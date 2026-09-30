@@ -5,8 +5,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
-
-
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -16,6 +14,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.DundueniFE">
+
+        <!-- 실제 앱 시작 Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -28,14 +28,21 @@
             </intent-filter>
         </activity>
 
+        <!-- MediaProjection 테스트 -->
         <activity
             android:name=".test.MediaProjectionTestActivity"
             android:exported="true" />
+
+        <!-- Photo Picker 테스트 -->
+        <activity
+            android:name=".test.PhotoPickerTestActivity"
+            android:exported="true" />
+
+        <!-- MediaProjection Foreground Service -->
         <service
             android:name=".test.MediaProjectionService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
-
 
     </application>
 
