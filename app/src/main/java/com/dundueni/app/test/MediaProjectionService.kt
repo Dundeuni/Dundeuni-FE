@@ -23,6 +23,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import com.dundueni.app.data.model.ImageInput
 
 
 /*
@@ -327,7 +328,7 @@ class MediaProjectionService : Service() {
                                     실제 캡처 화면을 눈으로 확인한다.
                                 */
 
-                                bitmap.recycle()
+                                val imageInput = ImageInput.ScreenCapture(bitmap)
 
                                 firstImageReceived = true
                             }

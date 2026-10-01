@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.dundueni.app.data.model.ImageInput
 
 @Composable
 fun PhotoPickerTestScreen() {
@@ -48,6 +49,9 @@ fun PhotoPickerTestScreen() {
         ) { uri ->
 
             if (uri != null) {
+
+                // 선택한 사진의 URI를 ImageInput 에 넘김.
+                val imageInput = ImageInput.PhotoPicker(uri)
 
                 // 1. URI
                 selectedImageUri = uri.toString()
