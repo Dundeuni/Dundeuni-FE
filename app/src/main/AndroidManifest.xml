@@ -2,8 +2,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 다른 앱 위에 Floating Button 표시 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Foreground Service 공통 권한 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- MediaProjection Foreground Service 권한 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- Floating Button Foreground Service 권한 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
 
     <application
         android:allowBackup="true"
@@ -21,12 +31,14 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.DundueniFE">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
+
 
         <!-- MediaProjection 테스트 -->
         <activity
@@ -38,11 +50,26 @@
             android:name=".test.PhotoPickerTestActivity"
             android:exported="true" />
 
+
         <!-- MediaProjection Foreground Service -->
         <service
             android:name=".test.MediaProjectionService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+
+        <!-- Floating Button Foreground Service -->
+        <service
+            android:name=".feature.floatingbutton.FloatingButtonService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+
+            <!-- specialUse Foreground Service 사용 목적 -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent user-visible floating safety button overlay" />
+
+        </service>
 
     </application>
 

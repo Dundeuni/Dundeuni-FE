@@ -6,42 +6,53 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
+
         setContent {
+
             DundueniFETheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+
+                Scaffold(
+                    modifier = Modifier.fillMaxSize()
+                ) { innerPadding ->
+
+                    Button(
+                        modifier = Modifier.padding(innerPadding),
+                        onClick = {
+                            startFloatingButton()
+                        }
+                    ) {
+                        Text("플로팅 버튼 시작")
+                    }
                 }
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+    // Overlay 권한 확인 후 Floating Button 실행
+    private fun startFloatingButton() {
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    DundueniFETheme {
-        Greeting("Android")
+        if (FloatingButtonManager.hasOverlayPermission(this)) {
+
+            // 권한 있음 → Foreground Service 실행
+            FloatingButtonManager.start(this)
+
+        } else {
+
+            // 권한 없음 → Android Overlay 권한 설정 화면 이동
+            FloatingButtonManager.requestOverlayPermission(this)
+        }
     }
 }
