@@ -2,4 +2,16 @@
 <resources>
 
     <style name="Theme.DundueniFE" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- No opaque blank screen or exit animation over the app being inspected. -->
+    <!-- 승인 중계 Activity가 검사할 화면을 가리지 않도록 투명하게 표시한다. -->
+    <style name="Theme.DundueniFE.ProjectionPermission" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
 </resources>

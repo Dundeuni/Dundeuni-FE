@@ -196,3 +196,13 @@ Package = lowercase
 
 API 계약 변경은 BE / AI와 반드시 공유
 ```
+
+### Package / Folder
+
+- Package명은 lowercase를 사용한다.
+- 코드는 역할에 맞는 Package에 배치한다.
+- 새로운 기능은 가능한 `feature/<기능명>` 단위로 분리한다.
+- 공용 UI는 `ui/component`에 둔다.
+- 임시 테스트 코드는 실제 서비스 코드와 분리한다.
+
+자세한 프로젝트 구조는 `README.md` 참고.

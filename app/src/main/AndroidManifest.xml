@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- 다른 앱 위에 Floating Button 표시 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
@@ -40,20 +42,27 @@
         </activity>
 
 
-        <!-- MediaProjection 테스트 -->
+        <!-- 내부 화면 공유 승인 전달 Activity -->
         <activity
-            android:name=".test.MediaProjectionTestActivity"
-            android:exported="true" />
+            android:name=".feature.capture.MediaProjectionTestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.DundueniFE.ProjectionPermission" />
 
         <!-- Photo Picker 테스트 -->
         <activity
-            android:name=".test.PhotoPickerTestActivity"
+            android:name=".feature.analysis.AnalysisActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".feature.photopicker.PhotoPickerActivity"
             android:exported="true" />
 
 
         <!-- MediaProjection Foreground Service -->
         <service
-            android:name=".test.MediaProjectionService"
+            android:name=".feature.capture.MediaProjectionService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
