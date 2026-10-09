@@ -6,7 +6,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.dundueni.app.data.model.AnalysisResult
-import com.dundueni.app.data.model.RiskLevel
 import com.dundueni.app.ui.theme.DundueniFETheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -25,11 +24,11 @@ class AnalysisFlowScreenTest {
         compose.setContent { DundueniFETheme { AnalysisFlowScreen(state.value, {}, {}) } }
         compose.onNodeWithText("분석 중").assertIsDisplayed()
         compose.runOnIdle {
-            state.value = AnalysisUiState.Success(AnalysisResult(RiskLevel.MEDIUM, listOf("전달된 근거"), listOf("전달된 행동")))
+            state.value = AnalysisUiState.Success(AnalysisResult(analysisId = "test-id", type = "IMAGE", status = "COMPLETED", aiGenerationScore = 41.2, aiRiskLevel = "MOCK_MEDIUM", reasons = listOf("test-reason"), modelVersion = null, errorCode = null, createdAt = null, completedAt = null, expiresAt = null, recommendedActions = listOf("test-action")))
         }
-        compose.onNodeWithText("위험도: MEDIUM").assertIsDisplayed()
-        compose.onNodeWithText("전달된 근거").assertIsDisplayed()
-        compose.onNodeWithText("전달된 행동").assertIsDisplayed()
+        compose.onNodeWithText("위험도: MOCK_MEDIUM").assertIsDisplayed()
+        compose.onNodeWithText("test-reason").assertIsDisplayed()
+        compose.onNodeWithText("test-action").assertIsDisplayed()
     }
 
     @Test fun errorOffersRetryAndClose() {

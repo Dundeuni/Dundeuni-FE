@@ -1,11 +1,21 @@
 {
-  "risk_level": "HIGH",
-  "reasons": [
-    "출처를 확인할 수 없는 링크가 포함되어 있습니다.",
-    "개인정보 입력을 요구합니다."
-  ],
-  "recommended_actions": [
-    "링크를 열기 전에 발신자를 확인하세요.",
-    "공식 채널에서 안내 내용을 확인하세요."
-  ]
+  "isSuccess": true,
+  "code": "ANALYSIS202",
+  "message": "synthetic fixture",
+  "result": {
+    "analysisId": "analysis-example",
+    "type": "IMAGE",
+    "status": "COMPLETED",
+    "aiGenerationScore": 82.4,
+    "aiRiskLevel": "NEW_SERVER_RISK",
+    "reasons": [
+      {"description": "reason one"},
+      {"description": "reason two"}
+    ],
+    "modelVersion": "model-example",
+    "errorCode": null,
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "completedAt": "2026-01-01T00:00:01.000Z",
+    "expiresAt": "2026-01-08T00:00:01.000Z"
+  }
 }

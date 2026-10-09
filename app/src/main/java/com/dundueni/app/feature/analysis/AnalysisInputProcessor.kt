@@ -20,17 +20,17 @@ import okhttp3.MultipartBody
  * 화면이 멈추지 않도록 준비 작업은 파일 작업용 IO 영역에서 수행한다.
  * 준비된 Part는 ViewModel이 받아 Repository에 전달한다.
  */
-class AnalysisInputProcessor(contentResolver: ContentResolver) {
+class AnalysisInputProcessor(contentResolver: ContentResolver, cacheDirectory: File) {
     private val preprocessor = ImagePreprocessor(contentResolver)
-    private val multipartFactory = ImageMultipartFactory(contentResolver)
+    private val multipartFactory = ImageMultipartFactory(contentResolver, cacheDirectory)
 
     suspend fun prepare(input: ImageInput): MultipartBody.Part = withContext(Dispatchers.IO) {
         multipartFactory.createPart(preprocessor.preprocess(input), AnalysisApiContract.IMAGE_FIELD)
     }
 
-    /** Activity 경계를 넘긴 캡처 PNG는 재디코딩/재인코딩 없이 같은 Factory로 전달합니다. */
+    /** 저장된 캡처 PNG도 같은 크기 검증/변환 정책을 적용합니다. */
     suspend fun prepareCaptureFile(file: File): MultipartBody.Part = withContext(Dispatchers.IO) {
-        // 이미 저장된 PNG의 주소와 정보를 사용해 불필요한 이미지 변환을 피한다.
+        // 10 MiB 이하면 원본 PNG를 유지하고, 초과하면 JPEG 90/85를 시도한다.
         check(file.isFile) { "Capture file is missing" }
         multipartFactory.createPart(
             PreprocessedImage.PhotoPicker(Uri.fromFile(file), "image/png", "capture.png", file.length()),

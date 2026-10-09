@@ -4,6 +4,7 @@ import com.dundueni.app.data.remote.api.AnalysisApiService
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import okhttp3.RequestBody
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
@@ -15,13 +16,13 @@ import okio.buffer
 import okio.source
 
 class AnalysisRepositoryTest {
-    private val part = MultipartBody.Part.createFormData("image", "test.png", byteArrayOf(1).toRequestBody())
+    private val part = MultipartBody.Part.createFormData("file", "test.png", byteArrayOf(1).toRequestBody())
 
     @Test
     fun resultRequestParsesMapsAndClosesBody() = runBlocking {
         var closed = false
         val stream = object : java.io.ByteArrayInputStream(
-            """{"risk_level":"HIGH","reasons":["reason"],"recommended_actions":["action"]}""".toByteArray()
+            """{"isSuccess":true,"code":"ANALYSIS202","result":{"analysisId":"id-1","type":"IMAGE","status":"COMPLETED","aiGenerationScore":82.4,"aiRiskLevel":"SERVER_VALUE","reasons":[{"description":"reason"}],"modelVersion":"v1","errorCode":null,"createdAt":"now","completedAt":"now","expiresAt":"later"}}""".toByteArray()
         ) {
             override fun close() { closed = true; super.close() }
         }
@@ -32,15 +33,17 @@ class AnalysisRepositoryTest {
             override fun source() = source
         }
         val fake = object : AnalysisApiService {
-            override suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> {
+            override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody): Response<ResponseBody> {
                 assertSame(part, image)
-                return Response.success(body)
+                return Response.success(202, body)
             }
         }
         val result = AnalysisRepository(fake).analyzeResult(part)
-        assertEquals(com.dundueni.app.data.model.RiskLevel.HIGH, result.riskLevel)
+        assertEquals("SERVER_VALUE", result.aiRiskLevel)
+        assertEquals(82.4, result.aiGenerationScore!!, 0.0)
+        assertEquals("id-1", result.analysisId)
         assertEquals(listOf("reason"), result.reasons)
-        assertEquals(listOf("action"), result.recommendedActions)
+        assertTrue(result.recommendedActions.isEmpty())
         assertTrue(closed)
     }
 
@@ -55,7 +58,7 @@ class AnalysisRepositoryTest {
         )
         for (response in responses) {
             val fake = object : AnalysisApiService {
-                override suspend fun analyzeImage(image: MultipartBody.Part) = response
+                override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody) = response
             }
             assertThrows(Exception::class.java) {
                 runBlocking { AnalysisRepository(fake).analyzeResult(part) }
@@ -68,7 +71,7 @@ class AnalysisRepositoryTest {
         val response = Response.success("raw response".toResponseBody())
         var calls = 0
         val fake = object : AnalysisApiService {
-            override suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> {
+            override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody): Response<ResponseBody> {
                 calls++
                 assertSame(part, image)
                 return response
@@ -84,7 +87,7 @@ class AnalysisRepositoryTest {
     fun preservesHttpErrorResponse() = runBlocking {
         val response = Response.error<ResponseBody>(422, "unconfirmed error format".toResponseBody())
         val fake = object : AnalysisApiService {
-            override suspend fun analyzeImage(image: MultipartBody.Part) = response
+            override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody) = response
         }
         val result = AnalysisRepository(fake).analyzeImage(part)
         assertSame(response, result)
@@ -96,7 +99,7 @@ class AnalysisRepositoryTest {
     fun propagatesIoFailureAndCancellation() {
         for (failure in listOf(IOException("offline"), CancellationException("cancelled"))) {
             val fake = object : AnalysisApiService {
-                override suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> = throw failure
+                override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody): Response<ResponseBody> = throw failure
             }
             val caught = assertThrows(failure.javaClass) {
                 runBlocking { AnalysisRepository(fake).analyzeImage(part) }

@@ -59,7 +59,7 @@ class AnalysisActivity : ComponentActivity() {
     }
 
     private fun startAnalysis() {
-        val processor = AnalysisInputProcessor(applicationContext.contentResolver)
+        val processor = AnalysisInputProcessor(applicationContext.contentResolver, applicationContext.cacheDir)
         val file = captureFile
         val uri = intent.data
         // 최초 실행과 재시도 모두 입력 준비부터 시작해 준비 실패도 검사 상태에 포함한다.

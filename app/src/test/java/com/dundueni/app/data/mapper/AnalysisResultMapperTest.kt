@@ -1,6 +1,5 @@
 package com.dundueni.app.data.mapper
 
-import com.dundueni.app.data.model.RiskLevel
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
@@ -15,14 +14,12 @@ import retrofit2.converter.gson.GsonConverterFactory
 class AnalysisResultMapperTest {
     private val gson = Gson()
 
-    private fun parse(json: String): AnalysisResponseDto =
-        gson.fromJson(json, AnalysisResponseDto::class.java)
+    private fun parse(json: String): AnalysisResponseDto = gson.fromJson(json, AnalysisResponseDto::class.java)
 
     @Test
-    fun mockJsonParsesAndMapsThroughConfiguredConverterType() {
+    fun backendEnvelopeMapsRawValuesAndObjectReasons() {
         val json = checkNotNull(javaClass.getResourceAsStream("/analysis_response_mock.json"))
             .bufferedReader(Charsets.UTF_8).use { it.readText() }
-        // Converter만 사용하며 네트워크 호출은 하지 않습니다.
         val retrofit = Retrofit.Builder()
             .baseUrl("https://example.invalid/")
             .addConverterFactory(GsonConverterFactory.create())
@@ -32,56 +29,49 @@ class AnalysisResultMapperTest {
         val dto = json.toResponseBody("application/json".toMediaType()).use {
             checkNotNull(converter.convert(it))
         }
-        assertEquals("HIGH", dto.riskLevel)
         val result = dto.toDomain()
-        assertEquals(RiskLevel.HIGH, result.riskLevel)
-        assertEquals(listOf("출처를 확인할 수 없는 링크가 포함되어 있습니다.", "개인정보 입력을 요구합니다."), result.reasons)
-        assertEquals(listOf("링크를 열기 전에 발신자를 확인하세요.", "공식 채널에서 안내 내용을 확인하세요."), result.recommendedActions)
+        assertEquals("analysis-example", result.analysisId)
+        assertEquals("COMPLETED", result.status)
+        assertEquals("NEW_SERVER_RISK", result.aiRiskLevel)
+        assertEquals(82.4, result.aiGenerationScore!!, 0.0)
+        assertEquals(listOf("reason one", "reason two"), result.reasons)
+        assertEquals("model-example", result.modelVersion)
+        assertNull(result.errorCode)
+        assertEquals(emptyList<String>(), result.recommendedActions)
     }
 
     @Test
-    fun mapsAllProvisionalRiskLevelsAndDoesNotTreatUnknownAsLow() {
-        for ((raw, expected) in mapOf(
-            "LOW" to RiskLevel.LOW,
-            "MEDIUM" to RiskLevel.MEDIUM,
-            "HIGH" to RiskLevel.HIGH,
-            "NEW_SERVER_VALUE" to RiskLevel.UNKNOWN,
-            "" to RiskLevel.UNKNOWN
-        )) {
-            assertEquals(expected, parse("""{"risk_level":"$raw"}""").toDomain().riskLevel)
-        }
+    fun nullableAndMissingResultFieldsStayNullAndCollectionsStayEmpty() {
+        val result = parse("""{"result":{"status":"COMPLETED","reasons":null}}""").toDomain()
+        assertNull(result.analysisId)
+        assertNull(result.aiGenerationScore)
+        assertNull(result.aiRiskLevel)
+        assertTrue(result.reasons.isEmpty())
+        assertTrue(result.recommendedActions.isEmpty())
     }
 
     @Test
-    fun missingAndNullFieldsProduceUnknownAndEmptyLists() {
-        for (json in listOf("{}", """{"risk_level":null,"reasons":null,"recommended_actions":null}""")) {
-            val result = parse(json).toDomain()
-            assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
-            assertTrue(result.reasons.isEmpty())
-            assertTrue(result.recommendedActions.isEmpty())
-        }
-    }
-
-    @Test
-    fun ignoresExtraFieldsAndNullItemsWhilePreservingTextAndOrder() {
+    fun rawRiskTextAndReasonTextAreNotNormalized() {
         val result = parse("""{
-            "risk_level":"MEDIUM",
-            "reasons":[" second ",null,"first"],
-            "recommended_actions":[null,"확인하세요"],
-            "future_field":{"value":true}
+            "result": {
+                "aiRiskLevel":"  FUTURE_VALUE  ",
+                "reasons":[{"description":" reason "},null,{"description":null}]
+            }
         }""").toDomain()
-        assertEquals(RiskLevel.MEDIUM, result.riskLevel)
-        assertEquals(listOf(" second ", "first"), result.reasons)
-        assertEquals(listOf("확인하세요"), result.recommendedActions)
-        val empty = parse("""{"reasons":[],"recommended_actions":[]}""").toDomain()
-        assertTrue(empty.reasons.isEmpty())
-        assertTrue(empty.recommendedActions.isEmpty())
+        assertEquals("  FUTURE_VALUE  ", result.aiRiskLevel)
+        assertEquals("  FUTURE_VALUE  ", result.riskLevel)
+        assertEquals(listOf(" reason "), result.reasons)
     }
 
     @Test
-    fun incompatibleJsonShapeFailsInsteadOfInventingResult() {
+    fun absentEnvelopeResultIsRejected() {
+        assertThrows(IllegalArgumentException::class.java) { parse("{}").toDomain() }
+    }
+
+    @Test
+    fun incompatibleReasonsShapeFailsInsteadOfInventingResult() {
         assertThrows(JsonSyntaxException::class.java) {
-            parse("""{"reasons":{"unexpected":"object"}}""")
+            parse("""{"result":{"reasons":{"unexpected":"object"}}}""")
         }
     }
 }

@@ -17,9 +17,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.net.Uri
 import com.dundueni.app.data.model.ImageInput
 import com.dundueni.app.data.image.ImagePreprocessor
 import com.dundueni.app.feature.analysis.AnalysisActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 시스템 사진 선택기를 열고 선택 결과를 분석 화면에 연결하는 Compose 화면이다.
@@ -68,39 +71,7 @@ fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
                 // 선택한 URI와 읽기 권한을 담은 Intent로 분석 화면을 연다.
                 context.startActivity(AnalysisActivity.forPhoto(context, uri))
 
-                // 선택한 사진의 URI를 ImageInput 에 넘김.
-                val imageInput = ImageInput.PhotoPicker(uri)
-
-                val preprocessedImage = imagePreprocessor.preprocess(imageInput)
-
-                selectedImageUri = preprocessedImage.uri.toString()
-                imageMimeType = preprocessedImage.mimeType ?: "MIME 타입 알 수 없음"
-                imageFileName = preprocessedImage.displayName ?: "파일명 알 수 없음"
-                imageFileSize = preprocessedImage.sizeBytes?.let { sizeBytes ->
-                    "${sizeBytes} bytes (${sizeBytes / 1024.0 / 1024.0} MB)"
-                } ?: "파일 크기 알 수 없음"
-
-                // 4. 실제 이미지 데이터 읽기
-                try {
-                    context.contentResolver
-                        .openInputStream(uri)
-                        ?.use { inputStream ->
-
-                            val firstByte = inputStream.read()
-
-                            imageReadResult =
-                                if (firstByte != -1) {
-                                    "이미지 데이터 읽기 성공"
-                                } else {
-                                    "이미지 데이터가 비어 있음"
-                                }
-                        } ?: run {
-                        imageReadResult = "InputStream 열기 실패"
-                    }
-
-                } catch (e: Exception) {
-                    imageReadResult = "이미지 읽기 실패: ${e.message}"
-                }
+                selectedImageUri = uri.toString()
 
             } else {
 
@@ -112,6 +83,27 @@ fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
                 imageFileSize = "파일 크기 확인 전"
             }
         }
+
+    // 정보 표시용 URI 조회도 IO에서 수행한다. 선택 변경/화면 종료 시 이전 작업은 취소된다.
+    LaunchedEffect(selectedImageUri) {
+        val uri = selectedImageUri?.let(Uri::parse) ?: return@LaunchedEffect
+        val (image, readResult) = withContext(Dispatchers.IO) {
+            val metadata = imagePreprocessor.preprocess(ImageInput.PhotoPicker(uri))
+            val read = try {
+                context.contentResolver.openInputStream(uri)?.use {
+                    if (it.read() != -1) "이미지 데이터 읽기 성공" else "이미지 데이터가 비어 있음"
+                } ?: "InputStream 열기 실패"
+            } catch (e: Exception) {
+                "이미지 읽기 실패: ${e.message}"
+            }
+            metadata to read
+        }
+        imageMimeType = image.mimeType ?: "MIME 타입 알 수 없음"
+        imageFileName = image.displayName ?: "파일명 알 수 없음"
+        imageFileSize = image.sizeBytes?.let { "${it} bytes (${it / 1024.0 / 1024.0} MB)" }
+            ?: "파일 크기 알 수 없음"
+        imageReadResult = readResult
+    }
 
     // 메뉴에서 전달된 요청만 한 번 실행한다. 회전/복원 시 Picker를 중복 실행하지 않는다.
     var pendingPickerLaunch by rememberSaveable {

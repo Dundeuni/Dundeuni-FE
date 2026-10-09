@@ -3,6 +3,7 @@ package com.dundueni.app.data.remote.api
 import java.io.IOException
 import kotlinx.coroutines.delay
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
@@ -11,16 +12,11 @@ import okio.blackholeSink
 import okio.buffer
 import retrofit2.Response
 
-/** 로컬 Flow 검증 전용. 이미지는 읽기만 하며 서버에 전송하거나 저장하지 않습니다. */
-/**
- * 실제 서버 없이 입력 준비부터 결과 표시까지 확인하기 위한 API 구현이다.
- * AnalysisFlowDependencies가 현재 실행 흐름에 이 구현을 연결한다.
- * 이미지 본문을 읽어 비어 있는지 확인하지만 이미지 내용을 판별하지는 않는다.
- * 잠시 기다린 뒤 고정된 HIGH 응답을 반환해 결과 화면까지 진행하게 한다.
- * 실제 API와 같은 반환형을 사용하므로 Repository의 파싱 경로도 함께 확인한다.
- */
+/** Local-only API implementation used to exercise the image-to-result flow without a server. */
 class FakeAnalysisApiService : AnalysisApiService {
-    override suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> {
+    override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody): Response<ResponseBody> {
+        val requestType = Buffer().also { type.writeTo(it) }.readUtf8()
+        require(requestType == AnalysisApiContract.IMAGE_TYPE) { "Only IMAGE analysis is supported" }
         var size = 0L
         val sink = object : ForwardingSink(blackholeSink()) {
             override fun write(source: Buffer, byteCount: Long) {
@@ -28,18 +24,31 @@ class FakeAnalysisApiService : AnalysisApiService {
                 super.write(source, byteCount)
             }
         }.buffer()
-        // 준비된 본문을 실제로 읽어 URI 읽기나 본문 생성 단계의 실패도 드러나게 한다.
         sink.use { image.body.writeTo(it) }
         if (size == 0L) throw IOException("Image body is empty")
         delay(600)
-        return Response.success(MOCK_RESPONSE.toResponseBody())
+        return Response.success(202, MOCK_RESPONSE.toResponseBody())
     }
 
     private companion object {
+        // Deliberately synthetic test data; this is not an AI result.
         const val MOCK_RESPONSE = """{
-            "risk_level":"HIGH",
-            "reasons":["Mock 결과: 개인정보 입력을 요구하는 상황을 가정합니다."],
-            "recommended_actions":["Mock 안내: 공식 채널에서 내용을 확인하세요."]
+            "isSuccess":true,
+            "code":"ANALYSIS202",
+            "message":"Mock response for local flow verification",
+            "result":{
+                "analysisId":"mock-analysis-id",
+                "type":"IMAGE",
+                "status":"COMPLETED",
+                "aiGenerationScore":82.4,
+                "aiRiskLevel":"MOCK_CAUTION",
+                "reasons":[{"description":"Mock test data: verify the source before sharing."}],
+                "modelVersion":"mock-test",
+                "errorCode":null,
+                "createdAt":"2026-01-01T00:00:00.000Z",
+                "completedAt":"2026-01-01T00:00:01.000Z",
+                "expiresAt":"2026-01-08T00:00:01.000Z"
+            }
         }"""
     }
 }

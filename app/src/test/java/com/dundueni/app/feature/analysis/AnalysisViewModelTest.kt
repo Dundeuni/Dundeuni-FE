@@ -2,7 +2,6 @@ package com.dundueni.app.feature.analysis
 
 import androidx.lifecycle.ViewModelStore
 import com.dundueni.app.data.model.AnalysisResult
-import com.dundueni.app.data.model.RiskLevel
 import com.dundueni.app.data.repository.AnalysisResultRepository
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
@@ -23,7 +22,12 @@ class AnalysisViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val store = ViewModelStore()
     private val part = MultipartBody.Part.createFormData("image", "test.png", byteArrayOf(1).toRequestBody())
-    private val result = AnalysisResult(RiskLevel.HIGH, listOf("근거"), listOf("안내"))
+    private val result = AnalysisResult(
+        analysisId = "id-1", type = "IMAGE", status = "COMPLETED",
+        aiGenerationScore = 82.4, aiRiskLevel = "SERVER_DEFINED_VALUE",
+        reasons = listOf("근거"), modelVersion = null, errorCode = null,
+        createdAt = null, completedAt = null, expiresAt = null
+    )
 
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
@@ -88,17 +92,12 @@ class AnalysisViewModelTest {
         assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading, AnalysisUiState.Error), states)
     }
 
-    @Test fun unknownRiskProducesErrorAndNextValidRequestSucceeds() = runTest {
-        var calls = 0
-        val vm = viewModel { if (++calls == 1) result.copy(riskLevel = RiskLevel.UNKNOWN) else result }
-        val states = mutableListOf<AnalysisUiState>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.toList(states) }
+    @Test fun unknownServerRiskValueIsPreservedAsSuccess() = runTest {
+        val futureRiskResult = result.copy(aiRiskLevel = "FUTURE_SERVER_VALUE")
+        val vm = viewModel { futureRiskResult }
         vm.analyze(part)
         runCurrent()
-        assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading, AnalysisUiState.Error), states)
-        vm.analyze(part)
-        runCurrent()
-        assertEquals(AnalysisUiState.Success(result), vm.uiState.value)
+        assertEquals(AnalysisUiState.Success(futureRiskResult), vm.uiState.value)
     }
 
     @Test fun cancellationReturnsIdleAndAllowsRetry() = runTest {

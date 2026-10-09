@@ -3,7 +3,6 @@ package com.dundueni.app.feature.analysis
 import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dundueni.app.data.model.RiskLevel
 import com.dundueni.app.data.repository.AnalysisResultRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -46,7 +45,6 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
                 val result = checkNotNull(repository.analyzeResult(prepare()))
                 ensureActive()
                 // 위험도를 해석할 수 없는 응답은 정상 분석 결과로 표시하지 않습니다.
-                check(result.riskLevel != RiskLevel.UNKNOWN) { "Analysis risk level is missing or invalid" }
                 mutableUiState.value = AnalysisUiState.Success(result)
             // 화면 종료 등에 따른 작업 취소는 검사 실패가 아니므로 Error와 구분한다.
             } catch (cancelled: CancellationException) {

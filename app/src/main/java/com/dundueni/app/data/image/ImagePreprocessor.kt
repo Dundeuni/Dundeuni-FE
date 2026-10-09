@@ -20,29 +20,33 @@ class ImagePreprocessor(private val contentResolver: ContentResolver) {
 
     fun preprocess(input: ImageInput.PhotoPicker): PreprocessedImage.PhotoPicker {
         // MIME 타입은 image/png처럼 파일의 데이터 형식을 나타낸다.
-        val mimeType = contentResolver.getType(input.uri)
+        val mimeType = try { contentResolver.getType(input.uri) } catch (_: RuntimeException) { null }
         var displayName: String? = null
         var sizeBytes: Long? = null
 
         // URI 제공자가 알려 주는 파일명과 크기를 조회하고, 없는 정보는 비워 둔다.
-        contentResolver.query(
-            input.uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+        try {
+            contentResolver.query(
+                input.uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
 
-                if (nameIndex >= 0) {
-                    displayName = cursor.getString(nameIndex)
-                }
-                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
-                    sizeBytes = cursor.getLong(sizeIndex)
+                    if (nameIndex >= 0) {
+                        displayName = cursor.getString(nameIndex)
+                    }
+                    if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                        sizeBytes = cursor.getLong(sizeIndex)
+                    }
                 }
             }
+        } catch (_: RuntimeException) {
+            // 제공자의 메타데이터 오류는 실제 바이트 읽기/검증을 막지 않는다.
         }
 
         return PreprocessedImage.PhotoPicker(input.uri, mimeType, displayName, sizeBytes)

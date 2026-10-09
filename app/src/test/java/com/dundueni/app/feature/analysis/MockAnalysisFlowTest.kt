@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModelStore
 import com.dundueni.app.data.model.ImageInput
-import com.dundueni.app.data.model.RiskLevel
 import com.dundueni.app.data.remote.api.FakeAnalysisApiService
 import com.dundueni.app.data.remote.api.AnalysisApiService
 import com.dundueni.app.data.repository.AnalysisRepository
@@ -28,6 +27,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import okhttp3.RequestBody
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
@@ -40,7 +40,7 @@ import retrofit2.Response
 class MockAnalysisFlowTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private val store = ViewModelStore()
-    private val processor = AnalysisInputProcessor(RuntimeEnvironment.getApplication().contentResolver)
+    private val processor = AnalysisInputProcessor(RuntimeEnvironment.getApplication().contentResolver, RuntimeEnvironment.getApplication().cacheDir)
 
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
@@ -60,9 +60,9 @@ class MockAnalysisFlowTest {
                 val state = completed.await()
                 assertTrue(state is AnalysisUiState.Success)
                 val result = (state as AnalysisUiState.Success).result
-                assertEquals(RiskLevel.HIGH, result.riskLevel)
-                assertTrue(result.reasons.single().startsWith("Mock 결과:"))
-                assertTrue(result.recommendedActions.single().startsWith("Mock 안내:"))
+                assertEquals("MOCK_CAUTION", result.aiRiskLevel)
+                assertEquals("Mock test data: verify the source before sharing.", result.reasons.single())
+                assertTrue(result.recommendedActions.isEmpty())
             }
             // 실제 화면 캡처의 Activity 간 전달 경로도 같은 Factory/Fake/Mapper로 검증합니다.
             val captureVm = AnalysisViewModel(AnalysisFlowDependencies.createRepository())
@@ -96,10 +96,10 @@ class MockAnalysisFlowTest {
             Response.success("""{"risk_level":"INVALID"}""".toResponseBody()),
             Response.error<ResponseBody>(500, "error".toResponseBody())
         )
-        val part = MultipartBody.Part.createFormData("image", "test.png", byteArrayOf(1).toRequestBody())
+        val part = MultipartBody.Part.createFormData("file", "test.png", byteArrayOf(1).toRequestBody())
         for (response in responses) {
             val api = object : AnalysisApiService {
-                override suspend fun analyzeImage(image: MultipartBody.Part) = response
+                override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody) = response
             }
             val vm = AnalysisViewModel(AnalysisRepository(api))
             store.put("analysis", vm)
@@ -118,7 +118,7 @@ class MockAnalysisFlowTest {
         store.put("analysis", vm)
         val completed = async { vm.uiState.first { it == AnalysisUiState.Error || it is AnalysisUiState.Success } }
         // Fake가 빈 이미지 본문을 읽은 뒤 직접 예외를 발생시키는 경로입니다.
-        val part = MultipartBody.Part.createFormData("image", "empty.png", byteArrayOf().toRequestBody())
+        val part = MultipartBody.Part.createFormData("file", "empty.png", byteArrayOf().toRequestBody())
         vm.analyze(part)
         assertEquals(AnalysisUiState.Error, completed.await())
         assertEquals(AnalysisUiState.Error, vm.uiState.value)

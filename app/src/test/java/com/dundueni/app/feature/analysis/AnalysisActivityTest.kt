@@ -26,16 +26,24 @@ class AnalysisActivityTest {
 
     private fun assertMockResult() {
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("위험도: HIGH").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("위험도: MOCK_CAUTION").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("위험도: HIGH").assertIsDisplayed()
-        compose.onNodeWithText("Mock 결과: 개인정보 입력을 요구하는 상황을 가정합니다.").assertIsDisplayed()
-        compose.onNodeWithText("Mock 안내: 공식 채널에서 내용을 확인하세요.").assertIsDisplayed()
+        compose.onNodeWithText("위험도: MOCK_CAUTION").assertIsDisplayed()
+        compose.onNodeWithText("Mock test data: verify the source before sharing.").assertIsDisplayed()
     }
 
     @Test fun photoUriLaunchReachesResultAndSurvivesRecreation() {
         val uri = Uri.parse("content://test/photo/flow")
-        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(byteArrayOf(1, 2, 3)))
+        val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        val bytes = try {
+            java.io.ByteArrayOutputStream().use { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+                output.toByteArray()
+            }
+        } finally {
+            bitmap.recycle()
+        }
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(bytes))
         ActivityScenario.launch<AnalysisActivity>(AnalysisActivity.forPhoto(context, uri)).use { scenario ->
             assertMockResult()
             scenario.recreate()
