@@ -13,7 +13,10 @@ import okio.buffer
 import retrofit2.Response
 
 /** Local-only API implementation used to exercise the image-to-result flow without a server. */
-class FakeAnalysisApiService : AnalysisApiService {
+class FakeAnalysisApiService(private val mockRiskLevel: String = "MOCK_CAUTION") : AnalysisApiService {
+    init {
+        require(mockRiskLevel in setOf("MOCK_SAFE", "MOCK_CAUTION", "MOCK_DANGER"))
+    }
     override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody): Response<ResponseBody> {
         val requestType = Buffer().also { type.writeTo(it) }.readUtf8()
         require(requestType == AnalysisApiContract.IMAGE_TYPE) { "Only IMAGE analysis is supported" }
@@ -27,7 +30,7 @@ class FakeAnalysisApiService : AnalysisApiService {
         sink.use { image.body.writeTo(it) }
         if (size == 0L) throw IOException("Image body is empty")
         delay(600)
-        return Response.success(202, MOCK_RESPONSE.toResponseBody())
+        return Response.success(202, MOCK_RESPONSE.replace("MOCK_CAUTION", mockRiskLevel).toResponseBody())
     }
 
     private companion object {

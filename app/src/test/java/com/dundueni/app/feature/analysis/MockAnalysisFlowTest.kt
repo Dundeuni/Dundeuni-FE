@@ -7,6 +7,7 @@ import com.dundueni.app.data.model.ImageInput
 import com.dundueni.app.data.remote.api.FakeAnalysisApiService
 import com.dundueni.app.data.remote.api.AnalysisApiService
 import com.dundueni.app.data.repository.AnalysisRepository
+import com.dundueni.app.feature.analysisresult.RiskLevel
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,6 +34,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE)
@@ -50,8 +53,9 @@ class MockAnalysisFlowTest {
         val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
         try {
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            for (input in listOf(ImageInput.PhotoPicker(Uri.fromFile(file)), ImageInput.ScreenCapture(bitmap))) {
-                val vm = AnalysisViewModel(AnalysisRepository(FakeAnalysisApiService()))
+            for (level in RiskLevel.entries) {
+              for (input in listOf(ImageInput.PhotoPicker(Uri.fromFile(file)), ImageInput.ScreenCapture(bitmap))) {
+                val vm = AnalysisViewModel(AnalysisRepository(FakeAnalysisApiService("MOCK_${level.name}")))
                 store.put("analysis", vm)
                 assertEquals(AnalysisUiState.Idle, vm.uiState.value)
                 val completed = async { vm.uiState.filter { it is AnalysisUiState.Success || it is AnalysisUiState.Error }.first() }
@@ -60,9 +64,15 @@ class MockAnalysisFlowTest {
                 val state = completed.await()
                 assertTrue(state is AnalysisUiState.Success)
                 val result = (state as AnalysisUiState.Success).result
-                assertEquals("MOCK_CAUTION", result.aiRiskLevel)
+                assertEquals("MOCK_${level.name}", result.aiRiskLevel)
+                val presented = checkNotNull(result.toPb05Result(isDemo = true))
+                assertEquals(level, presented.riskLevel)
+                assertEquals(result.analysisId, presented.id)
+                assertEquals(result.reasons.single(), presented.evidence.single().description)
+                assertNull(presented.fraudScore)
                 assertEquals("Mock test data: verify the source before sharing.", result.reasons.single())
                 assertTrue(result.recommendedActions.isEmpty())
+              }
             }
             // 실제 화면 캡처의 Activity 간 전달 경로도 같은 Factory/Fake/Mapper로 검증합니다.
             val captureVm = AnalysisViewModel(AnalysisFlowDependencies.createRepository())
@@ -70,7 +80,8 @@ class MockAnalysisFlowTest {
             val completed = async { captureVm.uiState.filter { it is AnalysisUiState.Success || it is AnalysisUiState.Error }.first() }
             captureVm.analyzePrepared { processor.prepareCaptureFile(file) }
             assertEquals(AnalysisUiState.Loading, captureVm.uiState.value)
-            assertTrue(completed.await() is AnalysisUiState.Success)
+            val captureResult = completed.await() as AnalysisUiState.Success
+            assertEquals(RiskLevel.CAUTION, captureResult.result.toPb05Result(isDemo = true)?.riskLevel)
         } finally {
             bitmap.recycle()
             file.delete()
@@ -84,6 +95,48 @@ class MockAnalysisFlowTest {
         vm.analyzePrepared { processor.prepare(ImageInput.PhotoPicker(Uri.parse("file:///missing-flow-image"))) }
         assertEquals(AnalysisUiState.Loading, vm.uiState.value)
         assertEquals(AnalysisUiState.Error, completed.await())
+    }
+
+    @Test fun photoAndCaptureFileReachViewModelThroughRealRetrofitWithoutInventingSafetyVerdicts() = runTest {
+        val server = MockWebServer()
+        server.start()
+        val file = File.createTempFile("retrofit-image", ".png", RuntimeEnvironment.getApplication().cacheDir)
+        val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        try {
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            for (capture in listOf(false, true)) {
+                server.enqueue(MockResponse().setResponseCode(202).setBody("""{
+                    "isSuccess":true,"code":"ANALYSIS202","result":{
+                        "analysisId":"server-id","type":"IMAGE","status":"COMPLETED",
+                        "aiGenerationScore":82.4,"aiRiskLevel":"CAUTION",
+                        "reasons":[{"description":"server AI finding"}]
+                    }
+                }"""))
+                val vm = AnalysisViewModel(AnalysisFlowDependencies.createRepository("REAL", server.url("/").toString()))
+                store.put("analysis", vm)
+                val completed = async { vm.uiState.first { it is AnalysisUiState.Success || it is AnalysisUiState.Error } }
+                vm.analyzePrepared {
+                    if (capture) processor.prepareCaptureFile(file)
+                    else processor.prepare(ImageInput.PhotoPicker(Uri.fromFile(file)))
+                }
+                val result = (completed.await() as AnalysisUiState.Success).result
+                assertEquals("server-id", result.analysisId)
+                assertEquals("CAUTION", result.aiRiskLevel)
+                assertEquals(listOf("server AI finding"), result.reasons)
+                assertNull(result.toPb05Result(isDemo = false))
+                val request = server.takeRequest()
+                assertEquals("/api/analysis", request.path)
+                val body = request.body.readUtf8()
+                assertTrue(body.contains("name=\"type\""))
+                assertTrue(body.contains("IMAGE"))
+                assertTrue(body.contains("name=\"file\""))
+                assertTrue(body.contains("Content-Type: image/png"))
+            }
+        } finally {
+            bitmap.recycle()
+            file.delete()
+            server.shutdown()
+        }
     }
 
     @Test fun invalidResponsesLeaveLoadingAndReachError() = runTest {

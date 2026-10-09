@@ -44,7 +44,7 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
                 // 먼저 이미지를 준비한 뒤 분석을 요청하며, 어느 단계의 실패든 아래에서 처리한다.
                 val result = checkNotNull(repository.analyzeResult(prepare()))
                 ensureActive()
-                // 위험도를 해석할 수 없는 응답은 정상 분석 결과로 표시하지 않습니다.
+                // 서버 값은 보존하고, 최종 판정 표시 여부는 화면 매핑에서 결정합니다.
                 mutableUiState.value = AnalysisUiState.Success(result)
             // 화면 종료 등에 따른 작업 취소는 검사 실패가 아니므로 Error와 구분한다.
             } catch (cancelled: CancellationException) {

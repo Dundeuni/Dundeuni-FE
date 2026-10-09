@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -26,10 +27,11 @@ class AnalysisActivityTest {
 
     private fun assertMockResult() {
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("위험도: MOCK_CAUTION").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("조금 더 확인해보세요").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("위험도: MOCK_CAUTION").assertIsDisplayed()
-        compose.onNodeWithText("Mock test data: verify the source before sharing.").assertIsDisplayed()
+        compose.onNodeWithText("조금 더 확인해보세요").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("디자인 미리보기 · 샘플 데이터").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("분석 근거 1").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun photoUriLaunchReachesResultAndSurvivesRecreation() {
