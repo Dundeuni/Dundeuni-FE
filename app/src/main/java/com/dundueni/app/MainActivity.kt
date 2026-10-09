@@ -1,9 +1,12 @@
 package com.dundueni.app
 
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -30,18 +33,21 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             DundueniFETheme {
-
-                Scaffold(
-                    modifier = Modifier.fillMaxSize()
-                ) { innerPadding ->
-
-                    Button(
-                        modifier = Modifier.padding(innerPadding),
-                        onClick = {
-                            startFloatingButton()
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Column(modifier = Modifier.padding(innerPadding)) {
+                        Button(onClick = { startFloatingButton() }) {
+                            Text("플로팅 버튼 시작")
                         }
-                    ) {
-                        Text("플로팅 버튼 시작")
+                        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                            Button(onClick = {
+                                startActivity(Intent().setClassName(
+                                    this@MainActivity,
+                                    "com.dundueni.app.feature.analysisresult.AnalysisResultPreviewActivity",
+                                ))
+                            }) {
+                                Text("PB-05 분석 결과 미리보기")
+                            }
+                        }
                     }
                 }
             }

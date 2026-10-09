@@ -41,6 +41,10 @@
 
         </activity>
 
+        <!-- PB-05 분석 결과 -->
+        <activity
+            android:name=".feature.analysisresult.AnalysisResultActivity"
+            android:exported="false" />
 
         <!-- 내부 화면 공유 승인 전달 Activity -->
         <activity
