@@ -28,6 +28,11 @@
             </intent-filter>
         </activity>
 
+        <!-- PB-05 분석 결과 -->
+        <activity
+            android:name=".feature.analysisresult.AnalysisResultActivity"
+            android:exported="false" />
+
         <!-- MediaProjection 테스트 -->
         <activity
             android:name=".test.MediaProjectionTestActivity"
