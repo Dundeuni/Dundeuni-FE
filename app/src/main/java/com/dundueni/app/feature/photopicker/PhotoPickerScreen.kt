@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import android.net.Uri
+import android.widget.Toast
 import com.dundueni.app.data.model.ImageInput
 import com.dundueni.app.data.image.ImagePreprocessor
 import com.dundueni.app.feature.analysis.AnalysisActivity
@@ -33,7 +34,11 @@ import kotlinx.coroutines.withContext
  * 사진 정보와 읽기 결과를 보여주는 기존 확인용 UI도 함께 남아 있다.
  */
 @Composable
-fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
+fun PhotoPickerTestScreen(
+    openPickerOnLaunch: Boolean = false,
+    closeOnCancel: Boolean = false,
+    onCancel: () -> Unit = {}
+) {
 
     val context = LocalContext.current
     val imagePreprocessor = remember(context) {
@@ -69,9 +74,12 @@ fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
             if (uri != null) {
 
                 // 선택한 URI와 읽기 권한을 담은 Intent로 분석 화면을 연다.
-                context.startActivity(AnalysisActivity.forPhoto(context, uri))
-
-                selectedImageUri = uri.toString()
+                try {
+                    context.startActivity(AnalysisActivity.forPhoto(context, uri))
+                    selectedImageUri = uri.toString()
+                } catch (error: Exception) {
+                    Toast.makeText(context, "분석 화면을 열지 못했습니다. 다시 시도해 주세요.", Toast.LENGTH_LONG).show()
+                }
 
             } else {
 
@@ -81,6 +89,7 @@ fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
                 imageMimeType = "MIME 타입 확인 전"
                 imageFileName = "파일명 확인 전"
                 imageFileSize = "파일 크기 확인 전"
+                if (closeOnCancel) onCancel()
             }
         }
 
@@ -109,11 +118,18 @@ fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
     var pendingPickerLaunch by rememberSaveable {
         mutableStateOf(openPickerOnLaunch)
     }
+    fun launchPicker() {
+        try {
+            photoPickerLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        } catch (error: Exception) {
+            Toast.makeText(context, "사진 선택을 열지 못했습니다. 다시 시도해 주세요.", Toast.LENGTH_LONG).show()
+        }
+    }
     LaunchedEffect(pendingPickerLaunch) {
         if (pendingPickerLaunch) {
             // 실행 전에 요청을 소비해 화면 재구성이나 복원으로 자동 선택기가 다시 열리지 않게 한다.
             pendingPickerLaunch = false
-            photoPickerLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+            launchPicker()
         }
     }
 
@@ -124,11 +140,7 @@ fun PhotoPickerTestScreen(openPickerOnLaunch: Boolean = false) {
         Button(
             onClick = {
                 // 자동 실행 요청이 없어도 버튼을 눌러 이미지 한 장을 선택할 수 있다.
-                photoPickerLauncher.launch(
-                    PickVisualMediaRequest(
-                        PickVisualMedia.ImageOnly
-                    )
-                )
+                launchPicker()
             }
         ) {
             Text("사진 선택")
