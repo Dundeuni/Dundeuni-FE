@@ -14,6 +14,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 /**
@@ -35,10 +36,19 @@ class MainActivity : ComponentActivity() {
             DundueniFETheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Column(modifier = Modifier.padding(innerPadding)) {
+                        Button(onClick = { startActivity(Intent(this@MainActivity, LoginActivity::class.java)) }) {
+                            Text("로그인")
+                        }
                         Button(onClick = { startFloatingButton() }) {
                             Text("플로팅 버튼 시작")
                         }
                         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                            Button(onClick = {
+                                startActivity(Intent().setClassName(this@MainActivity,
+                                    "com.dundueni.app.feature.auth.LoginPreviewActivity"))
+                            }) {
+                                Text("PB-09 로그인 UI 미리보기")
+                            }
                             Button(onClick = {
                                 startActivity(Intent().setClassName(
                                     this@MainActivity,
