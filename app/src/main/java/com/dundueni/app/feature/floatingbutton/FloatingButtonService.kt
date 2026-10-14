@@ -43,6 +43,7 @@ import com.dundueni.app.feature.capture.MediaProjectionTestActivity
 import com.dundueni.app.feature.floatingbutton.view.FloatingButtonView
 import com.dundueni.app.feature.floatingbutton.view.FloatingMenuView
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
+import com.dundueni.app.feature.textinput.TextInputActivity
 import java.io.File
 import java.io.IOException
 
@@ -160,7 +161,16 @@ class FloatingButtonService : Service() {
                     )
                 }
             },
-            onEmptyClick = { /* TODO: 빈 메뉴 기능 정의 */ }
+            onTextScanClick = {
+                if (isMenuOpen) {
+                    hideFloatingMenu()
+                    startActivity(
+                        Intent(this, TextInputActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                    )
+                }
+            }
         ).also { floatingMenu = it }
 
         val density = resources.displayMetrics.density
