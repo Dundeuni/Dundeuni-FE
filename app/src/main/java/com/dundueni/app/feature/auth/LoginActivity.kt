@@ -25,6 +25,7 @@ class LoginActivity : ComponentActivity() {
             DundueniFETheme {
                 LoginRoute(
                     viewModel = viewModel,
+                    onBack = ::finish,
                     onLoginSuccess = ::finish,
                     onSignUp = { startActivity(Intent(this, SignUpTermsActivity::class.java)) },
                     onResetPassword = { pending("비밀번호 재설정") },

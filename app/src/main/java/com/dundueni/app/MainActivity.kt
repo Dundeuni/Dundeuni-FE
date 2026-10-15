@@ -1,82 +1,160 @@
 package com.dundueni.app
 
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.auth.LoginActivity
+import com.dundueni.app.feature.home.HomeDestination
+import com.dundueni.app.feature.home.HomeScreen
+import com.dundueni.app.feature.photopicker.PhotoPickerActivity
+import com.dundueni.app.feature.textinput.TextInputActivity
 import com.dundueni.app.ui.theme.DundueniFETheme
 
-/**
- * 사용자가 플로팅 버튼 기능을 시작하는 앱 진입 화면이다.
- * 시작 버튼을 누르면 FloatingButtonManager를 통해 Overlay 권한을 확인한다.
- * Overlay는 다른 앱 위에 View를 표시하는 기능이며 별도 권한이 필요하다.
- * 권한이 있으면 서비스를 시작하고, 없으면 Android 설정 화면을 연다.
- * 실제 플로팅 버튼과 메뉴는 FloatingButtonService가 관리한다.
- */
 class MainActivity : ComponentActivity() {
+    private var floatingButtonEnabled by mutableStateOf(false)
+    private var pendingOverlayAction: OverlayAction? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        enableEdgeToEdge()
-
-        setContent {
-
-            DundueniFETheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Column(modifier = Modifier.padding(innerPadding)) {
-                        Button(onClick = { startActivity(Intent(this@MainActivity, LoginActivity::class.java)) }) {
-                            Text("로그인")
-                        }
-                        Button(onClick = { startFloatingButton() }) {
-                            Text("플로팅 버튼 시작")
-                        }
-                        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                            Button(onClick = {
-                                startActivity(Intent().setClassName(this@MainActivity,
-                                    "com.dundueni.app.feature.auth.LoginPreviewActivity"))
-                            }) {
-                                Text("PB-09 로그인 UI 미리보기")
-                            }
-                            Button(onClick = {
-                                startActivity(Intent().setClassName(
-                                    this@MainActivity,
-                                    "com.dundueni.app.feature.analysisresult.AnalysisResultPreviewActivity",
-                                ))
-                            }) {
-                                Text("PB-05 분석 결과 미리보기")
-                            }
-                        }
-                    }
-                }
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        val action = pendingOverlayAction
+        pendingOverlayAction = null
+        if (FloatingButtonManager.hasOverlayPermission(this)) {
+            when (action) {
+                OverlayAction.ENABLE -> startFloatingButton()
+                OverlayAction.SCREEN_SCAN -> startScreenScan()
+                null -> syncFloatingButtonState()
+            }
+        } else {
+            syncFloatingButtonState()
+            if (action == OverlayAction.SCREEN_SCAN) {
+                showMessage("화면 검사를 사용하려면 오버레이 권한이 필요합니다.")
             }
         }
     }
 
-    // Overlay 권한 확인 후 Floating Button 실행
-    private fun startFloatingButton() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        syncFloatingButtonState()
 
-        if (FloatingButtonManager.hasOverlayPermission(this)) {
-
-            // 권한 있음 → Foreground Service 실행
-            FloatingButtonManager.start(this)
-
-        } else {
-
-            // 권한 없음 → Android Overlay 권한 설정 화면 이동
-            // 설정에서 돌아온 뒤에는 시작 버튼을 다시 눌러 권한을 확인한다.
-            FloatingButtonManager.requestOverlayPermission(this)
+        setContent {
+            DundueniFETheme {
+                HomeScreen(
+                    floatingButtonEnabled = floatingButtonEnabled,
+                    onFloatingButtonChange = ::onFloatingButtonChange,
+                    onScreenScan = ::requestScreenScan,
+                    onImageScan = ::openPhotoPicker,
+                    onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
+                    onNotifications = { showMessage("준비 중인 기능입니다") },
+                    onSettings = { showMessage("준비 중인 기능입니다") },
+                    onViewAllHistory = { showMessage("준비 중인 기능입니다") },
+                    onNavigationSelected = { destination ->
+                        when (destination) {
+                            HomeDestination.MY_SHELTER ->
+                                startActivity(Intent(this@MainActivity, LoginActivity::class.java))
+                            HomeDestination.HOME -> Unit
+                            else -> showMessage("준비 중인 기능입니다")
+                        }
+                    },
+                )
+            }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingOverlayAction == null) syncFloatingButtonState()
+    }
+
+    private fun onFloatingButtonChange(enabled: Boolean) {
+        if (!enabled) {
+            FloatingButtonManager.stop(this)
+            floatingButtonEnabled = false
+            return
+        }
+
+        if (FloatingButtonManager.hasOverlayPermission(this)) {
+            startFloatingButton()
+        } else {
+            requestOverlayPermission(OverlayAction.ENABLE)
+        }
+    }
+
+    private fun requestScreenScan() {
+        if (FloatingButtonManager.hasOverlayPermission(this)) {
+            startScreenScan()
+        } else {
+            requestOverlayPermission(OverlayAction.SCREEN_SCAN)
+        }
+    }
+
+    private fun requestOverlayPermission(action: OverlayAction) {
+        pendingOverlayAction = action
+        try {
+            overlayPermissionLauncher.launch(FloatingButtonManager.createOverlayPermissionIntent(this))
+        } catch (_: Exception) {
+            pendingOverlayAction = null
+            syncFloatingButtonState()
+            showMessage("오버레이 권한 설정을 열지 못했습니다.")
+        }
+    }
+
+    private fun startFloatingButton() {
+        try {
+            FloatingButtonManager.start(this)
+            verifyFloatingButtonStarted()
+        } catch (_: Exception) {
+            syncFloatingButtonState()
+            showMessage("안심 버튼을 시작하지 못했습니다.")
+        }
+    }
+
+    private fun startScreenScan() {
+        try {
+            FloatingButtonManager.startScreenScan(this)
+        } catch (_: Exception) {
+            syncFloatingButtonState()
+            showMessage("화면 검사를 시작하지 못했습니다.")
+        }
+    }
+
+    private fun verifyFloatingButtonStarted() {
+        floatingButtonEnabled = true
+        mainHandler.postDelayed({
+            syncFloatingButtonState()
+            if (!floatingButtonEnabled) showMessage("안심 버튼을 표시하지 못했습니다.")
+        }, 700L)
+    }
+
+    private fun syncFloatingButtonState() {
+        floatingButtonEnabled = FloatingButtonManager.isRunning()
+    }
+
+    private fun openPhotoPicker() {
+        try {
+            startActivity(Intent(this, PhotoPickerActivity::class.java).apply {
+                putExtra(PhotoPickerActivity.EXTRA_OPEN_PICKER, true)
+            })
+        } catch (_: Exception) {
+            showMessage("이미지 선택 화면을 열지 못했습니다.")
+        }
+    }
+
+    private fun showMessage(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private enum class OverlayAction { ENABLE, SCREEN_SCAN }
 }

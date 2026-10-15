@@ -3,7 +3,14 @@ package com.dundueni.app.feature.analysis
 import androidx.lifecycle.ViewModelStore
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.repository.AnalysisResultRepository
+import com.dundueni.app.data.remote.api.AnalysisHttpException
+import com.dundueni.app.data.remote.api.AnalysisProtocolException
+import com.dundueni.app.data.repository.AnalysisFailedException
+import com.dundueni.app.data.repository.AnalysisNotCompletedException
+import com.dundueni.app.data.repository.AnalysisExecutionStatus
 import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -68,7 +75,8 @@ class AnalysisViewModelTest {
         runCurrent()
         pending.completeExceptionally(IOException("private server details"))
         runCurrent()
-        assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading, AnalysisUiState.Error), states)
+        assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading,
+            AnalysisUiState.Error(AnalysisErrorKind.CONNECTION)), states)
         vm.analyze(part)
         runCurrent()
         assertEquals(AnalysisUiState.Success(result), vm.uiState.value)
@@ -78,7 +86,7 @@ class AnalysisViewModelTest {
         val vm = viewModel { throw IllegalArgumentException("invalid response") }
         vm.analyze(part)
         runCurrent()
-        assertEquals(AnalysisUiState.Error, vm.uiState.value)
+        assertEquals(AnalysisUiState.Error(), vm.uiState.value)
     }
 
     @Test fun preparationExceptionProducesErrorWithoutCallingRepository() = runTest {
@@ -89,7 +97,28 @@ class AnalysisViewModelTest {
         vm.analyzePrepared { throw IllegalStateException("image preparation failed") }
         runCurrent()
         assertEquals(0, calls)
-        assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading, AnalysisUiState.Error), states)
+        assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading,
+            AnalysisUiState.Error(AnalysisErrorKind.INPUT)), states)
+    }
+
+    @Test fun distinguishesFailuresWithoutExposingPrivateServerMessages() = runTest {
+        val failures = listOf(
+            ConnectException("private host") to AnalysisUiState.Error(AnalysisErrorKind.CONNECTION),
+            SocketTimeoutException("private host") to AnalysisUiState.Error(AnalysisErrorKind.TIMEOUT),
+            java.io.InterruptedIOException("call timeout") to AnalysisUiState.Error(AnalysisErrorKind.TIMEOUT),
+            AnalysisHttpException(503, "INTERNAL", "private details") to AnalysisUiState.Error(AnalysisErrorKind.HTTP, 503),
+            AnalysisProtocolException("private JSON") to AnalysisUiState.Error(AnalysisErrorKind.RESPONSE),
+            AnalysisApiConfigurationException("private URL") to AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION),
+            AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, "id", null) to AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS),
+            AnalysisFailedException("INTERNAL", "private details") to AnalysisUiState.Error(AnalysisErrorKind.SERVER),
+        )
+        for ((failure, expected) in failures) {
+            val vm = viewModel { throw failure }
+            vm.analyze(part)
+            runCurrent()
+            assertEquals(expected, vm.uiState.value)
+            assertFalse(vm.uiState.value.toString().contains("private"))
+        }
     }
 
     @Test fun unknownServerRiskValueIsPreservedAsSuccess() = runTest {

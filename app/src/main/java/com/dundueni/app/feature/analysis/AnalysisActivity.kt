@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.data.model.ImageInput
+import com.dundueni.app.feature.home.returnToHome
 import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
 
@@ -52,7 +53,7 @@ class AnalysisActivity : ComponentActivity() {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 Box(Modifier.safeDrawingPadding()) {
-                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish)
+                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome)
                 }
             }
         }

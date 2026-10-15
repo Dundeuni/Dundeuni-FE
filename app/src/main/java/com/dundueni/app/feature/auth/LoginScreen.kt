@@ -57,25 +57,28 @@ fun LoginScreen(
     onKakaoLogin: () -> Unit,
     onGoogleLogin: () -> Unit,
     modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
-    val keyboardVisible = WindowInsets.isImeVisible
     val submit = { focus.clearFocus(); onLogin() }
     CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(
         fontFamily = LoginFont, letterSpacing = 0.sp,
     )) {
-    Box(modifier.fillMaxSize().background(LoginColors.Background).safeDrawingPadding().imePadding()) {
+    Box(modifier.fillMaxSize().background(LoginColors.Background).safeDrawingPadding()) {
         Column(
-            Modifier.fillMaxSize().padding(bottom = if (keyboardVisible) 64.dp else 0.dp).verticalScroll(rememberScrollState()),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // 390px 원본의 로고 위치를 유지하고 큰 화면에서는 폼 너비만 제한한다.
-            if (keyboardVisible) Spacer(Modifier.height(16.dp))
-            else {
-                Spacer(Modifier.height(111.dp))
-                LoginBrand()
-                Spacer(Modifier.height(50.dp))
+            Box(
+                Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onBack),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text("← 뒤로가기", Modifier.padding(horizontal = 20.dp), color = LoginColors.Link, fontSize = 14.sp)
             }
+            // 390px 원본의 로고 위치를 유지하고 큰 화면에서는 폼 너비만 제한한다.
+            Spacer(Modifier.height(111.dp))
+            LoginBrand()
+            Spacer(Modifier.height(50.dp))
             Column(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 20.dp)) {
                 Column(
                     Modifier.fillMaxWidth().shadow(1.dp, RoundedCornerShape(12.dp))
@@ -103,7 +106,7 @@ fun LoginScreen(
                             LoginMessage(message)
                         }
                     }
-                    if (!keyboardVisible) LoginSubmitButton(state, submit)
+                    LoginSubmitButton(state, submit)
                     Row(
                         Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
@@ -127,13 +130,6 @@ fun LoginScreen(
                 Spacer(Modifier.height(12.dp))
                 SocialButton("Google로 시작하기", R.drawable.auth_google, Color.White, !state.submitting, onGoogleLogin)
                 Spacer(Modifier.height(60.dp))
-            }
-        }
-        if (keyboardVisible) {
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(LoginColors.Background), contentAlignment = Alignment.Center) {
-                Box(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 8.dp)) {
-                    LoginSubmitButton(state, submit, compact = true)
-                }
             }
         }
     }

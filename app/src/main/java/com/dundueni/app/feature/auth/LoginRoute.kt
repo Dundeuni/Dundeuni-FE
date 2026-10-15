@@ -12,11 +12,13 @@ fun LoginRoute(
     onResetPassword: () -> Unit,
     onKakaoLogin: () -> Unit,
     onGoogleLogin: () -> Unit,
+    onBack: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LoginScreen(
         state, viewModel::changeEmail, viewModel::changePassword, viewModel::togglePasswordVisibility,
         onLogin = { viewModel.login(onLoginSuccess) },
+        onBack = onBack,
         onSignUp = onSignUp, onResetPassword = onResetPassword,
         onKakaoLogin = onKakaoLogin, onGoogleLogin = onGoogleLogin,
     )

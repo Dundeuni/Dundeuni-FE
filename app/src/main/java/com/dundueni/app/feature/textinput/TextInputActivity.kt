@@ -47,6 +47,7 @@ class TextInputActivity : ComponentActivity() {
                             val json = Gson().toJson(result)
                             val intent = AnalysisResultActivity.createIntent(this@TextInputActivity, json)
                             startActivity(intent)
+                            finish()
                         },
                         onClose = { finish() }
                     )

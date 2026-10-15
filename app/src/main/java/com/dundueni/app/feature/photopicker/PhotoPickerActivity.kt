@@ -23,7 +23,9 @@ class PhotoPickerActivity : ComponentActivity() {
 
         setContent {
             PhotoPickerTestScreen(
-                openPickerOnLaunch = intent.getBooleanExtra(EXTRA_OPEN_PICKER, false)
+                openPickerOnLaunch = intent.getBooleanExtra(EXTRA_OPEN_PICKER, false),
+                closeOnCancel = intent.getBooleanExtra(EXTRA_OPEN_PICKER, false),
+                onCancel = ::finish
             )
         }
     }

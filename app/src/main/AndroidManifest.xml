@@ -48,7 +48,7 @@
         <activity android:name=".feature.auth.SignUpCredentialsActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".feature.auth.LoginActivity" android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustNothing" />
         <!-- PB-05 분석 결과 -->
         <activity
             android:name=".feature.analysisresult.AnalysisResultActivity"
@@ -65,16 +65,20 @@
         <!-- Photo Picker 테스트 -->
         <activity
             android:name=".feature.analysis.AnalysisActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:taskAffinity="" />
 
         <activity
             android:name=".feature.photopicker.PhotoPickerActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.DundueniFE.PhotoPickerHost" />
 
         <!-- 텍스트 입력 및 검사 -->
         <activity
             android:name=".feature.textinput.TextInputActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:taskAffinity="" />
 
 
         <!-- MediaProjection Foreground Service -->

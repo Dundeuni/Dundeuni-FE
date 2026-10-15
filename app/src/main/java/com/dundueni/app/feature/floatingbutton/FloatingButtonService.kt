@@ -1,5 +1,8 @@
 package com.dundueni.app.feature.floatingbutton
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,7 +14,9 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -22,9 +27,13 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Choreographer
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import com.dundueni.app.MainActivity
 import com.dundueni.app.R
@@ -46,6 +55,7 @@ import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
 import java.io.File
 import java.io.IOException
+import kotlin.math.abs
 
 /**
  * Activity 화면과 별개로 플로팅 버튼과 검사 메뉴의 표시 수명을 관리한다.
@@ -60,21 +70,32 @@ class FloatingButtonService : Service() {
 
     private lateinit var windowManager: WindowManager
     private var floatingButton: ImageButton? = null
+    private var floatingButtonX = 30
+    private var floatingButtonY = 0
+    private var edgeSnapAnimator: ValueAnimator? = null
     private var floatingMenu: View? = null
+    private var closingFloatingMenu: View? = null
+    private var errorMessageView: TextView? = null
     private var isMenuOpen = false
     private val captureHandler = Handler(Looper.getMainLooper())
     private var scanInProgress = false
+    private var homeInitiatedScan = false
     private var scanGeneration = 0
     private var captureService: MediaProjectionService? = null
     private var captureConnection: ServiceConnection? = null
     private var captureFrameCallback: Choreographer.FrameCallback? = null
     private var destroyed = false
     private val analysisHandoffScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val errorMessageTimeout = Runnable { dismissErrorMessage() }
     private val scanTimeout = Runnable { finishScreenScan("화면 검사를 시작하지 못했습니다.") }
 
     companion object {
         private const val CHANNEL_ID = "floating_button_channel"
         private const val NOTIFICATION_ID = 1001
+        const val ACTION_SCREEN_SCAN = "com.dundueni.app.action.SCREEN_SCAN"
+        @Volatile
+        var isFloatingButtonVisible: Boolean = false
+            private set
     }
 
     override fun onCreate() {
@@ -95,8 +116,6 @@ class FloatingButtonService : Service() {
         // 4. WindowManager 가져오기
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // 5. Floating Button 화면에 표시
-        showFloatingButton()
     }
 
     // 실제 Floating Button 생성 + 화면에 추가
@@ -126,39 +145,148 @@ class FloatingButtonService : Service() {
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
 
             // 오른쪽에서 약간 떨어뜨림
-            x = 30
-            y = 0
+            x = floatingButtonX
+            y = floatingButtonY
         }
+
+        installDragHandling(floatingButton!!, params, buttonSize)
 
         // 생성한 버튼을 창에 등록해야 다른 앱 위에서도 실제로 보인다.
         windowManager.addView(floatingButton, params)
+        isFloatingButtonVisible = true
+    }
+
+    private fun installDragHandling(button: ImageButton, params: WindowManager.LayoutParams, buttonSize: Int) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        val maxX = (resources.displayMetrics.widthPixels - buttonSize).coerceAtLeast(0)
+        val maxY = ((resources.displayMetrics.heightPixels - buttonSize) / 2).coerceAtLeast(0)
+        var downX = 0f
+        var downY = 0f
+        var startX = params.x
+        var startY = params.y
+        var dragging = false
+
+        button.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    edgeSnapAnimator?.cancel()
+                    edgeSnapAnimator = null
+                    downX = event.rawX
+                    downY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    dragging = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = event.rawX - downX
+                    val deltaY = event.rawY - downY
+                    if (!dragging && (abs(deltaX) > touchSlop || abs(deltaY) > touchSlop)) {
+                        dragging = true
+                    }
+                    if (dragging) {
+                        // END gravity reverses the horizontal window offset direction.
+                        params.x = (startX - deltaX.toInt()).coerceIn(0, maxX)
+                        params.y = (startY + deltaY.toInt()).coerceIn(-maxY, maxY)
+                        try {
+                            windowManager.updateViewLayout(view, params)
+                            floatingButtonX = params.x
+                            floatingButtonY = params.y
+                        } catch (error: WindowManager.BadTokenException) {
+                            Log.w("FloatingButtonService", "플로팅 버튼 이동 실패", error)
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (dragging) {
+                        val screenWidth = resources.displayMetrics.widthPixels
+                        val screenCenterX = screenWidth - params.x - buttonSize / 2f
+                        val centerLine = screenWidth / 2f
+                        val crossingThreshold = buttonSize / 2f
+                        val startWasLeft = startX > maxX / 2
+                        val snapToLeft = when {
+                            screenCenterX < centerLine - crossingThreshold -> true
+                            screenCenterX > centerLine + crossingThreshold -> false
+                            else -> startWasLeft
+                        }
+                        animateButtonToEdge(view, params, if (snapToLeft) maxX else 0)
+                    } else {
+                        view.performClick()
+                    }
+                    dragging = false
+                }
+                MotionEvent.ACTION_CANCEL -> dragging = false
+            }
+            true
+        }
+    }
+
+    private fun animateButtonToEdge(button: View, params: WindowManager.LayoutParams, targetX: Int) {
+        edgeSnapAnimator?.cancel()
+        val animator = ValueAnimator.ofInt(params.x, targetX).apply {
+            duration = 450L
+            interpolator = DecelerateInterpolator(2.5f)
+            addUpdateListener { animation ->
+                params.x = animation.animatedValue as Int
+                try {
+                    windowManager.updateViewLayout(button, params)
+                    floatingButtonX = params.x
+                    floatingButtonY = params.y
+                } catch (error: WindowManager.BadTokenException) {
+                    Log.w("FloatingButtonService", "플로팅 버튼 가장자리 부착 실패", error)
+                    cancel()
+                }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (edgeSnapAnimator === animation) edgeSnapAnimator = null
+                }
+            })
+        }
+        edgeSnapAnimator = animator
+        animator.start()
     }
 
     private fun showFloatingMenu() {
         // 메뉴 중복 표시와 검사 중 재진입을 막고, 이어서 권한 취소 여부도 확인한다.
-        if (isMenuOpen || scanInProgress) return
+        if (isMenuOpen || closingFloatingMenu != null || scanInProgress) return
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
 
         // 닫아 둔 메뉴 View는 재사용하고, 처음 열 때만 선택 동작을 연결한다.
-        val menu = floatingMenu ?: FloatingMenuView.create(
+        val density = resources.displayMetrics.density
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val buttonSize = (72 * density).toInt()
+        val menuWidth = minOf((300 * density).toInt(), screenWidth).coerceAtLeast(1)
+        val menuHeight = minOf((280 * density).toInt(), screenHeight).coerceAtLeast(1)
+        val gap = (8 * density).toInt()
+        val buttonOnLeft = floatingButtonX > (screenWidth - buttonSize).coerceAtLeast(0) / 2
+        val maxMenuOffset = ((screenHeight - menuHeight) / 2).coerceAtLeast(0)
+
+        val menu = FloatingMenuView.create(
             context = this,
+            opensTowardLeft = !buttonOnLeft,
             // 화면 검사 선택은 별도의 캡처 흐름으로 넘긴다.
             onScreenScanClick = { startScreenScan() },
             // 이미지 검사 선택은 메뉴를 닫고 사진 선택 화면으로 넘긴다.
             onImageScanClick = {
                 if (isMenuOpen) {
                     hideFloatingMenu()
-                    startActivity(
+                    try {
+                        startActivity(
                         Intent(this, PhotoPickerActivity::class.java).apply {
                             // Service에서 실행하고, 기존 Picker 화면이 있으면 새 요청으로 교체한다.
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                             // 다음 화면이 열리자마자 시스템 사진 선택기를 띄우도록 요청한다.
                             putExtra(PhotoPickerActivity.EXTRA_OPEN_PICKER, true)
                         }
-                    )
+                        )
+                    } catch (error: Exception) {
+                        Log.e("FloatingButtonService", "Photo Picker 화면 실행 실패", error)
+                        showErrorMessage("사진 선택 화면을 열지 못했습니다. 다시 시도해 주세요.")
+                    }
                 }
             },
             onTextScanClick = {
@@ -173,27 +301,38 @@ class FloatingButtonService : Service() {
             }
         ).also { floatingMenu = it }
 
-        val density = resources.displayMetrics.density
-        val offset = 30 + (80 * density).toInt()
         val params = WindowManager.LayoutParams(
-            minOf((300 * density).toInt(), resources.displayMetrics.widthPixels - offset)
-                .coerceAtLeast(1),
-            (280 * density).toInt(),
+            menuWidth,
+            menuHeight,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             // 버튼 창과 겹치지 않게 왼쪽에 배치한다.
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            x = offset
-            y = 0
+            gravity = (if (buttonOnLeft) Gravity.LEFT else Gravity.RIGHT) or Gravity.CENTER_VERTICAL
+            x = if (buttonOnLeft) {
+                (screenWidth - floatingButtonX + gap).coerceIn(0, screenWidth - menuWidth)
+            } else {
+                (floatingButtonX + buttonSize + gap).coerceIn(0, screenWidth - menuWidth)
+            }
+            y = floatingButtonY.coerceIn(-maxMenuOffset, maxMenuOffset)
         }
 
         try {
             // 메뉴는 버튼과 별도 창으로 표시하고, 버튼 모양도 닫기 상태로 맞춘다.
+            menu.alpha = 0f
+            menu.scaleX = 0.92f
+            menu.scaleY = 0.92f
             windowManager.addView(menu, params)
             isMenuOpen = true
             floatingButton?.let { FloatingButtonView.setMenuOpen(it, true) }
+            menu.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(220L)
+                .setInterpolator(DecelerateInterpolator(1.6f))
+                .start()
         } catch (error: WindowManager.BadTokenException) {
             Log.w("FloatingButtonService", "메뉴 오버레이를 표시할 수 없습니다.", error)
             stopSelf()
@@ -206,9 +345,25 @@ class FloatingButtonService : Service() {
     // 서비스와 버튼은 유지하고 메뉴 창만 떼어 낸 뒤 버튼 모양을 되돌린다.
     private fun hideFloatingMenu() {
         if (!isMenuOpen) return
-        removeOverlay(floatingMenu)
+        val menu = floatingMenu
+        floatingMenu = null
         isMenuOpen = false
         floatingButton?.let { FloatingButtonView.setMenuOpen(it, false) }
+        if (menu == null) return
+
+        closingFloatingMenu = menu
+        menu.animate().cancel()
+        menu.animate()
+            .alpha(0f)
+            .scaleX(0.92f)
+            .scaleY(0.92f)
+            .setDuration(150L)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                removeOverlay(menu)
+                if (closingFloatingMenu === menu) closingFloatingMenu = null
+            }
+            .start()
     }
 
     // 메뉴의 화면 검사 요청부터 승인·캡처·정리까지 이 서비스가 진행 순서를 관리한다.
@@ -244,6 +399,10 @@ class FloatingButtonService : Service() {
                         connectCaptureService(generation)
                     }
                     MediaProjectionTestActivity.PERMISSION_CANCELLED -> finishScreenScan()
+                    MediaProjectionTestActivity.PERMISSION_LAUNCH_FAILED ->
+                        finishScreenScan("화면 공유 승인을 시작하지 못했습니다.")
+                    MediaProjectionTestActivity.CAPTURE_SERVICE_START_FAILED ->
+                        finishScreenScan("화면 캡처 세션을 시작하지 못했습니다.")
                 }
             }
         }
@@ -284,9 +443,9 @@ class FloatingButtonService : Service() {
                         result.fold(
                             onSuccess = { input ->
                                 try {
-                                    onScreenCaptureReady(input)
+                                    onScreenCaptureReady(input, stopServiceAfterHandoff = homeInitiatedScan)
                                 } finally {
-                                    finishScreenScan()
+                                    finishScreenScan(deferTemporaryStop = homeInitiatedScan)
                                 }
                             },
                             onFailure = { error ->
@@ -337,7 +496,7 @@ class FloatingButtonService : Service() {
         Choreographer.getInstance().postFrameCallback(callback)
     }
 
-    private fun onScreenCaptureReady(input: ImageInput.ScreenCapture) {
+    private fun onScreenCaptureReady(input: ImageInput.ScreenCapture, stopServiceAfterHandoff: Boolean) {
         // Bitmap을 Binder에 싣지 않고 앱 내부 PNG 캐시를 전달합니다. 기존 PNG 인코딩은 한 번만 수행합니다.
         // 큰 Bitmap의 Intent 전달 용량 제한을 피하고, 파일 쓰기는 화면을 막지 않게 처리한다.
         analysisHandoffScope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -360,19 +519,24 @@ class FloatingButtonService : Service() {
                 throw cancelled
             } catch (error: Exception) {
                 Log.w("FloatingButtonService", "분석 화면으로 캡처 전달 실패", error)
-                Toast.makeText(this@FloatingButtonService, "검사를 시작하지 못했습니다. 다시 시도해 주세요.", Toast.LENGTH_SHORT).show()
+                val message = "검사를 시작하지 못했습니다. 다시 시도해 주세요."
+                if (stopServiceAfterHandoff) Toast.makeText(this@FloatingButtonService, message, Toast.LENGTH_SHORT).show()
+                else showErrorMessage(message)
             } finally {
                 // Bitmap은 여기서 해제하고, 전달하지 못한 임시 파일도 삭제한다.
                 input.bitmap.recycle()
                 if (!handedOff) file?.delete()
+                if (stopServiceAfterHandoff) stopSelf()
             }
         }
     }
 
     // 성공·취소·실패가 같은 정리 경로를 거쳐 다음 검사를 받을 수 있게 한다.
-    private fun finishScreenScan(message: String? = null) {
+    private fun finishScreenScan(message: String? = null, deferTemporaryStop: Boolean = false) {
         if (!scanInProgress) return
         scanInProgress = false
+        val stopAfterScan = homeInitiatedScan
+        homeInitiatedScan = false
         captureHandler.removeCallbacks(scanTimeout)
         // 예약된 프레임 대기를 취소한 뒤 캡처 세션을 끝내고 서비스 연결을 해제한다.
         captureFrameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
@@ -389,8 +553,11 @@ class FloatingButtonService : Service() {
         captureConnection = null
         // Also covers initialization/binding failure before a binder became available.
         stopService(Intent(this, MediaProjectionService::class.java))
-        // 플로팅 서비스와 표시 권한이 남아 있을 때만 버튼을 복구한다.
-        if (!destroyed && Settings.canDrawOverlays(this)) {
+        if (stopAfterScan) {
+            removeOverlay(floatingButton)
+            floatingButton = null
+            if (!deferTemporaryStop) stopSelf()
+        } else if (!destroyed && Settings.canDrawOverlays(this)) {
             try {
                 showFloatingButton()
                 floatingButton?.isEnabled = true
@@ -399,7 +566,56 @@ class FloatingButtonService : Service() {
                 stopSelf()
             }
         }
-        if (message != null && !destroyed) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        if (message != null && !destroyed) {
+            if (stopAfterScan) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            else showErrorMessage(message)
+        }
+    }
+
+    // Reuse the already-authorized overlay window so errors remain visible above other apps.
+    private fun showErrorMessage(message: String) {
+        if (destroyed || !Settings.canDrawOverlays(this)) return
+        captureHandler.removeCallbacks(errorMessageTimeout)
+        dismissErrorMessage()
+
+        val density = resources.displayMetrics.density
+        val view = TextView(this).apply {
+            text = message
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding((20 * density).toInt(), (14 * density).toInt(), (20 * density).toInt(), (14 * density).toInt())
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(45, 45, 45))
+                cornerRadius = 12 * density
+            }
+            elevation = 8 * density
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = (72 * density).toInt()
+        }
+
+        try {
+            windowManager.addView(view, params)
+            errorMessageView = view
+            captureHandler.postDelayed(errorMessageTimeout, 4_000L)
+        } catch (error: Exception) {
+            Log.w("FloatingButtonService", "오류 안내 오버레이 표시 실패", error)
+        }
+    }
+
+    private fun dismissErrorMessage() {
+        captureHandler.removeCallbacks(errorMessageTimeout)
+        errorMessageView?.let(::removeOverlay)
+        errorMessageView = null
     }
 
     private fun removeOverlay(view: View?) {
@@ -411,6 +627,7 @@ class FloatingButtonService : Service() {
             // 이미 분리된 View여도 다른 오버레이의 정리는 계속한다.
             Log.w("FloatingButtonService", "이미 제거된 오버레이입니다.", error)
         }
+        if (view === floatingButton) isFloatingButtonVisible = false
     }
 
     // Foreground Service 시작
@@ -479,20 +696,35 @@ class FloatingButtonService : Service() {
     ): Int {
 
         // 시스템이 Service를 종료했을 경우 가능한 범위에서 재생성 요청
+        if (intent?.action == ACTION_SCREEN_SCAN) {
+            val temporaryScan = floatingButton == null
+            homeInitiatedScan = temporaryScan
+            startScreenScan()
+            return if (temporaryScan) START_NOT_STICKY else START_STICKY
+        }
+        if (Settings.canDrawOverlays(this)) showFloatingButton()
         return START_STICKY
     }
 
     override fun onDestroy() {
 
         destroyed = true
+        isFloatingButtonVisible = false
+        edgeSnapAnimator?.cancel()
+        edgeSnapAnimator = null
+        dismissErrorMessage()
         analysisHandoffScope.cancel()
         finishScreenScan()
 
         // 서비스 종료 후 화면에 버튼이나 메뉴가 남지 않도록 창과 참조를 정리한다.
-        if (isMenuOpen) removeOverlay(floatingMenu)
+        floatingMenu?.animate()?.cancel()
+        closingFloatingMenu?.animate()?.cancel()
+        removeOverlay(floatingMenu)
+        removeOverlay(closingFloatingMenu)
         removeOverlay(floatingButton)
         isMenuOpen = false
         floatingMenu = null
+        closingFloatingMenu = null
         floatingButton?.setOnClickListener(null)
         floatingButton = null
 
