@@ -1,6 +1,7 @@
 package com.dundueni.app
 
 import android.content.Intent
+import android.app.AlertDialog
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.auth.LoginActivity
+import com.dundueni.app.data.auth.AuthSessionRuntime
+import com.dundueni.app.feature.capture.MediaProjectionService
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeScreen
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
@@ -24,6 +27,8 @@ class MainActivity : ComponentActivity() {
     private var floatingButtonEnabled by mutableStateOf(false)
     private var pendingOverlayAction: OverlayAction? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var lastUnauthorizedRevision = 0L
+    private var redirectingToLogin = false
 
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -47,6 +52,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val authStore = AuthSessionRuntime.store(applicationContext)
+        lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
+        authStore.read()?.takeIf { !it.isValid() }?.let {
+            AuthSessionRuntime.onExpired(it)
+            redirectToLogin()
+            return
+        }
         syncFloatingButtonState()
 
         setContent {
@@ -62,8 +74,7 @@ class MainActivity : ComponentActivity() {
                     onViewAllHistory = { showMessage("준비 중인 기능입니다") },
                     onNavigationSelected = { destination ->
                         when (destination) {
-                            HomeDestination.MY_SHELTER ->
-                                startActivity(Intent(this@MainActivity, LoginActivity::class.java))
+                            HomeDestination.MY_SHELTER -> openAccount()
                             HomeDestination.HOME -> Unit
                             else -> showMessage("준비 중인 기능입니다")
                         }
@@ -75,7 +86,51 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        val unauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
+        if (unauthorizedRevision > lastUnauthorizedRevision) {
+            lastUnauthorizedRevision = unauthorizedRevision
+            redirectToLogin()
+            return
+        }
+        AuthSessionRuntime.store(applicationContext).read()?.takeIf { !it.isValid() }?.let {
+            AuthSessionRuntime.onExpired(it)
+            lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
+            redirectToLogin()
+            return
+        }
         if (pendingOverlayAction == null) syncFloatingButtonState()
+    }
+
+    private fun openAccount() {
+        val session = AuthSessionRuntime.store(applicationContext).read()
+        if (session == null) {
+            startActivity(Intent(this, LoginActivity::class.java))
+        } else if (!session.isValid()) {
+            AuthSessionRuntime.onExpired(session)
+            lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
+            redirectToLogin()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("계정")
+                .setMessage("로그인된 상태입니다.")
+                .setNegativeButton("취소", null)
+                .setPositiveButton("로그아웃") { _, _ ->
+                    AuthSessionRuntime.store(applicationContext).clear()
+                    redirectToLogin()
+                }
+                .show()
+        }
+    }
+
+    private fun redirectToLogin() {
+        if (redirectingToLogin || isFinishing) return
+        redirectingToLogin = true
+        FloatingButtonManager.stop(this)
+        stopService(Intent(this, MediaProjectionService::class.java))
+        floatingButtonEnabled = false
+        startActivity(Intent(this, LoginActivity::class.java).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
+        ))
     }
 
     private fun onFloatingButtonChange(enabled: Boolean) {

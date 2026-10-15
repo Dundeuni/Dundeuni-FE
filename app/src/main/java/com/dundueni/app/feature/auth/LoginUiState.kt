@@ -1,5 +1,7 @@
 package com.dundueni.app.feature.auth
 
+import com.dundueni.app.data.auth.AuthSession
+
 data class LoginUiState(
     val email: String = "",
     val password: String = "",
@@ -12,7 +14,7 @@ data class LoginUiState(
 )
 
 sealed interface LoginOutcome {
-    data object Success : LoginOutcome
+    data class Success(val session: AuthSession) : LoginOutcome
     data object InvalidCredentials : LoginOutcome
     data object Unavailable : LoginOutcome
     data object ConnectionError : LoginOutcome

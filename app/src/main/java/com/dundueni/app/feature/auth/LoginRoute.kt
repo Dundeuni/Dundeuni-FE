@@ -1,5 +1,7 @@
 package com.dundueni.app.feature.auth
 
+import com.dundueni.app.data.auth.AuthSession
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -7,7 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun LoginRoute(
     viewModel: LoginViewModel,
-    onLoginSuccess: () -> Unit,
+    onLoginSuccess: (AuthSession) -> Unit,
     onSignUp: () -> Unit,
     onResetPassword: () -> Unit,
     onKakaoLogin: () -> Unit,

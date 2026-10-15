@@ -32,7 +32,7 @@ class LoginViewModel(
         state.update { it.copy(passwordVisible = !it.passwordVisible) }
     }
 
-    fun login(onSuccess: () -> Unit) {
+    fun login(onSuccess: (com.dundueni.app.data.auth.AuthSession) -> Unit) {
         if (state.value.submitting || submission?.isActive == true) return
         val input = state.value
         val emailError = LoginInputValidator.emailError(input.email)
@@ -52,9 +52,9 @@ class LoginViewModel(
                 LoginOutcome.ConnectionError
             }
             when (outcome) {
-                LoginOutcome.Success -> {
+                is LoginOutcome.Success -> {
                     state.update { LoginUiState(email = it.email) }
-                    onSuccess()
+                    onSuccess(outcome.session)
                 }
                 LoginOutcome.InvalidCredentials -> state.update {
                     it.copy(submitting = false, credentialsRejected = true, message = "이메일 또는 비밀번호가 일치하지 않습니다.")

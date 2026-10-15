@@ -1,6 +1,8 @@
 package com.dundueni.app.feature.auth
 
 import androidx.lifecycle.ViewModelStore
+import com.dundueni.app.data.auth.AuthSession
+import com.dundueni.app.data.auth.AuthSessionSource
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,7 +22,7 @@ class LoginViewModelTest {
 
     @Test fun malformedOrMissingInputDoesNotCallApi() = runTest {
         var calls = 0
-        val vm = model { _, _ -> calls++; LoginOutcome.Success }
+        val vm = model { _, _ -> calls++; success() }
         vm.login { fail("Unexpected success") }
         assertNotNull(vm.uiState.value.emailError)
         assertNotNull(vm.uiState.value.passwordError)
@@ -62,7 +64,7 @@ class LoginViewModelTest {
     }
 
     @Test fun successClearsPasswordAndNavigatesOnce() = runTest {
-        val vm = model { _, _ -> LoginOutcome.Success }
+        val vm = model { _, _ -> success() }
         vm.changeEmail("example@kau.kr")
         vm.changePassword("test-password")
         var navigations = 0
@@ -82,5 +84,12 @@ class LoginViewModelTest {
         assertFalse(vm.uiState.value.credentialsRejected)
         assertFalse(vm.uiState.value.submitting)
         assertEquals("연결하지 못했습니다. 다시 시도해 주세요.", vm.uiState.value.message)
+    }
+
+    private fun success(): LoginOutcome.Success {
+        val exp = System.currentTimeMillis() / 1_000L + 600L
+        fun encode(value: String) = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(value.toByteArray())
+        return LoginOutcome.Success(AuthSession("${encode("{}")}.${encode("{\"exp\":$exp}")}.sig", AuthSessionSource.MOCK))
     }
 }
