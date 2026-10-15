@@ -71,6 +71,11 @@
             android:name=".feature.photopicker.PhotoPickerActivity"
             android:exported="true" />
 
+        <!-- 텍스트 입력 및 검사 -->
+        <activity
+            android:name=".feature.textinput.TextInputActivity"
+            android:exported="false" />
+
 
         <!-- MediaProjection Foreground Service -->
         <service
