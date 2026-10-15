@@ -19,7 +19,7 @@ object FloatingMenuView {
         opensTowardLeft: Boolean,
         onScreenScanClick: () -> Unit,
         onImageScanClick: () -> Unit,
-        onEmptyClick: () -> Unit
+        onTextScanClick: () -> Unit
     ): View {
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
@@ -94,7 +94,7 @@ object FloatingMenuView {
         val verticalOffset = 62
         addItem("AI 화면 검사", R.drawable.menu_icon_screen, middleTop - verticalOffset, 0, onScreenScanClick)
         addItem("이미지 검사", R.drawable.menu_icon_image, middleTop, 28, onImageScanClick)
-        addItem("텍스트 검사", R.drawable.menu_icon_text, middleTop + verticalOffset, 30, onEmptyClick)
+        addItem("텍스트 검사", R.drawable.menu_icon_text, middleTop + verticalOffset, 30, onTextScanClick)
         return container
     }
 }
