@@ -34,7 +34,7 @@ class IntegratedManifestTest {
             val info = pm.getServiceInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
             assertFalse(info.exported)
         }
-        val permissions = pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.toSet()
+        val permissions = pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty().toSet()
         for (permission in listOf("INTERNET", "SYSTEM_ALERT_WINDOW", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PROJECTION", "FOREGROUND_SERVICE_SPECIAL_USE")) {
             assertTrue(permission, "android.permission.$permission" in permissions)
         }
