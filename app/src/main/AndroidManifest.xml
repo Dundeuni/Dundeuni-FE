@@ -66,7 +66,7 @@
         <!-- 텍스트 입력 및 검사 -->
         <activity
             android:name=".feature.textinput.TextInputActivity"
-            android:exported="true" />
+            android:exported="false" />
 
 
         <!-- MediaProjection Foreground Service -->

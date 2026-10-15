@@ -33,14 +33,14 @@ class TextInputActivity : ComponentActivity() {
                             val result = AnalysisResult(
                                 id = "text-scan-${System.currentTimeMillis()}",
                                 riskLevel = RiskLevel.CAUTION,
-                                summary = "입력하신 텍스트에 대한 분석 결과입니다.",
-                                keyFinding = "작성하신 내용에서 주의가 필요한 표현이 감지되었습니다.",
+                                summary = "모의 분석 결과입니다. 실제 텍스트 분석은 수행되지 않았습니다.",
+                                keyFinding = "표시된 위험 단계와 점수는 예시 데이터이며, 입력한 텍스트를 분석한 결과가 아닙니다.",
                                 fraudScore = 50.0,
                                 aiLikelihood = AiLikelihood.MEDIUM,
                                 sourceText = text,
                                 evidence = listOf(
-                                    RiskEvidence("입력 텍스트 점검", "사용자가 직접 입력한 텍스트 내용을 기반으로 사기 및 피싱 위험도를 분석했습니다."),
-                                    RiskEvidence("주의 필요 표현", "금전 요구나 개인정보 요청 문구가 있는지 주의 깊게 확인하세요.")
+                                    RiskEvidence("모의 텍스트 검사", "실제 분석 API를 호출하지 않은 고정 예시 항목입니다."),
+                                    RiskEvidence("예시 안내", "표시된 주의 단계와 점수는 입력 내용과 무관한 샘플 값입니다.")
                                 ),
                                 targetLabel = "입력한 텍스트 내용"
                             )
