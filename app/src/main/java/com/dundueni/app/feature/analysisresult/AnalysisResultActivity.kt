@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.ui.theme.DundueniFETheme
+import com.dundueni.app.feature.home.returnToHome
 
 class AnalysisResultActivity : ComponentActivity() {
     companion object {
@@ -34,7 +35,7 @@ class AnalysisResultActivity : ComponentActivity() {
         setContent {
             DundueniFETheme {
                 if (result != null) {
-                    AnalysisResultRoute(result, onReturn = { finish() })
+                    AnalysisResultRoute(result, onReturn = ::finish, onHome = ::returnToHome)
                 } else {
                     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                         Column(Modifier.safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.Center,
@@ -43,7 +44,7 @@ class AnalysisResultActivity : ComponentActivity() {
                             Spacer(Modifier.height(12.dp))
                             Text("결과 데이터가 없거나 형식이 올바르지 않아요. 이전 화면에서 다시 확인해주세요.")
                             Spacer(Modifier.height(24.dp))
-                            Button(onClick = { finish() }) { Text("이전 화면으로 돌아가기") }
+                            Button(onClick = ::returnToHome) { Text("홈으로 돌아가기") }
                         }
                     }
                 }

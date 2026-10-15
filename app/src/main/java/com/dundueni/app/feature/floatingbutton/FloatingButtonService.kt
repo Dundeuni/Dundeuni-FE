@@ -34,6 +34,7 @@ import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import com.dundueni.app.MainActivity
 import com.dundueni.app.R
 import com.dundueni.app.data.model.ImageInput
@@ -78,6 +79,7 @@ class FloatingButtonService : Service() {
     private var isMenuOpen = false
     private val captureHandler = Handler(Looper.getMainLooper())
     private var scanInProgress = false
+    private var homeInitiatedScan = false
     private var scanGeneration = 0
     private var captureService: MediaProjectionService? = null
     private var captureConnection: ServiceConnection? = null
@@ -90,6 +92,10 @@ class FloatingButtonService : Service() {
     companion object {
         private const val CHANNEL_ID = "floating_button_channel"
         private const val NOTIFICATION_ID = 1001
+        const val ACTION_SCREEN_SCAN = "com.dundueni.app.action.SCREEN_SCAN"
+        @Volatile
+        var isFloatingButtonVisible: Boolean = false
+            private set
     }
 
     override fun onCreate() {
@@ -110,8 +116,6 @@ class FloatingButtonService : Service() {
         // 4. WindowManager 가져오기
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // 5. Floating Button 화면에 표시
-        showFloatingButton()
     }
 
     // 실제 Floating Button 생성 + 화면에 추가
@@ -149,6 +153,7 @@ class FloatingButtonService : Service() {
 
         // 생성한 버튼을 창에 등록해야 다른 앱 위에서도 실제로 보인다.
         windowManager.addView(floatingButton, params)
+        isFloatingButtonVisible = true
     }
 
     private fun installDragHandling(button: ImageButton, params: WindowManager.LayoutParams, buttonSize: Int) {
@@ -438,9 +443,9 @@ class FloatingButtonService : Service() {
                         result.fold(
                             onSuccess = { input ->
                                 try {
-                                    onScreenCaptureReady(input)
+                                    onScreenCaptureReady(input, stopServiceAfterHandoff = homeInitiatedScan)
                                 } finally {
-                                    finishScreenScan()
+                                    finishScreenScan(deferTemporaryStop = homeInitiatedScan)
                                 }
                             },
                             onFailure = { error ->
@@ -491,7 +496,7 @@ class FloatingButtonService : Service() {
         Choreographer.getInstance().postFrameCallback(callback)
     }
 
-    private fun onScreenCaptureReady(input: ImageInput.ScreenCapture) {
+    private fun onScreenCaptureReady(input: ImageInput.ScreenCapture, stopServiceAfterHandoff: Boolean) {
         // Bitmap을 Binder에 싣지 않고 앱 내부 PNG 캐시를 전달합니다. 기존 PNG 인코딩은 한 번만 수행합니다.
         // 큰 Bitmap의 Intent 전달 용량 제한을 피하고, 파일 쓰기는 화면을 막지 않게 처리한다.
         analysisHandoffScope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -514,19 +519,24 @@ class FloatingButtonService : Service() {
                 throw cancelled
             } catch (error: Exception) {
                 Log.w("FloatingButtonService", "분석 화면으로 캡처 전달 실패", error)
-                showErrorMessage("검사를 시작하지 못했습니다. 다시 시도해 주세요.")
+                val message = "검사를 시작하지 못했습니다. 다시 시도해 주세요."
+                if (stopServiceAfterHandoff) Toast.makeText(this@FloatingButtonService, message, Toast.LENGTH_SHORT).show()
+                else showErrorMessage(message)
             } finally {
                 // Bitmap은 여기서 해제하고, 전달하지 못한 임시 파일도 삭제한다.
                 input.bitmap.recycle()
                 if (!handedOff) file?.delete()
+                if (stopServiceAfterHandoff) stopSelf()
             }
         }
     }
 
     // 성공·취소·실패가 같은 정리 경로를 거쳐 다음 검사를 받을 수 있게 한다.
-    private fun finishScreenScan(message: String? = null) {
+    private fun finishScreenScan(message: String? = null, deferTemporaryStop: Boolean = false) {
         if (!scanInProgress) return
         scanInProgress = false
+        val stopAfterScan = homeInitiatedScan
+        homeInitiatedScan = false
         captureHandler.removeCallbacks(scanTimeout)
         // 예약된 프레임 대기를 취소한 뒤 캡처 세션을 끝내고 서비스 연결을 해제한다.
         captureFrameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
@@ -543,8 +553,11 @@ class FloatingButtonService : Service() {
         captureConnection = null
         // Also covers initialization/binding failure before a binder became available.
         stopService(Intent(this, MediaProjectionService::class.java))
-        // 플로팅 서비스와 표시 권한이 남아 있을 때만 버튼을 복구한다.
-        if (!destroyed && Settings.canDrawOverlays(this)) {
+        if (stopAfterScan) {
+            removeOverlay(floatingButton)
+            floatingButton = null
+            if (!deferTemporaryStop) stopSelf()
+        } else if (!destroyed && Settings.canDrawOverlays(this)) {
             try {
                 showFloatingButton()
                 floatingButton?.isEnabled = true
@@ -553,7 +566,10 @@ class FloatingButtonService : Service() {
                 stopSelf()
             }
         }
-        if (message != null && !destroyed) showErrorMessage(message)
+        if (message != null && !destroyed) {
+            if (stopAfterScan) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            else showErrorMessage(message)
+        }
     }
 
     // Reuse the already-authorized overlay window so errors remain visible above other apps.
@@ -611,6 +627,7 @@ class FloatingButtonService : Service() {
             // 이미 분리된 View여도 다른 오버레이의 정리는 계속한다.
             Log.w("FloatingButtonService", "이미 제거된 오버레이입니다.", error)
         }
+        if (view === floatingButton) isFloatingButtonVisible = false
     }
 
     // Foreground Service 시작
@@ -679,12 +696,20 @@ class FloatingButtonService : Service() {
     ): Int {
 
         // 시스템이 Service를 종료했을 경우 가능한 범위에서 재생성 요청
+        if (intent?.action == ACTION_SCREEN_SCAN) {
+            val temporaryScan = floatingButton == null
+            homeInitiatedScan = temporaryScan
+            startScreenScan()
+            return if (temporaryScan) START_NOT_STICKY else START_STICKY
+        }
+        if (Settings.canDrawOverlays(this)) showFloatingButton()
         return START_STICKY
     }
 
     override fun onDestroy() {
 
         destroyed = true
+        isFloatingButtonVisible = false
         edgeSnapAnimator?.cancel()
         edgeSnapAnimator = null
         dismissErrorMessage()

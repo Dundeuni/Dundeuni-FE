@@ -40,4 +40,15 @@ class IntegratedManifestTest {
             assertTrue(permission, "android.permission.$permission" in permissions)
         }
     }
+
+    @Test fun scanActivitiesUseCallerTaskAffinityForOverlayReturn() {
+        for (name in listOf(
+            "feature.photopicker.PhotoPickerActivity",
+            "feature.analysis.AnalysisActivity",
+            "feature.textinput.TextInputActivity",
+        )) {
+            val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
+            assertNull("$name should have no task affinity", info.taskAffinity)
+        }
+    }
 }

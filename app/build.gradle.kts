@@ -14,6 +14,9 @@ fun buildConfigString(value: String): String =
 
 val analysisApiMode = localApiConfig.getProperty("analysis.api.mode", "FAKE").trim()
 val analysisApiBaseUrl = localApiConfig.getProperty("analysis.api.baseUrl", "").trim()
+// The current BE integration uses mock results independently of FAKE/REAL transport.
+val analysisApiMockResults = localApiConfig.getProperty("analysis.api.mockResults", "true")
+    .trim().toBooleanStrict()
 
 android {
     namespace = "com.dundueni.app"
@@ -30,6 +33,7 @@ android {
 
         buildConfigField("String", "ANALYSIS_API_MODE", buildConfigString(analysisApiMode))
         buildConfigField("String", "ANALYSIS_API_BASE_URL", buildConfigString(analysisApiBaseUrl))
+        buildConfigField("boolean", "ANALYSIS_API_MOCK_RESULTS", analysisApiMockResults.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

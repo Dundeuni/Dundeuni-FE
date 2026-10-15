@@ -19,18 +19,19 @@ import com.dundueni.app.feature.analysisresult.AnalysisResultRoute
  * 직접 이미지를 읽거나 API를 호출하지 않고 결과와 동작을 외부에서 받는다.
  * 재시도 버튼은 Activity의 입력 준비 흐름을 다시 시작하도록 요청한다.
  * 닫기 버튼도 전달받은 동작을 실행하며 화면 종료와 자원 정리는 Activity가 맡는다.
- * Fake 결과는 PB-05에 전달하고, 최종 판정 계약이 없는 실제 결과는 서버 정보만 표시한다.
+ * Fake 결과는 샘플 판정을 포함해 PB-05에 전달하고, 실제 결과는 판정 미확정 상태로 같은 화면에 전달한다.
  */
 @Composable
 fun AnalysisFlowScreen(
     state: AnalysisUiState,
     onRetry: () -> Unit,
     onClose: () -> Unit,
+    onHome: () -> Unit,
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
 ) {
     val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)
     if (presented != null) {
-        AnalysisResultRoute(presented, onReturn = onClose, isDemo = isDemo)
+        AnalysisResultRoute(presented, onReturn = onClose, onHome = onHome, isDemo = isDemo)
         return
     }
     Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
@@ -42,8 +43,10 @@ fun AnalysisFlowScreen(
                 Text("분석 중")
             }
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
-            AnalysisUiState.Error -> {
-                Text("검사에 실패했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요.")
+            is AnalysisUiState.Error -> {
+                Text(state.kind.message)
+                state.httpStatus?.let { Text("HTTP 상태: $it") }
+                Text("다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
                 Button(onClick = onRetry) { Text("다시 시도") }
             }
         }
@@ -51,7 +54,6 @@ fun AnalysisFlowScreen(
     }
 }
 
-/** aiRiskLevel is an unconfirmed provider string, never an overall safety verdict. */
 @Composable
 fun AnalysisResultContent(result: AnalysisResult) {
     Text("최종 위험 판정 미확정")

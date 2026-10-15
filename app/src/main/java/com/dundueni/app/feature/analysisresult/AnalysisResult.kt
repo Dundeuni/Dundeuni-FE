@@ -4,11 +4,11 @@ import java.util.Locale
 
 /** The overall verdict comes from the analysis service; the UI never derives it from scores. */
 enum class RiskLevel(val label: String) {
-    SAFE("안전"), CAUTION("주의"), DANGER("위험");
+    SAFE("안전"), CAUTION("주의"), DANGER("위험"), UNKNOWN("판정 미확정");
 
     companion object {
         fun fromWireValue(value: String): RiskLevel =
-            entries.firstOrNull { it.name == value.trim().uppercase(Locale.ROOT) }
+            entries.firstOrNull { it != UNKNOWN && it.name == value.trim().uppercase(Locale.ROOT) }
                 ?: throw IllegalArgumentException("지원하지 않는 위험 단계입니다: $value")
     }
 }
@@ -32,6 +32,7 @@ data class AnalysisResult(
     val fraudLevel: RiskLevel? = null,
     val fraudScore: Double? = null,
     val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
+    val aiRiskLabel: String? = null,
     val aiScore: Double? = null,
     val evidence: List<RiskEvidence> = emptyList(),
     val sourceText: String? = null,
@@ -47,5 +48,5 @@ data class AnalysisResult(
 }
 
 enum class ResultAction {
-    RETURN, PROFILE, CALL_FAMILY, SHARE, REPORT, PREVIEW_DOMAIN, ASK_FAMILY, SAVE_HISTORY
+    RETURN, HOME, PROFILE, CALL_FAMILY, SHARE, REPORT, PREVIEW_DOMAIN, ASK_FAMILY, SAVE_HISTORY
 }
