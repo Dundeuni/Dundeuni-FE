@@ -80,6 +80,18 @@
             android:exported="false"
             android:taskAffinity="" />
 
+        <!-- 링크(URL) 검사 -->
+        <activity
+            android:name=".feature.url.UrlInputActivity"
+            android:exported="false"
+            android:taskAffinity="" />
+
+        <!-- 전화번호 검사 -->
+        <activity
+            android:name=".feature.phone.PhoneInputActivity"
+            android:exported="false"
+            android:taskAffinity="" />
+
 
         <!-- MediaProjection Foreground Service -->
         <service

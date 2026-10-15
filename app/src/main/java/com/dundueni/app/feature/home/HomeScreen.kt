@@ -76,6 +76,8 @@ fun HomeScreen(
     onScreenScan: () -> Unit,
     onImageScan: () -> Unit,
     onTextScan: () -> Unit,
+    onUrlScan: () -> Unit,
+    onPhoneScan: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
     onViewAllHistory: () -> Unit,
@@ -110,8 +112,14 @@ fun HomeScreen(
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     QuickScanCard("screen", "AI 화면\n검사", Modifier.weight(1f), onScreenScan)
-                    QuickScanCard("image", "이미지 검사", Modifier.weight(1f), onImageScan)
-                    QuickScanCard("text", "텍스트 검사", Modifier.weight(1f), onTextScan)
+                    QuickScanCard("image", "이미지\n검사", Modifier.weight(1f), onImageScan)
+                    QuickScanCard("text", "텍스트\n검사", Modifier.weight(1f), onTextScan)
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickScanCard("link", "링크(URL)\n검사", Modifier.weight(1f), onUrlScan)
+                    QuickScanCard("phone", "전화번호\n검사", Modifier.weight(1f), onPhoneScan)
+                    Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(25.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -466,6 +474,16 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
                 drawLine(color, p(9f,17f), p(15f,17f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
                 drawLine(color, p(10f,20f), p(14f,20f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
                 drawLine(color, p(12f,1f), p(12f,3f), strokeWidth = 1.8f*sx)
+            }
+            "link" -> {
+                drawRoundRect(color, p(3f,5f), Size(18f*sx,14f*sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f*sx), style = stroke)
+                drawLine(color, p(8f,12f), p(16f,12f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
+                drawLine(color, p(12f,8f), p(12f,16f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
+            }
+            "phone" -> {
+                drawRoundRect(color, p(5f,2f), Size(14f*sx,20f*sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f*sx), style = stroke)
+                drawLine(color, p(10f,4f), p(14f,4f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
+                drawCircle(color, 1f*sx, p(12f,18f))
             }
         }
     }
