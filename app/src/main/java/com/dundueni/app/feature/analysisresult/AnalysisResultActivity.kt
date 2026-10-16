@@ -20,10 +20,13 @@ import com.dundueni.app.feature.home.returnToHome
 class AnalysisResultActivity : ComponentActivity() {
     companion object {
         const val EXTRA_RESULT_JSON = "com.dundueni.app.analysis.RESULT_JSON"
+        const val EXTRA_IS_DEMO = "com.dundueni.app.analysis.IS_DEMO"
 
         /** Prefer AnalysisResultScreen(result, onAction) when integrating an existing navigation graph. */
-        fun createIntent(context: Context, resultJson: String): Intent =
-            Intent(context, AnalysisResultActivity::class.java).putExtra(EXTRA_RESULT_JSON, resultJson)
+        fun createIntent(context: Context, resultJson: String, isDemo: Boolean = false): Intent =
+            Intent(context, AnalysisResultActivity::class.java)
+                .putExtra(EXTRA_RESULT_JSON, resultJson)
+                .putExtra(EXTRA_IS_DEMO, isDemo)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,10 +35,11 @@ class AnalysisResultActivity : ComponentActivity() {
         val result = runCatching {
             AnalysisResultJsonAdapter.decode(requireNotNull(intent.getStringExtra(EXTRA_RESULT_JSON)))
         }.getOrNull()
+        val isDemo = intent.getBooleanExtra(EXTRA_IS_DEMO, false)
         setContent {
             DundueniFETheme {
                 if (result != null) {
-                    AnalysisResultRoute(result, onReturn = ::finish, onHome = ::returnToHome)
+                    AnalysisResultRoute(result, onReturn = ::finish, onHome = ::returnToHome, isDemo = isDemo)
                 } else {
                     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                         Column(Modifier.safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.Center,
