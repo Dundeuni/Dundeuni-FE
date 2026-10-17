@@ -16,17 +16,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.feature.home.returnToHome
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 
 class AnalysisResultActivity : ComponentActivity() {
+    private val overlayOwner = "text-result:${java.util.UUID.randomUUID()}"
+
     companion object {
         const val EXTRA_RESULT_JSON = "com.dundueni.app.analysis.RESULT_JSON"
         const val EXTRA_IS_DEMO = "com.dundueni.app.analysis.IS_DEMO"
+        const val EXTRA_SUSPEND_FLOATING_BUTTON = "com.dundueni.app.analysis.SUSPEND_FLOATING_BUTTON"
 
         /** Prefer AnalysisResultScreen(result, onAction) when integrating an existing navigation graph. */
-        fun createIntent(context: Context, resultJson: String, isDemo: Boolean = false): Intent =
+        fun createIntent(
+            context: Context,
+            resultJson: String,
+            isDemo: Boolean = false,
+            suspendFloatingButton: Boolean = false,
+        ): Intent =
             Intent(context, AnalysisResultActivity::class.java)
                 .putExtra(EXTRA_RESULT_JSON, resultJson)
                 .putExtra(EXTRA_IS_DEMO, isDemo)
+                .putExtra(EXTRA_SUSPEND_FLOATING_BUTTON, suspendFloatingButton)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
+            FloatingButtonManager.suspendForActivity(overlayOwner)
+        }
+    }
+
+    override fun onStop() {
+        if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
+            FloatingButtonManager.resumeForActivity(overlayOwner)
+        }
+        super.onStop()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

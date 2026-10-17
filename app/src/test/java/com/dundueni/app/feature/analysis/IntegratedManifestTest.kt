@@ -41,14 +41,25 @@ class IntegratedManifestTest {
         }
     }
 
-    @Test fun scanActivitiesUseCallerTaskAffinityForOverlayReturn() {
+    @Test fun floatingScanActivitiesUseHiddenTemporaryTasks() {
+        val mainAffinity = pm.getActivityInfo(
+            ComponentName(context.packageName, "${context.packageName}.MainActivity"), 0,
+        ).taskAffinity
+        assertNotNull(mainAffinity)
         for (name in listOf(
             "feature.photopicker.PhotoPickerActivity",
             "feature.analysis.AnalysisActivity",
             "feature.textinput.TextInputActivity",
         )) {
             val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
-            assertNull("$name should have no task affinity", info.taskAffinity)
+            assertTrue("$name should launch outside the home task", info.taskAffinity.isNullOrEmpty())
+        }
+        for (name in listOf(
+            "feature.url.UrlInputActivity",
+            "feature.phone.PhoneInputActivity",
+        )) {
+            val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
+            assertEquals("$name should share the main task", mainAffinity, info.taskAffinity)
         }
     }
 }

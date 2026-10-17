@@ -12,6 +12,7 @@ import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.google.gson.Gson
 
@@ -20,6 +21,17 @@ import com.google.gson.Gson
  * 검사 실행 시 입력된 텍스트를 담아 분석 결과 화면(AnalysisResultActivity)으로 진입한다.
  */
 class TextInputActivity : ComponentActivity() {
+    private val overlayOwner = "text-input:${java.util.UUID.randomUUID()}"
+
+    override fun onStart() {
+        super.onStart()
+        FloatingButtonManager.suspendForActivity(overlayOwner)
+    }
+
+    override fun onStop() {
+        FloatingButtonManager.resumeForActivity(overlayOwner)
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +57,9 @@ class TextInputActivity : ComponentActivity() {
                                 targetLabel = "입력한 텍스트 내용"
                             )
                             val json = Gson().toJson(result)
-                            val intent = AnalysisResultActivity.createIntent(this@TextInputActivity, json, isDemo = true)
+                            val intent = AnalysisResultActivity.createIntent(
+                                this@TextInputActivity, json, isDemo = true, suspendFloatingButton = true,
+                            )
                             startActivity(intent)
                         },
                         onClose = { finish() }

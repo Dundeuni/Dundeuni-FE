@@ -3,6 +3,8 @@ package com.dundueni.app.feature.photopicker
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import java.util.UUID
 
 // 버튼 누르면 사진 선택 화면이 뜨고, 사진 선택 후 uri를 받아오는 테스트용 Activity
 /**
@@ -13,6 +15,7 @@ import androidx.activity.compose.setContent
  * 실제 선택 결과 수신과 분석 화면 이동은 PhotoPickerTestScreen이 담당한다.
  */
 class PhotoPickerActivity : ComponentActivity() {
+    private val overlayOwner = "photo-picker:${UUID.randomUUID()}"
 
     companion object {
         const val EXTRA_OPEN_PICKER = "com.dundueni.app.extra.OPEN_PHOTO_PICKER"
@@ -20,6 +23,8 @@ class PhotoPickerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The system picker stops this host activity; keep the button hidden until it closes.
+        FloatingButtonManager.suspendForActivity(overlayOwner)
 
         setContent {
             PhotoPickerTestScreen(
@@ -28,5 +33,10 @@ class PhotoPickerActivity : ComponentActivity() {
                 onCancel = ::finish
             )
         }
+    }
+
+    override fun onDestroy() {
+        FloatingButtonManager.resumeForActivity(overlayOwner)
+        super.onDestroy()
     }
 }

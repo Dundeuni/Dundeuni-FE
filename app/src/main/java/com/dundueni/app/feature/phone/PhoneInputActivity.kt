@@ -12,10 +12,24 @@ import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.google.gson.Gson
+import java.util.UUID
 
 class PhoneInputActivity : ComponentActivity() {
+    private val overlayOwner = "phone-input:${UUID.randomUUID()}"
+
+    override fun onStart() {
+        super.onStart()
+        FloatingButtonManager.suspendForActivity(overlayOwner)
+    }
+
+    override fun onStop() {
+        FloatingButtonManager.resumeForActivity(overlayOwner)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -38,7 +52,9 @@ class PhoneInputActivity : ComponentActivity() {
                                 targetLabel = "입력한 전화번호"
                             )
                             val json = Gson().toJson(result)
-                            val intent = AnalysisResultActivity.createIntent(this@PhoneInputActivity, json, isDemo = true)
+                            val intent = AnalysisResultActivity.createIntent(
+                                this@PhoneInputActivity, json, isDemo = true, suspendFloatingButton = true,
+                            )
                             startActivity(intent)
                         },
                         onClose = { finish() }
