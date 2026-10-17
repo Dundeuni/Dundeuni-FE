@@ -11,6 +11,7 @@ data class LoginUiState(
     val message: String? = null,
     val credentialsRejected: Boolean = false,
     val submitting: Boolean = false,
+    val navigationPending: Boolean = false,
 )
 
 sealed interface LoginOutcome {

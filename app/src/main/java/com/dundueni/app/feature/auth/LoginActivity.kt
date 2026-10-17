@@ -25,7 +25,7 @@ class LoginActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == LoginViewModel::class.java)
                 @Suppress("UNCHECKED_CAST")
-                return LoginViewModel(submitter) as T
+                return LoginViewModel(submitter, saveSession = AuthSessionRuntime.store(applicationContext)::save) as T
             }
         })[LoginViewModel::class.java]
         setContent {
@@ -33,8 +33,7 @@ class LoginActivity : ComponentActivity() {
                 LoginRoute(
                     viewModel = viewModel,
                     onBack = ::finish,
-                    onLoginSuccess = { session ->
-                        AuthSessionRuntime.store(applicationContext).save(session)
+                    onLoginSuccess = {
                         startActivity(Intent(this, MainActivity::class.java).addFlags(
                             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
                         ))

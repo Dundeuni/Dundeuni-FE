@@ -23,12 +23,12 @@ class LoginViewModelTest {
     @Test fun malformedOrMissingInputDoesNotCallApi() = runTest {
         var calls = 0
         val vm = model { _, _ -> calls++; success() }
-        vm.login { fail("Unexpected success") }
+        vm.login()
         assertNotNull(vm.uiState.value.emailError)
         assertNotNull(vm.uiState.value.passwordError)
         vm.changeEmail("example")
         vm.changePassword("a")
-        vm.login { fail("Unexpected success") }
+        vm.login()
         runCurrent()
         assertEquals(0, calls)
         assertEquals("이메일 형식을 확인해 주세요.", vm.uiState.value.emailError)
@@ -45,8 +45,8 @@ class LoginViewModelTest {
         }
         vm.changeEmail(" example@kau.kr ")
         vm.changePassword(" secret ")
-        vm.login {}
-        vm.login {}
+        vm.login()
+        vm.login()
         vm.changePassword("replaced")
         vm.togglePasswordVisibility()
         runCurrent()
@@ -67,10 +67,12 @@ class LoginViewModelTest {
         val vm = model { _, _ -> success() }
         vm.changeEmail("example@kau.kr")
         vm.changePassword("test-password")
-        var navigations = 0
-        vm.login { navigations++ }
+
+        vm.login()
         runCurrent()
-        assertEquals(1, navigations)
+        assertTrue(vm.uiState.value.navigationPending)
+        vm.consumeNavigation()
+        assertFalse(vm.uiState.value.navigationPending)
         assertEquals("", vm.uiState.value.password)
         assertFalse(vm.uiState.value.passwordVisible)
     }
@@ -79,11 +81,48 @@ class LoginViewModelTest {
         val vm = model { _, _ -> throw java.io.IOException() }
         vm.changeEmail("example@kau.kr")
         vm.changePassword("test-password")
-        vm.login {}
+        vm.login()
         runCurrent()
         assertFalse(vm.uiState.value.credentialsRejected)
         assertFalse(vm.uiState.value.submitting)
         assertEquals("연결하지 못했습니다. 다시 시도해 주세요.", vm.uiState.value.message)
+    }
+
+    @Test fun storageFailureStaysOnLoginAndCanRetry() = runTest {
+        var saves = 0
+        val vm = LoginViewModel(LoginSubmitter { _, _ -> success() }, saveSession = {
+            if (++saves == 1) throw java.io.IOException("storage unavailable")
+        }).also { store.put("login", it) }
+        vm.changeEmail("qa@kau.kr")
+        vm.changePassword("test-password")
+        vm.login()
+        runCurrent()
+        assertFalse(vm.uiState.value.submitting)
+        assertFalse(vm.uiState.value.navigationPending)
+        assertFalse(vm.uiState.value.credentialsRejected)
+        assertEquals("로그인 정보를 저장하지 못했습니다. 다시 시도해 주세요.", vm.uiState.value.message)
+        vm.login()
+        runCurrent()
+        assertEquals(2, saves)
+        assertTrue(vm.uiState.value.navigationPending)
+        assertEquals("", vm.uiState.value.password)
+    }
+
+    @Test fun pendingNavigationPreventsDuplicateLoginAndSave() = runTest {
+        var saves = 0
+        val vm = LoginViewModel(LoginSubmitter { _, _ -> success() }, saveSession = { saves++ })
+            .also { store.put("login", it) }
+        vm.changeEmail("qa@kau.kr")
+        vm.changePassword("test-password")
+        vm.login()
+        runCurrent()
+        vm.changePassword("another-password")
+        vm.login()
+        runCurrent()
+        assertEquals(1, saves)
+        assertTrue(vm.uiState.value.navigationPending)
+        vm.consumeNavigation()
+        assertFalse(vm.uiState.value.navigationPending)
     }
 
     private fun success(): LoginOutcome.Success {

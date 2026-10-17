@@ -2,6 +2,7 @@ package com.dundueni.app.feature.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dundueni.app.data.auth.AuthSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 class LoginViewModel(
     private val submitter: LoginSubmitter,
     initialState: LoginUiState = LoginUiState(),
+    private val saveSession: (AuthSession) -> Unit = {},
 ) : ViewModel() {
     private val state = MutableStateFlow(initialState)
     val uiState = state.asStateFlow()
@@ -32,8 +34,12 @@ class LoginViewModel(
         state.update { it.copy(passwordVisible = !it.passwordVisible) }
     }
 
-    fun login(onSuccess: (com.dundueni.app.data.auth.AuthSession) -> Unit) {
-        if (state.value.submitting || submission?.isActive == true) return
+    fun consumeNavigation() {
+        state.update { it.copy(navigationPending = false) }
+    }
+
+    fun login() {
+        if (state.value.submitting || state.value.navigationPending || submission?.isActive == true) return
         val input = state.value
         val emailError = LoginInputValidator.emailError(input.email)
         val passwordError = LoginInputValidator.passwordError(input.password)
@@ -53,8 +59,12 @@ class LoginViewModel(
             }
             when (outcome) {
                 is LoginOutcome.Success -> {
-                    state.update { LoginUiState(email = it.email) }
-                    onSuccess(outcome.session)
+                    try {
+                        saveSession(outcome.session)
+                        state.update { LoginUiState(email = it.email, navigationPending = true) }
+                    } catch (_: Exception) {
+                        state.update { it.copy(submitting = false, message = "로그인 정보를 저장하지 못했습니다. 다시 시도해 주세요.") }
+                    }
                 }
                 LoginOutcome.InvalidCredentials -> state.update {
                     it.copy(submitting = false, credentialsRejected = true, message = "이메일 또는 비밀번호가 일치하지 않습니다.")
