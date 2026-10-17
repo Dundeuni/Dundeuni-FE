@@ -11,6 +11,10 @@ import androidx.test.filters.SdkSuppress
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import com.dundueni.app.MainActivity
+import com.dundueni.app.data.auth.AuthSession
+import com.dundueni.app.data.auth.AuthSessionRuntime
+import org.junit.rules.ExternalResource
+import org.junit.rules.RuleChain
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertTrue
@@ -18,7 +22,14 @@ import org.junit.Assert.assertTrue
 /** 실제 Activity 연결·회전 검증. debug 샘플만 사용하며 서버에 요청하지 않는다. */
 @SdkSuppress(minSdkVersion = 30)
 class AuthFlowQaTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    private val compose = createAndroidComposeRule<MainActivity>()
+    private val authIsolation = object : ExternalResource() {
+        private var previous: AuthSession? = null
+        private val store get() = AuthSessionRuntime.store(InstrumentationRegistry.getInstrumentation().targetContext)
+        override fun before() { previous = store.read(); store.clear() }
+        override fun after() { store.clear(); previous?.takeIf { it.isValid() }?.let(store::save) }
+    }
+    @get:Rule val rules = RuleChain.outerRule(authIsolation).around(compose)
 
     private fun click(text: String) {
         val node = compose.onNodeWithText(text)
@@ -29,7 +40,7 @@ class AuthFlowQaTest {
         .performScrollTo().performTextReplacement(value)
 
     private fun waitForText(text: String) {
-        compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { runCatching { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false) }
     }
 
     private fun currentActivity(): Activity {
@@ -102,7 +113,8 @@ class AuthFlowQaTest {
     }
 
     private fun openEmail() {
-        click("PB-09 로그인 UI 미리보기")
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { compose.activity.startActivity(android.content.Intent().setClassName(compose.activity, "com.dundueni.app.feature.auth.LoginPreviewActivity")) }
+        waitForText("입력 전")
         click("입력 전")
         click("회원가입")
         waitForText("약관 동의")
@@ -146,7 +158,7 @@ class AuthFlowQaTest {
         compose.onNodeWithText("tester 님, 환영합니다!").assertIsDisplayed()
         compose.onNodeWithText("qa@kau.kr").assertIsDisplayed()
         click("든든이 시작하기 (홈으로) →")
-        waitForText("플로팅 버튼 시작")
+        waitForText("빠른 검사")
     }
 
     @Test fun verificationSurvivesRotationAndBackDoesNotReopenCredentials() {
@@ -177,7 +189,8 @@ class AuthFlowQaTest {
     }
 
     @Test fun loginKeyboardNextDoneAndButtonRemainAccessible() {
-        click("로그인")
+        click("My 쉼터")
+        waitForText("회원가입")
         input("이메일 계정", "qa@kau.kr")
         openKeyboard("이메일 계정")
         assertAboveKeyboard(compose.onNodeWithContentDescription("이메일 계정"))
@@ -190,7 +203,7 @@ class AuthFlowQaTest {
         assertAboveKeyboard(compose.onNodeWithContentDescription("비밀번호"))
         assertAboveKeyboard(compose.onNodeWithText("로그인"))
         compose.onNodeWithContentDescription("비밀번호").performImeAction()
-        waitForText("로그인 연결을 준비 중입니다.")
+        waitForText("빠른 검사")
         rotate(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
     }
 
@@ -234,6 +247,6 @@ class AuthFlowQaTest {
         compose.onNodeWithContentDescription("닉네임 설정").performImeAction()
         waitForText("회원가입이 완료되었습니다!")
         click("든든이 시작하기 (홈으로) →")
-        waitForText("플로팅 버튼 시작")
+        waitForText("빠른 검사")
     }
 }

@@ -48,7 +48,7 @@
         <activity android:name=".feature.auth.SignUpCredentialsActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".feature.auth.LoginActivity" android:exported="false"
-            android:windowSoftInputMode="adjustNothing" />
+            android:windowSoftInputMode="adjustResize" />
         <!-- PB-05 분석 결과 -->
         <activity
             android:name=".feature.analysisresult.AnalysisResultActivity"
