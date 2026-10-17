@@ -12,10 +12,24 @@ import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.google.gson.Gson
+import java.util.UUID
 
 class UrlInputActivity : ComponentActivity() {
+    private val overlayOwner = "url-input:${UUID.randomUUID()}"
+
+    override fun onStart() {
+        super.onStart()
+        FloatingButtonManager.suspendForActivity(overlayOwner)
+    }
+
+    override fun onStop() {
+        FloatingButtonManager.resumeForActivity(overlayOwner)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -39,7 +53,9 @@ class UrlInputActivity : ComponentActivity() {
                                 targetLabel = "입력한 웹 링크"
                             )
                             val json = Gson().toJson(result)
-                            val intent = AnalysisResultActivity.createIntent(this@UrlInputActivity, json, isDemo = true)
+                            val intent = AnalysisResultActivity.createIntent(
+                                this@UrlInputActivity, json, isDemo = true, suspendFloatingButton = true,
+                            )
                             startActivity(intent)
                         },
                         onClose = { finish() }

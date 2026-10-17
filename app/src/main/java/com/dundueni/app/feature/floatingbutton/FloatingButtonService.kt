@@ -74,9 +74,11 @@ class FloatingButtonService : Service() {
     private var floatingButtonY = 0
     private var edgeSnapAnimator: ValueAnimator? = null
     private var floatingMenu: View? = null
+    private var menuTouchBlocker: View? = null
     private var closingFloatingMenu: View? = null
     private var errorMessageView: TextView? = null
     private var isMenuOpen = false
+    private val overlaySuspensions = mutableSetOf<String>()
     private val captureHandler = Handler(Looper.getMainLooper())
     private var scanInProgress = false
     private var homeInitiatedScan = false
@@ -93,6 +95,10 @@ class FloatingButtonService : Service() {
         private const val CHANNEL_ID = "floating_button_channel"
         private const val NOTIFICATION_ID = 1001
         const val ACTION_SCREEN_SCAN = "com.dundueni.app.action.SCREEN_SCAN"
+        private var activeInstance: FloatingButtonService? = null
+        val isServiceActive: Boolean get() = activeInstance?.let { Settings.canDrawOverlays(it) } == true
+        fun suspendForActivity(owner: String) { activeInstance?.suspendOverlay(owner) }
+        fun resumeForActivity(owner: String) { activeInstance?.resumeOverlay(owner) }
         @Volatile
         var isFloatingButtonVisible: Boolean = false
             private set
@@ -115,13 +121,14 @@ class FloatingButtonService : Service() {
 
         // 4. WindowManager 가져오기
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        activeInstance = this
 
     }
 
     // 실제 Floating Button 생성 + 화면에 추가
     private fun showFloatingButton() {
 
-        if (floatingButton != null) return
+        if (floatingButton != null || overlaySuspensions.isNotEmpty()) return
         // View는 클릭만 전달하고, 메뉴 전환과 검사 중 입력 제한은 서비스가 결정한다.
         floatingButton = FloatingButtonView.create(this) {
             if (!scanInProgress) {
@@ -183,7 +190,7 @@ class FloatingButtonService : Service() {
                     if (!dragging && (abs(deltaX) > touchSlop || abs(deltaY) > touchSlop)) {
                         dragging = true
                     }
-                    if (dragging) {
+                    if (dragging && !isMenuOpen) {
                         // END gravity reverses the horizontal window offset direction.
                         params.x = (startX - deltaX.toInt()).coerceIn(0, maxX)
                         params.y = (startY + deltaY.toInt()).coerceIn(-maxY, maxY)
@@ -197,7 +204,9 @@ class FloatingButtonService : Service() {
                     }
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (dragging) {
+                    if (isMenuOpen) {
+                        if (!dragging) view.performClick()
+                    } else if (dragging) {
                         val screenWidth = resources.displayMetrics.widthPixels
                         val screenCenterX = screenWidth - params.x - buttonSize / 2f
                         val centerLine = screenWidth / 2f
@@ -246,6 +255,25 @@ class FloatingButtonService : Service() {
         animator.start()
     }
 
+    private fun suspendOverlay(owner: String) {
+        if (!overlaySuspensions.add(owner)) return
+        hideFloatingMenu()
+        closingFloatingMenu?.animate()?.cancel()
+        removeOverlay(closingFloatingMenu)
+        closingFloatingMenu = null
+        edgeSnapAnimator?.cancel()
+        edgeSnapAnimator = null
+        removeOverlay(floatingButton)
+        floatingButton = null
+    }
+
+    private fun resumeOverlay(owner: String) {
+        if (!overlaySuspensions.remove(owner)) return
+        if (overlaySuspensions.isEmpty() && !scanInProgress && Settings.canDrawOverlays(this)) {
+            showFloatingButton()
+        }
+    }
+
     private fun showFloatingMenu() {
         // 메뉴 중복 표시와 검사 중 재진입을 막고, 이어서 권한 취소 여부도 확인한다.
         if (isMenuOpen || closingFloatingMenu != null || scanInProgress) return
@@ -278,7 +306,7 @@ class FloatingButtonService : Service() {
                         startActivity(
                         Intent(this, PhotoPickerActivity::class.java).apply {
                             // Service에서 실행하고, 기존 Picker 화면이 있으면 새 요청으로 교체한다.
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
                             // 다음 화면이 열리자마자 시스템 사진 선택기를 띄우도록 요청한다.
                             putExtra(PhotoPickerActivity.EXTRA_OPEN_PICKER, true)
                         }
@@ -294,7 +322,7 @@ class FloatingButtonService : Service() {
                     hideFloatingMenu()
                     startActivity(
                         Intent(this, TextInputActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
                         }
                     )
                 }
@@ -320,6 +348,27 @@ class FloatingButtonService : Service() {
 
         try {
             // 메뉴는 버튼과 별도 창으로 표시하고, 버튼 모양도 닫기 상태로 맞춘다.
+            // Block touches to the app while leaving the X and menu above this window.
+            val blocker = View(this).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                setOnTouchListener { _, _ -> true }
+            }
+            val blockerParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply { gravity = Gravity.TOP or Gravity.START }
+            windowManager.addView(blocker, blockerParams)
+            menuTouchBlocker = blocker
+
+            // Overlay windows are stacked by add order.
+            floatingButton?.let { button ->
+                val buttonParams = button.layoutParams as WindowManager.LayoutParams
+                windowManager.removeViewImmediate(button)
+                windowManager.addView(button, buttonParams)
+            }
             menu.alpha = 0f
             menu.scaleX = 0.92f
             menu.scaleY = 0.92f
@@ -345,6 +394,8 @@ class FloatingButtonService : Service() {
     // 서비스와 버튼은 유지하고 메뉴 창만 떼어 낸 뒤 버튼 모양을 되돌린다.
     private fun hideFloatingMenu() {
         if (!isMenuOpen) return
+        removeOverlay(menuTouchBlocker)
+        menuTouchBlocker = null
         val menu = floatingMenu
         floatingMenu = null
         isMenuOpen = false
@@ -709,6 +760,7 @@ class FloatingButtonService : Service() {
     override fun onDestroy() {
 
         destroyed = true
+        if (activeInstance === this) activeInstance = null
         isFloatingButtonVisible = false
         edgeSnapAnimator?.cancel()
         edgeSnapAnimator = null
@@ -721,10 +773,12 @@ class FloatingButtonService : Service() {
         closingFloatingMenu?.animate()?.cancel()
         removeOverlay(floatingMenu)
         removeOverlay(closingFloatingMenu)
+        removeOverlay(menuTouchBlocker)
         removeOverlay(floatingButton)
         isMenuOpen = false
         floatingMenu = null
         closingFloatingMenu = null
+        menuTouchBlocker = null
         floatingButton?.setOnClickListener(null)
         floatingButton = null
 

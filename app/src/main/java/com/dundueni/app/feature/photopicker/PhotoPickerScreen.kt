@@ -31,7 +31,7 @@ fun PhotoPickerTestScreen(
             if (closeOnCancel) onCancel()
         } else {
             try {
-                context.startActivity(AnalysisActivity.forPhoto(context, uri))
+                context.startActivity(AnalysisActivity.forPhoto(context, uri, suspendFloatingButton = true))
                 (context as? Activity)?.finish()
             } catch (_: Exception) {
                 Toast.makeText(context, "분석 화면을 열지 못했습니다. 다시 시도해 주세요.", Toast.LENGTH_LONG).show()

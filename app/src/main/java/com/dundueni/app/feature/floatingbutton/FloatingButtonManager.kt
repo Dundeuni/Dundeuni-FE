@@ -57,7 +57,15 @@ object FloatingButtonManager {
     }
 
     fun isRunning(): Boolean {
-        return FloatingButtonService.isFloatingButtonVisible
+        return FloatingButtonService.isServiceActive
+    }
+
+    fun suspendForActivity(owner: String) {
+        FloatingButtonService.suspendForActivity(owner)
+    }
+
+    fun resumeForActivity(owner: String) {
+        FloatingButtonService.resumeForActivity(owner)
     }
 
     fun startScreenScan(context: Context) {

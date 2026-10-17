@@ -66,11 +66,13 @@
         <activity
             android:name=".feature.analysis.AnalysisActivity"
             android:exported="false"
+            android:excludeFromRecents="true"
             android:taskAffinity="" />
 
         <activity
             android:name=".feature.photopicker.PhotoPickerActivity"
             android:exported="true"
+            android:excludeFromRecents="true"
             android:taskAffinity=""
             android:theme="@style/Theme.DundueniFE.PhotoPickerHost" />
 
@@ -78,19 +80,18 @@
         <activity
             android:name=".feature.textinput.TextInputActivity"
             android:exported="false"
+            android:excludeFromRecents="true"
             android:taskAffinity="" />
 
         <!-- 링크(URL) 검사 -->
         <activity
             android:name=".feature.url.UrlInputActivity"
-            android:exported="false"
-            android:taskAffinity="" />
+            android:exported="false" />
 
         <!-- 전화번호 검사 -->
         <activity
             android:name=".feature.phone.PhoneInputActivity"
-            android:exported="false"
-            android:taskAffinity="" />
+            android:exported="false" />
 
 
         <!-- MediaProjection Foreground Service -->

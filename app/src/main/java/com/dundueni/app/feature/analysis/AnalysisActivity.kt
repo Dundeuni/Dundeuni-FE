@@ -24,6 +24,7 @@ import com.dundueni.app.data.model.ImageInput
 import com.dundueni.app.feature.home.returnToHome
 import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.launch
 
 /** 기존 Activity 전환 방식으로 연결하는 내부 검사 화면입니다. */
@@ -35,9 +36,24 @@ import kotlinx.coroutines.launch
  * 재시도 시 같은 입력을 다시 준비하며, 실제 종료 시 캡처 캐시를 정리한다.
  */
 class AnalysisActivity : ComponentActivity() {
+    private val overlayOwner = "image-analysis:${UUID.randomUUID()}"
     private lateinit var viewModel: AnalysisViewModel
     private var captureFile: File? = null
     private var redirectingToLogin = false
+
+    override fun onStart() {
+        super.onStart()
+        if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
+            FloatingButtonManager.suspendForActivity(overlayOwner)
+        }
+    }
+
+    override fun onStop() {
+        if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
+            FloatingButtonManager.resumeForActivity(overlayOwner)
+        }
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,18 +121,21 @@ class AnalysisActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_CAPTURE_FILENAME = "analysis_capture_filename"
+        private const val EXTRA_SUSPEND_FLOATING_BUTTON = "suspend_floating_button"
         fun captureDirectory(context: Context): File = File(context.cacheDir, "analysis_captures").apply { mkdirs() }
 
-        fun forPhoto(context: Context, uri: Uri): Intent = Intent(context, AnalysisActivity::class.java).apply {
+        fun forPhoto(context: Context, uri: Uri, suspendFloatingButton: Boolean = false): Intent = Intent(context, AnalysisActivity::class.java).apply {
             data = uri
             clipData = ClipData.newRawUri("analysis image", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            putExtra(EXTRA_SUSPEND_FLOATING_BUTTON, suspendFloatingButton)
         }
 
         fun forCapture(context: Context, file: File): Intent = Intent(context, AnalysisActivity::class.java).apply {
             require(file.parentFile?.canonicalFile == captureDirectory(context).canonicalFile)
             putExtra(EXTRA_CAPTURE_FILENAME, file.name)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(EXTRA_SUSPEND_FLOATING_BUTTON, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
         }
     }
 }

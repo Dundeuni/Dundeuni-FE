@@ -5,14 +5,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultRoute
+import com.dundueni.app.ui.component.InspectionErrorDialog
+import com.dundueni.app.ui.component.InspectionLoadingDialog
 
 /**
  * 전달받은 검사 상태에 맞춰 준비·로딩·결과·실패 안내를 보여 주는 화면이다.
@@ -29,6 +34,8 @@ fun AnalysisFlowScreen(
     onHome: () -> Unit,
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
 ) {
+    // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
+    var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
     val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)
     if (presented != null) {
         AnalysisResultRoute(presented, onReturn = onClose, onHome = onHome, isDemo = isDemo)
@@ -38,19 +45,37 @@ fun AnalysisFlowScreen(
         if (isDemo) Text("Mock 검사 — 실제 이미지 분석 결과가 아닙니다.")
         when (state) {
             AnalysisUiState.Idle -> Text("검사 준비 중")
-            AnalysisUiState.Loading -> {
-                CircularProgressIndicator()
-                Text("분석 중")
-            }
+            AnalysisUiState.Loading -> Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
-            is AnalysisUiState.Error -> {
-                Text(state.kind.message)
-                state.httpStatus?.let { Text("HTTP 상태: $it") }
-                Text("다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
-                Button(onClick = onRetry) { Text("다시 시도") }
+            is AnalysisUiState.Error -> Unit
+        }
+        if (state !is AnalysisUiState.Error) {
+            Button(onClick = onClose) {
+                Text(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기")
             }
         }
-        Button(onClick = onClose) { Text("닫기") }
+    }
+    when (state) {
+        AnalysisUiState.Loading -> if (!loadingPopupDismissed) {
+            InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+        }
+        is AnalysisUiState.Error -> {
+            val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
+            InspectionErrorDialog(
+                message = buildString {
+                    append(state.kind.message)
+                    state.httpStatus?.let { append("\nHTTP 상태: $it") }
+                    if (canRetry) append("\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
+                },
+                onRetry = {
+                    loadingPopupDismissed = false
+                    onRetry()
+                },
+                onCancelInspection = onClose,
+                showRetry = canRetry,
+            )
+        }
+        else -> Unit
     }
 }
 
