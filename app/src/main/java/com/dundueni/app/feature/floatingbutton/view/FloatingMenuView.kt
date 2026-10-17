@@ -82,19 +82,19 @@ object FloatingMenuView {
             }
 
             val params = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(48)).apply {
-                gravity = (if (opensTowardLeft) Gravity.RIGHT else Gravity.LEFT) or Gravity.TOP
+                gravity = (if (opensTowardLeft) Gravity.END else Gravity.START) or Gravity.TOP
                 topMargin = dp(top)
                 if (opensTowardLeft) rightMargin = dp(inset) else leftMargin = dp(inset)
             }
             container.addView(row, params)
         }
 
-        // Follow the Figma thumb-arch: the middle action sits farther from the button.
         val middleTop = (280 - 48) / 2
         val verticalOffset = 62
         addItem("AI 화면 검사", R.drawable.menu_icon_screen, middleTop - verticalOffset, 0, onScreenScanClick)
         addItem("이미지 검사", R.drawable.menu_icon_image, middleTop, 28, onImageScanClick)
         addItem("텍스트 검사", R.drawable.menu_icon_text, middleTop + verticalOffset, 30, onTextScanClick)
+
         return container
     }
 }

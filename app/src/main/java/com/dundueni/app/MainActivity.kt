@@ -21,6 +21,8 @@ import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeScreen
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
+import com.dundueni.app.feature.url.UrlInputActivity
+import com.dundueni.app.feature.phone.PhoneInputActivity
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +71,8 @@ class MainActivity : ComponentActivity() {
                     onScreenScan = ::requestScreenScan,
                     onImageScan = ::openPhotoPicker,
                     onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
+                    onUrlScan = { startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
+                    onPhoneScan = { startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
                     onSettings = { showMessage("준비 중인 기능입니다") },
                     onViewAllHistory = { showMessage("준비 중인 기능입니다") },
