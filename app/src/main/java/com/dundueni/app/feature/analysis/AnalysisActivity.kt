@@ -13,18 +13,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dundueni.app.data.auth.AuthSessionRuntime
-import com.dundueni.app.feature.auth.LoginActivity
-import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.data.model.ImageInput
-import com.dundueni.app.feature.home.returnToHome
 import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
-import kotlinx.coroutines.launch
 
 /** 기존 Activity 전환 방식으로 연결하는 내부 검사 화면입니다. */
 /**
@@ -37,18 +29,9 @@ import kotlinx.coroutines.launch
 class AnalysisActivity : ComponentActivity() {
     private lateinit var viewModel: AnalysisViewModel
     private var captureFile: File? = null
-    private var redirectingToLogin = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val initialUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                AuthSessionRuntime.unauthorizedRevision.collect { revision ->
-                    if (revision > initialUnauthorizedRevision) redirectToLogin()
-                }
-            }
-        }
         captureFile = intent.getStringExtra(EXTRA_CAPTURE_FILENAME)?.let { name ->
             // 내부 캐시 하위의 파일명만 허용합니다. 외부 경로는 받지 않습니다.
             if (name == File(name).name) File(captureDirectory(this), name) else null
@@ -58,7 +41,7 @@ class AnalysisActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == AnalysisViewModel::class.java)
                 @Suppress("UNCHECKED_CAST")
-                return AnalysisViewModel(AnalysisFlowDependencies.createRepository(applicationContext)) as T
+                return AnalysisViewModel(AnalysisFlowDependencies.createRepository()) as T
             }
         })[AnalysisViewModel::class.java]
 
@@ -69,7 +52,7 @@ class AnalysisActivity : ComponentActivity() {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 Box(Modifier.safeDrawingPadding()) {
-                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome)
+                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish)
                 }
             }
         }
@@ -84,17 +67,6 @@ class AnalysisActivity : ComponentActivity() {
             if (file != null) processor.prepareCaptureFile(file)
             else processor.prepare(ImageInput.PhotoPicker(requireNotNull(uri)))
         }
-    }
-
-    private fun redirectToLogin() {
-        if (redirectingToLogin || isFinishing) return
-        redirectingToLogin = true
-        FloatingButtonManager.stop(this)
-        stopService(Intent(this, com.dundueni.app.feature.capture.MediaProjectionService::class.java))
-        startActivity(Intent(this, LoginActivity::class.java).addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
-        ))
-        finishAffinity()
     }
 
     override fun onDestroy() {

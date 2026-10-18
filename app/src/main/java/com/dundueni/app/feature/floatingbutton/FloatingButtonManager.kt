@@ -24,13 +24,13 @@ object FloatingButtonManager {
 
     // Overlay 권한 설정 화면 열기
     fun requestOverlayPermission(context: Context) {
-        context.startActivity(createOverlayPermissionIntent(context))
-    }
-
-    fun createOverlayPermissionIntent(context: Context): Intent = Intent(
+        val intent = Intent(
             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
             Uri.parse("package:${context.packageName}")
         )
+
+        context.startActivity(intent)
+    }
 
     // Floating Button Foreground Service 시작
     fun start(context: Context) {
@@ -54,15 +54,5 @@ object FloatingButtonManager {
         )
 
         context.stopService(intent)
-    }
-
-    fun isRunning(): Boolean {
-        return FloatingButtonService.isFloatingButtonVisible
-    }
-
-    fun startScreenScan(context: Context) {
-        val intent = Intent(context, FloatingButtonService::class.java)
-            .setAction(FloatingButtonService.ACTION_SCREEN_SCAN)
-        ContextCompat.startForegroundService(context, intent)
     }
 }

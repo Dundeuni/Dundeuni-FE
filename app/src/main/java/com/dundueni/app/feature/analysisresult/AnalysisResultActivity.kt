@@ -15,18 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.ui.theme.DundueniFETheme
-import com.dundueni.app.feature.home.returnToHome
 
 class AnalysisResultActivity : ComponentActivity() {
     companion object {
         const val EXTRA_RESULT_JSON = "com.dundueni.app.analysis.RESULT_JSON"
-        const val EXTRA_IS_DEMO = "com.dundueni.app.analysis.IS_DEMO"
 
         /** Prefer AnalysisResultScreen(result, onAction) when integrating an existing navigation graph. */
-        fun createIntent(context: Context, resultJson: String, isDemo: Boolean = false): Intent =
-            Intent(context, AnalysisResultActivity::class.java)
-                .putExtra(EXTRA_RESULT_JSON, resultJson)
-                .putExtra(EXTRA_IS_DEMO, isDemo)
+        fun createIntent(context: Context, resultJson: String): Intent =
+            Intent(context, AnalysisResultActivity::class.java).putExtra(EXTRA_RESULT_JSON, resultJson)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,11 +31,10 @@ class AnalysisResultActivity : ComponentActivity() {
         val result = runCatching {
             AnalysisResultJsonAdapter.decode(requireNotNull(intent.getStringExtra(EXTRA_RESULT_JSON)))
         }.getOrNull()
-        val isDemo = intent.getBooleanExtra(EXTRA_IS_DEMO, false)
         setContent {
             DundueniFETheme {
                 if (result != null) {
-                    AnalysisResultRoute(result, onReturn = ::finish, onHome = ::returnToHome, isDemo = isDemo)
+                    AnalysisResultRoute(result, onReturn = { finish() })
                 } else {
                     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                         Column(Modifier.safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.Center,
@@ -48,7 +43,7 @@ class AnalysisResultActivity : ComponentActivity() {
                             Spacer(Modifier.height(12.dp))
                             Text("결과 데이터가 없거나 형식이 올바르지 않아요. 이전 화면에서 다시 확인해주세요.")
                             Spacer(Modifier.height(24.dp))
-                            Button(onClick = ::returnToHome) { Text("홈으로 돌아가기") }
+                            Button(onClick = { finish() }) { Text("이전 화면으로 돌아가기") }
                         }
                     }
                 }

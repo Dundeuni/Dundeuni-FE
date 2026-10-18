@@ -16,7 +16,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.dundueni.app.feature.home.returnToHome
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 class AnalysisResultPreviewActivity : ComponentActivity() {
@@ -34,12 +33,7 @@ class AnalysisResultPreviewActivity : ComponentActivity() {
                         }
                     }
                     key(selected) {
-                        AnalysisResultRoute(
-                            AnalysisResultSamples.forLevel(RiskLevel.valueOf(selected)),
-                            onReturn = { finish() },
-                            onHome = { returnToHome() },
-                            isDemo = true,
-                        )
+                        AnalysisResultRoute(AnalysisResultSamples.forLevel(RiskLevel.valueOf(selected)), onReturn = { finish() }, isDemo = true)
                     }
                 }
             }

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 든든이 API 문서
+    url: https://github.com/Dundeuni/Dundeuni-BE/tree/main/docs/api
+    about: API 변경 전후에는 Swagger와 저장소 API 문서를 함께 확인해주세요.

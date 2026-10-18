@@ -36,11 +36,5 @@ object AnalysisResultSamples {
                 RiskEvidence("본인 확인 전 인증번호·송금을 유도해요", "직접 통화하지 않고 텍스트로만 타인 명의 계좌 송금을 요구하고 있습니다."),
             ),
         )
-        RiskLevel.UNKNOWN -> AnalysisResult(
-            id = "demo-unclassified", riskLevel = level,
-            summary = "실제 위험 판정이 제공되지 않은 상태를 보여주는 예시입니다.",
-            aiLikelihood = AiLikelihood.UNKNOWN,
-            evidence = listOf(RiskEvidence("서버 근거", "위험 수준을 정할 수 있는 결과가 아직 제공되지 않았습니다.")),
-        )
     }
 }

@@ -1,6 +1,5 @@
 package com.dundueni.app.data.remote.network
 
-import com.dundueni.app.data.auth.AuthSessionStore
 import com.dundueni.app.data.remote.api.AnalysisApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -17,14 +16,8 @@ import retrofit2.converter.gson.GsonConverterFactory
  * 따라서 현재 결과 JSON의 해석은 AnalysisRepository가 직접 수행한다.
  * 앱의 기본 조립은 아직 Fake를 사용하며, 이 객체는 실제 API 연결에 사용한다.
  */
-class RetrofitClient(
-    baseUrl: String,
-    sessionStore: AuthSessionStore? = null,
-    onUnauthorized: (String) -> Unit = {},
-) {
-    private val okHttpClient = OkHttpClient.Builder().apply {
-        addInterceptor(BearerAuthInterceptor(sessionStore ?: EmptyAuthSessionStore, onUnauthorized))
-    }.build()
+class RetrofitClient(baseUrl: String) {
+    private val okHttpClient = OkHttpClient.Builder().build()
 
     private val retrofit = Retrofit.Builder()
         .baseUrl(baseUrl)
@@ -35,10 +28,4 @@ class RetrofitClient(
     val analysisApiService: AnalysisApiService by lazy {
         retrofit.create(AnalysisApiService::class.java)
     }
-}
-
-private object EmptyAuthSessionStore : AuthSessionStore {
-    override fun read() = null
-    override fun save(session: com.dundueni.app.data.auth.AuthSession) = Unit
-    override fun clear() = Unit
 }

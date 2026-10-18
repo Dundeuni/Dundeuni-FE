@@ -80,11 +80,6 @@ fun AnalysisResultScreen(
                         Text("* 사기 위험과 AI 생성·변조 가능성은 각각 독립적으로 분석됩니다.", color = Muted, fontSize = 10.sp)
                         EvidencePanel(result)
                     }
-                    RiskLevel.UNKNOWN -> {
-                        UnclassifiedNotice()
-                        MetricsRow(result)
-                        EvidencePanel(result)
-                    }
                 }
                 ResultActions(result, historySaved, onAction)
                 Spacer(Modifier.height(8.dp))
@@ -120,27 +115,24 @@ private fun ResultHeader(onAction: (ResultAction) -> Unit) {
 private fun ResultHero(result: AnalysisResult) {
     val safe = result.riskLevel == RiskLevel.SAFE
     val caution = result.riskLevel == RiskLevel.CAUTION
-    val neutral = safe || result.riskLevel == RiskLevel.UNKNOWN
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(80.dp).background(if (neutral) SoftBlue else Color(0xFFFFDAD6), CircleShape), contentAlignment = Alignment.Center) {
-            ResultGlyph(if (result.riskLevel == RiskLevel.UNKNOWN) ResultIcon.SEARCH else if (caution) ResultIcon.WARNING else ResultIcon.SHIELD, if (neutral) ProtectiveBlue else Danger, 34.dp)
+        Box(Modifier.size(80.dp).background(if (safe) SoftBlue else Color(0xFFFFDAD6), CircleShape), contentAlignment = Alignment.Center) {
+            ResultGlyph(if (caution) ResultIcon.WARNING else ResultIcon.SHIELD, if (safe) ProtectiveBlue else Danger, 34.dp)
         }
-        Surface(shape = CircleShape, color = if (neutral) Color(0xFFE8EEFF) else SoftRed) {
+        Surface(shape = CircleShape, color = if (safe) Color(0xFFE8EEFF) else SoftRed) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(6.dp).background(if (neutral) ProtectiveBlue else Danger, CircleShape))
+                Box(Modifier.size(6.dp).background(if (safe) ProtectiveBlue else Danger, CircleShape))
                 Text(when (result.riskLevel) {
                     RiskLevel.SAFE -> "분석 완료 · 안전 판정"
                     RiskLevel.CAUTION -> "주의 단계 경고"
                     RiskLevel.DANGER -> "위험 단계 경고"
-                    RiskLevel.UNKNOWN -> "분석 완료 · 판정 정보 없음"
-                }, fontSize = 11.sp, color = if (neutral) Ink else Danger)
+                }, fontSize = 11.sp, color = if (safe) Ink else Danger)
             }
         }
         Text(when (result.riskLevel) {
             RiskLevel.SAFE -> "현재는 안전해 보여요"
             RiskLevel.CAUTION -> "조금 더 확인해보세요"
             RiskLevel.DANGER -> "위험할 가능성이 높아요"
-            RiskLevel.UNKNOWN -> "결과 정보를 확인해주세요"
         }, color = Ink, fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
         Text(result.summary, color = Muted, fontSize = 13.sp, lineHeight = 20.sp)
     }
@@ -173,16 +165,6 @@ private fun SummaryBanner(message: String, urgent: Boolean) {
 }
 
 @Composable
-private fun UnclassifiedNotice() {
-    Surface(color = SoftBlue, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("최종 위험 판정 미확정", fontSize = 14.sp, color = Ink, fontWeight = FontWeight.SemiBold)
-            Text("사기 위험을 안전·주의·위험으로 판정할 정보는 아직 제공되지 않았어요.", fontSize = 12.sp, color = Muted, lineHeight = 19.sp)
-        }
-    }
-}
-
-@Composable
 private fun MessageQuote(message: String) {
     ResultPanel(color = SoftBlue) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -202,11 +184,10 @@ private fun MetricsRow(result: AnalysisResult, nested: Boolean = false) {
             RiskLevel.SAFE -> "낮음"
             RiskLevel.CAUTION -> "주의"
             RiskLevel.DANGER -> "높음"
-            RiskLevel.UNKNOWN -> "판정 미확정"
             null -> "정보 없음"
         }, result.fraudScore, if (result.fraudLevel == null || result.fraudLevel == RiskLevel.SAFE) ProtectiveBlue else Danger, ResultIcon.SHIELD,
             Modifier.weight(1f), nested)
-        MetricCard("AI 생성·변조", result.aiRiskLabel ?: result.aiLikelihood.label, result.aiScore, ProtectiveBlue, ResultIcon.AI,
+        MetricCard("AI 생성·변조", result.aiLikelihood.label, result.aiScore, ProtectiveBlue, ResultIcon.AI,
             Modifier.weight(1f), nested)
     }
 }
@@ -241,7 +222,6 @@ private fun EvidencePanel(result: AnalysisResult) {
                 RiskLevel.SAFE -> "세부 항목 점검 내역"
                 RiskLevel.CAUTION -> "발견된 주의 사항"
                 RiskLevel.DANGER -> "왜 위험한가요?"
-                RiskLevel.UNKNOWN -> "분석 근거"
             }, Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Ink)
             Text("${result.evidence.size}건", color = Muted, fontSize = 11.sp)
         }
@@ -309,10 +289,6 @@ private fun ResultActions(result: AnalysisResult, historySaved: Boolean, onActio
                 }
                 ReturnLink(onAction)
             }
-            RiskLevel.UNKNOWN -> ReturnLink(onAction)
-        }
-        ActionButton("든든이 홈으로", ResultIcon.SHIELD, ProtectiveBlue, Color.White) {
-            onAction(ResultAction.HOME)
         }
     }
 }
