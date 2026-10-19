@@ -19,6 +19,7 @@ import com.dundueni.app.data.auth.AuthSessionRuntime
 import com.dundueni.app.feature.capture.MediaProjectionService
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeScreen
+import com.dundueni.app.feature.history.HistoryActivity
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
 import com.dundueni.app.feature.url.UrlInputActivity
@@ -75,7 +76,7 @@ class MainActivity : ComponentActivity() {
                     onPhoneScan = { startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
                     onSettings = { showMessage("준비 중인 기능입니다") },
-                    onViewAllHistory = { showMessage("준비 중인 기능입니다") },
+                    onViewAllHistory = { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) },
                     onNavigationSelected = { destination ->
                         when (destination) {
                             HomeDestination.MY_SHELTER -> openAccount()
