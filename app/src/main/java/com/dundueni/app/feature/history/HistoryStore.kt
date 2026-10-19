@@ -17,7 +17,8 @@ class HistoryStore(context: Context) {
                 val id = item.getString("id").also { require(it.isNotBlank()) }
                 HistoryRecord(
                     id = id,
-                    riskLevel = RiskLevel.fromWireValue(item.getString("riskLevel")),
+                    riskLevel = RiskLevel.entries.firstOrNull { it.name == item.getString("riskLevel") }
+                        ?: throw IllegalArgumentException("Unknown saved risk level"),
                     savedAt = item.getLong("savedAt").also { require(it >= 0) },
                     type = HistoryType.entries.firstOrNull { it.name == item.optString("type") } ?: HistoryType.UNKNOWN,
                     fraudScore = item.score("fraudScore"),

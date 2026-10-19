@@ -2,8 +2,8 @@
 
 ## 실행
 
-- 실제 기록: 앱 시작 화면 → **검사 기록**.
-- 시작 화면의 검사 기록 진입 버튼은 **검사 기록** 하나만 제공합니다. 샘플 화면은 Android Studio의 HistoryPreviewActivity.kt Compose Preview로 확인합니다.
+- 실제 기록: 기존 홈 화면의 **최근 검사 → 전체 기록 보기**.
+- 홈의 검사 및 로그인 흐름은 `origin/dev`를 유지합니다. 샘플 화면은 Android Studio의 HistoryPreviewActivity.kt Compose Preview로 확인합니다.
 - 목록 우측 상단에서 기본/쉬운 모드 전환.
 - 카드 선택 → 상세. 상단 뒤로 버튼이나 시스템 뒤로 가기로 목록 복귀.
 - 검색 버튼 → 유형/위험 단계 검색. 필터와 검색은 함께 적용됨.
@@ -17,7 +17,7 @@
 - 상태: 기록 없음, 필터/검색 결과 없음, 로딩, 로딩/삭제 오류 및 재시도.
 - 쉬운 모드: 상단 상태 배지/검사명/시간, 하단 검사 내용/위험 안내/원형 화살표로 카드 배치. 위험 발견은 경고 아이콘과 붉은 안내 사용.
 - 검색: TextFieldValue로 한글 조합 상태 유지, 일반 텍스트 입력/검색 IME, 검색창 초점과 화면 키보드 표시, 키보드 영역 패딩 처리.
-- 홈 진입 버튼과 main Manifest 내부 Activity 등록. 기존 플로팅 버튼과 PB-05 흐름 유지.
+- 기존 홈의 전체 기록 보기 동작과 main Manifest 내부 Activity 등록. 기존 플로팅 버튼과 PB-05 흐름 유지.
 - 별도 debug 샘플/Compose Preview. 샘플은 실제 SharedPreferences에 저장하지 않음.
 
 ## 데이터 범위와 후속 연동
@@ -33,7 +33,9 @@ PB-05가 사용하는 `analysis_result_history` SharedPreferences의 `results`�
 이미지의 회원 전용/90일 보관/암호화 문구는 현재 구현으로 보장할 수 없어 실제 기능에 맞는 로컬 보관 안내로 대체했습니다.
 하단에는 연결 가능한 홈/검사 기록만 제공하며, 미구현 설정/안전 가이드 메뉴는 추가하지 않았습니다.
 
-## 검증
+## 원본 PB-06 커밋의 검증 기록
+
+아래 항목은 `e9ec1f2` 작성 당시 문서에 기록된 결과이며, 최신 `origin/dev`와 통합한 작업의 검증 결과는 아닙니다.
 
 - Debug APK assembleDebug 성공.
 - main 소스의 compileReleaseKotlin 성공.

@@ -1,6 +1,5 @@
 package com.dundueni.app.feature.analysis
 
-import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.repository.AnalysisRepository
 import java.io.IOException
@@ -20,9 +19,10 @@ class AnalysisApiModeTest {
     )
 
     @Test
-    fun defaultBuildConfigurationSelectsFake() {
-        assertEquals("FAKE", BuildConfig.ANALYSIS_API_MODE)
-        assertTrue(AnalysisFlowDependencies.createRepository() is AnalysisRepository)
+    fun explicitFakeModeWorksWithoutAnyServerConfiguration() = runBlocking {
+        val result = AnalysisFlowDependencies.createRepository("FAKE").analyzeResult(image)
+        assertEquals("mock-analysis-id", result.analysisId)
+        assertEquals("MOCK_CAUTION", result.aiRiskLevel)
     }
 
     @Test
@@ -111,6 +111,23 @@ class AnalysisApiModeTest {
             }
         }
         assertTrue(error.message!!.contains("FAKE or REAL"))
+    }
+
+    @Test
+    fun realSlowResponsePropagatesSocketTimeout() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            // Exceed the existing OkHttp read timeout without changing production settings.
+            server.enqueue(MockResponse().setResponseCode(202).setBody(completedResponse())
+                .setHeadersDelay(11, java.util.concurrent.TimeUnit.SECONDS))
+            val repository = AnalysisFlowDependencies.createRepository("REAL", server.url("/").toString())
+            assertThrows(java.net.SocketTimeoutException::class.java) {
+                runBlocking { repository.analyzeResult(image) }
+            }
+        } finally {
+            server.shutdown()
+        }
     }
 
     private fun completedResponse() = """{

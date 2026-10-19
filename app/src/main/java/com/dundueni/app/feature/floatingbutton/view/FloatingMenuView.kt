@@ -6,128 +6,95 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
+import com.dundueni.app.R
 
-/**
- * 플로팅 버튼을 눌렀을 때 검사 방식을 선택할 메뉴 View를 만든다.
- * 화면 검사·이미지 검사·빈 항목의 클릭 동작을 외부에서 전달받는다.
- * 각 항목을 하나의 컨테이너에 배치해 FloatingButtonService에 반환한다.
- * 메뉴를 화면에 붙이거나 검사 흐름을 실행하는 일은 서비스가 맡는다.
- * 빈 항목은 아직 기능이 정해지지 않은 자리이며 현재 서비스의 동작도 비어 있다.
- */
+/** Floating inspection actions arranged around the separately-windowed toggle button. */
 object FloatingMenuView {
 
     fun create(
         context: Context,
+        opensTowardLeft: Boolean,
         onScreenScanClick: () -> Unit,
         onImageScanClick: () -> Unit,
-        onEmptyClick: () -> Unit
+        onTextScanClick: () -> Unit
     ): View {
-
         val density = context.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
 
         val container = FrameLayout(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                (300 * density).toInt(),
-                (280 * density).toInt()
-            )
-
+            layoutParams = FrameLayout.LayoutParams(dp(300), dp(280))
             setBackgroundColor(Color.TRANSPARENT)
+            pivotX = if (opensTowardLeft) dp(300).toFloat() else 0f
+            pivotY = dp(140).toFloat()
         }
 
-        // AI 화면 검사
-        val screenScanButton = createMenuButton(
-            context = context,
-            text = "AI 화면 검사"
-        ).apply {
+        fun addItem(label: String, icon: Int, top: Int, inset: Int, onClick: () -> Unit) {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+            val pill = TextView(context).apply {
+                text = label
+                textSize = 18f
+                setTextColor(Color.rgb(18, 28, 44))
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setPadding(dp(12), dp(7), dp(12), dp(7))
+                background = GradientDrawable().apply {
+                    setColor(Color.WHITE)
+                    cornerRadius = dp(999).toFloat()
+                }
+                elevation = dp(4).toFloat()
+            }
+            val iconBubble = FrameLayout(context).apply {
+                clipChildren = false
+                clipToPadding = false
+                background = GradientDrawable().apply {
+                    setColor(Color.rgb(225, 224, 255))
+                    shape = GradientDrawable.OVAL
+                }
+                elevation = dp(4).toFloat()
+                contentDescription = label
+            }
+            val iconView = ImageView(context).apply {
+                setImageResource(icon)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                isDuplicateParentStateEnabled = true
+                layoutParams = FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER)
+            }
+            iconBubble.addView(iconView)
 
-            layoutParams = FrameLayout.LayoutParams(
-                (150 * density).toInt(),
-                (56 * density).toInt()
-            ).apply {
-                gravity = Gravity.END or Gravity.TOP
-                rightMargin = (70 * density).toInt()
-                topMargin = (25 * density).toInt()
+            val gap = View(context).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) }
+            if (opensTowardLeft) {
+                row.addView(pill)
+                row.addView(gap)
+                row.addView(iconBubble, LinearLayout.LayoutParams(dp(48), dp(48)))
+            } else {
+                row.addView(iconBubble, LinearLayout.LayoutParams(dp(48), dp(48)))
+                row.addView(gap)
+                row.addView(pill)
             }
 
-            setOnClickListener {
-                onScreenScanClick()
+            val params = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(48)).apply {
+                gravity = (if (opensTowardLeft) Gravity.END else Gravity.START) or Gravity.TOP
+                topMargin = dp(top)
+                if (opensTowardLeft) rightMargin = dp(inset) else leftMargin = dp(inset)
             }
+            container.addView(row, params)
         }
 
-        // 이미지 검사
-        val imageScanButton = createMenuButton(
-            context = context,
-            text = "이미지 검사"
-        ).apply {
-
-            layoutParams = FrameLayout.LayoutParams(
-                (140 * density).toInt(),
-                (56 * density).toInt()
-            ).apply {
-                gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                rightMargin = (120 * density).toInt()
-            }
-
-            setOnClickListener {
-                onImageScanClick()
-            }
-        }
-
-        // 빈 버튼
-        val emptyButton = createMenuButton(
-            context = context,
-            text = ""
-        ).apply {
-
-            layoutParams = FrameLayout.LayoutParams(
-                (130 * density).toInt(),
-                (56 * density).toInt()
-            ).apply {
-                gravity = Gravity.END or Gravity.BOTTOM
-                rightMargin = (70 * density).toInt()
-                bottomMargin = (25 * density).toInt()
-            }
-
-            setOnClickListener {
-                onEmptyClick()
-            }
-        }
-
-        // 항목을 하나의 메뉴로 묶어 서비스가 창 단위로 열고 닫을 수 있게 한다.
-        container.addView(screenScanButton)
-        container.addView(imageScanButton)
-        container.addView(emptyButton)
+        val middleTop = (280 - 48) / 2
+        val verticalOffset = 62
+        addItem("AI 화면 검사", R.drawable.menu_icon_screen, middleTop - verticalOffset, 0, onScreenScanClick)
+        addItem("이미지 검사", R.drawable.menu_icon_image, middleTop, 28, onImageScanClick)
+        addItem("텍스트 검사", R.drawable.menu_icon_text, middleTop + verticalOffset, 30, onTextScanClick)
 
         return container
-    }
-
-
-    private fun createMenuButton(
-        context: Context,
-        text: String
-    ): TextView {
-
-        val density = context.resources.displayMetrics.density
-
-        return TextView(context).apply {
-
-            this.text = text
-
-            textSize = 18f
-            setTextColor(Color.rgb(17, 27, 43))
-
-            gravity = Gravity.CENTER
-
-            elevation = 6 * density
-
-            isClickable = true
-            isFocusable = true
-
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE)
-                cornerRadius = 28 * density
-            }
-        }
     }
 }
