@@ -6,22 +6,27 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.dundueni.app.feature.analysisresult.AnalysisResult
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
-import com.dundueni.app.feature.analysisresult.RiskEvidence
-import com.dundueni.app.feature.analysisresult.RiskLevel
-import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.dundueni.app.ui.component.InspectionErrorDialog
+import com.dundueni.app.ui.component.InspectionLoadingDialog
 import com.dundueni.app.ui.theme.DundueniFETheme
-import com.google.gson.Gson
 
 /**
  * 텍스트 입력 및 검사 화면을 관리하는 Activity.
- * 검사 실행 시 입력된 텍스트를 담아 분석 결과 화면(AnalysisResultActivity)으로 진입한다.
+ * 검사 상태를 표시하고 Mock 결과가 준비되면 결과 화면으로 이동한다.
  */
 class TextInputActivity : ComponentActivity() {
     private val overlayOwner = "text-input:${java.util.UUID.randomUUID()}"
+    private lateinit var viewModel: TextInspectionViewModel
 
     override fun onStart() {
         super.onStart()
@@ -36,34 +41,49 @@ class TextInputActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        viewModel = ViewModelProvider(this)[TextInspectionViewModel::class.java]
 
         setContent {
             DundueniFETheme {
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val inputText by viewModel.inputText.collectAsStateWithLifecycle()
+                var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
                 Box(modifier = Modifier.safeDrawingPadding()) {
                     TextInputScreen(
+                        textInput = inputText,
+                        onTextChange = viewModel::updateInputText,
                         onInspect = { text ->
-                            val result = AnalysisResult(
-                                id = "text-scan-${System.currentTimeMillis()}",
-                                riskLevel = RiskLevel.CAUTION,
-                                summary = "입력하신 텍스트에 대한 분석 결과입니다 (Mock 데이터).",
-                                keyFinding = "작성하신 내용에서 주의가 필요한 표현이 감지되었습니다.",
-                                fraudScore = 50.0,
-                                aiLikelihood = AiLikelihood.MEDIUM,
-                                sourceText = text,
-                                evidence = listOf(
-                                    RiskEvidence("입력 텍스트 점검 (Mock)", "사용자가 직접 입력한 텍스트 내용을 기반으로 사기 및 피싱 위험도를 가상 분석했습니다."),
-                                    RiskEvidence("주의 필요 표현", "금전 요구나 개인정보 요청 문구가 있는지 주의 깊게 확인하세요.")
-                                ),
-                                targetLabel = "입력한 텍스트 내용"
-                            )
-                            val json = Gson().toJson(result)
-                            val intent = AnalysisResultActivity.createIntent(
-                                this@TextInputActivity, json, isDemo = true, suspendFloatingButton = true,
-                            )
-                            startActivity(intent)
+                            loadingPopupDismissed = false
+                            viewModel.inspect(text)
                         },
-                        onClose = { finish() }
+                        onClose = ::finish,
+                        isInspecting = state == TextInspectionUiState.Loading,
                     )
+                }
+                when (state) {
+                    TextInspectionUiState.Loading -> if (!loadingPopupDismissed) {
+                        InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+                    }
+                    TextInspectionUiState.Error -> InspectionErrorDialog(
+                        message = "텍스트 검사를 완료하지 못했어요. 다시 시도하면 같은 텍스트로 검사합니다.",
+                        onRetry = {
+                            loadingPopupDismissed = false
+                            viewModel.retry()
+                        },
+                        onCancelInspection = viewModel::cancelError,
+                    )
+                    else -> Unit
+                }
+                LaunchedEffect(state) {
+                    val success = state as? TextInspectionUiState.Success ?: return@LaunchedEffect
+                    try {
+                        startActivity(AnalysisResultActivity.createIntent(
+                            this@TextInputActivity, success.resultJson, isDemo = true, suspendFloatingButton = true,
+                        ))
+                        viewModel.onResultOpened()
+                    } catch (_: Exception) {
+                        viewModel.onResultOpenFailure()
+                    }
                 }
             }
         }

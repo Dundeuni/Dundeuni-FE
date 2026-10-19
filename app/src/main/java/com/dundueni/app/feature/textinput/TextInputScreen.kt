@@ -19,10 +19,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -36,11 +32,13 @@ import com.dundueni.app.ui.component.DundueniButtonType
  */
 @Composable
 fun TextInputScreen(
+    textInput: String,
+    onTextChange: (String) -> Unit,
     onInspect: (String) -> Unit,
     onClose: () -> Unit,
+    isInspecting: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var textInput by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
 
     Column(
@@ -60,6 +58,10 @@ fun TextInputScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        if (isInspecting) {
+            Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
+        }
+
         // 상단에 빠른 붙여넣기 / 지우기 버튼 영역
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -67,9 +69,10 @@ fun TextInputScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
+                enabled = !isInspecting,
                 onClick = {
                     clipboardManager.getText()?.text?.let { pastedText ->
-                        textInput = pastedText
+                        onTextChange(pastedText)
                     }
                 }
             ) {
@@ -79,7 +82,8 @@ fun TextInputScreen(
             if (textInput.isNotEmpty()) {
                 Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
-                    onClick = { textInput = "" }
+                    enabled = !isInspecting,
+                    onClick = { onTextChange("") }
                 ) {
                     Text("내용 지우기")
                 }
@@ -89,7 +93,8 @@ fun TextInputScreen(
         // 텍스트 입력 필드
         OutlinedTextField(
             value = textInput,
-            onValueChange = { textInput = it },
+            onValueChange = onTextChange,
+            enabled = !isInspecting,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -98,7 +103,8 @@ fun TextInputScreen(
             trailingIcon = {
                 if (textInput.isNotEmpty()) {
                     IconButton(
-                        onClick = { textInput = "" }
+                        enabled = !isInspecting,
+                        onClick = { onTextChange("") }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Clear,
@@ -112,7 +118,7 @@ fun TextInputScreen(
             ),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    if (textInput.isNotBlank()) {
+                    if (textInput.isNotBlank() && !isInspecting) {
                         onInspect(textInput)
                     }
                 }
@@ -128,17 +134,18 @@ fun TextInputScreen(
             if (textInput.isNotEmpty()) {
                 DundueniButton(
                     text = "지우기",
-                    onClick = { textInput = "" },
+                    onClick = { onTextChange("") },
                     type = DundueniButtonType.DANGER,
+                    enabled = !isInspecting,
                     modifier = Modifier.weight(1f)
                 )
             }
 
             // 검사하기 버튼 (PRIMARY)
             DundueniButton(
-                text = "검사하기",
+                text = if (isInspecting) "검사 중..." else "검사하기",
                 onClick = { onInspect(textInput) },
-                enabled = textInput.isNotBlank(),
+                enabled = textInput.isNotBlank() && !isInspecting,
                 modifier = Modifier.weight(if (textInput.isNotEmpty()) 1f else 2f)
             )
         }
