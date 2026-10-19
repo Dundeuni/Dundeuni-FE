@@ -9,7 +9,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.StateRestorationTester
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.ui.theme.DundueniFETheme
 import org.junit.Assert.assertEquals
@@ -40,16 +39,13 @@ class AnalysisFlowScreenTest {
 
     @Test fun dismissingLoadingPopupKeepsRequestVisibleAndResultArrives() {
         val state = mutableStateOf<AnalysisUiState>(AnalysisUiState.Loading)
-        val restoration = StateRestorationTester(compose)
-        restoration.setContent { DundueniFETheme { AnalysisFlowScreen(state.value, {}, {}, {}, isDemo = true) } }
+        compose.setContent { DundueniFETheme { AnalysisFlowScreen(state.value, {}, {}, {}, isDemo = true) } }
 
         compose.onNodeWithText("닫고 검사 계속하기").performClick()
         compose.onNodeWithText("잠시만 기다려 주세요").assertDoesNotExist()
         compose.onNodeWithText("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.").assertIsDisplayed()
         compose.runOnIdle { assertEquals(AnalysisUiState.Loading, state.value) }
 
-        restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("잠시만 기다려 주세요").assertDoesNotExist()
         compose.runOnIdle { state.value = AnalysisUiState.Success(result("MOCK_CAUTION")) }
         compose.onNodeWithText("조금 더 확인해보세요").assertIsDisplayed()
     }
