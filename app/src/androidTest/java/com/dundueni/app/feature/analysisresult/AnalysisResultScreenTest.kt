@@ -19,7 +19,6 @@ import java.io.FileOutputStream
 class AnalysisResultScreenTest {
     @get:Rule val compose = createComposeRule()
 
-
     @Test fun safeShowsEvidenceAndDispatchesSave() {
         var dispatched: ResultAction? = null
         compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.SAFE), onAction = { dispatched = it }) } }

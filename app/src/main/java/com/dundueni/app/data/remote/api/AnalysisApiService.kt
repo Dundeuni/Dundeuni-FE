@@ -5,7 +5,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
-import com.dundueni.app.data.remote.network.BearerAuthInterceptor
 import retrofit2.Response
 import retrofit2.http.HTTP
 import retrofit2.http.Multipart
@@ -20,7 +19,6 @@ import retrofit2.http.Part
  */
 interface AnalysisApiService {
     @Multipart
-    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
     @HTTP(method = AnalysisApiContract.METHOD, path = AnalysisApiContract.PATH, hasBody = true)
     suspend fun analyzeImage(
         @Part image: MultipartBody.Part,

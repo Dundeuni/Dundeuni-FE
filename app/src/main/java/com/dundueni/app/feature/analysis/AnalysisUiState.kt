@@ -12,21 +12,6 @@ sealed interface AnalysisUiState {
     data object Idle : AnalysisUiState
     data object Loading : AnalysisUiState
     data class Success(val result: AnalysisResult) : AnalysisUiState
-    // Preserve a safe category, never the exception or raw server message.
-    data class Error(
-        val kind: AnalysisErrorKind = AnalysisErrorKind.UNKNOWN,
-        val httpStatus: Int? = null,
-    ) : AnalysisUiState
-}
-
-enum class AnalysisErrorKind(val message: String) {
-    INPUT("이미지를 읽거나 변환하지 못했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요."),
-    CONFIGURATION("분석 서버 연결 설정을 확인해 주세요."),
-    CONNECTION("분석 서버에 연결하지 못했습니다. 네트워크와 서버 실행 상태를 확인해 주세요."),
-    HTTP("분석 서버가 요청을 정상 처리하지 못했습니다."),
-    TIMEOUT("분석 서버 응답 시간이 초과되었습니다. 다시 시도해 주세요."),
-    RESPONSE("분석 서버 응답 형식을 확인할 수 없습니다."),
-    IN_PROGRESS("서버 분석이 아직 완료되지 않았습니다. 다시 시도하면 새 분석 요청을 보냅니다."),
-    SERVER("서버에서 이미지 분석에 실패했습니다. 다시 시도해 주세요."),
-    UNKNOWN("검사에 실패했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요."),
+    // HTTP/파싱 예외와 서버 원문을 UI 상태에 노출하지 않습니다.
+    data object Error : AnalysisUiState
 }

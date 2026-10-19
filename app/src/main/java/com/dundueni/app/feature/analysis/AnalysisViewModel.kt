@@ -4,12 +4,6 @@ import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.data.repository.AnalysisResultRepository
-import com.dundueni.app.data.remote.api.AnalysisHttpException
-import com.dundueni.app.data.remote.api.AnalysisProtocolException
-import com.dundueni.app.data.repository.AnalysisFailedException
-import com.dundueni.app.data.repository.AnalysisNotCompletedException
-import java.io.IOException
-import java.io.InterruptedIOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -46,12 +40,9 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
         if (requestJob?.isActive == true) return
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
-            var inputPrepared = false
             try {
                 // 먼저 이미지를 준비한 뒤 분석을 요청하며, 어느 단계의 실패든 아래에서 처리한다.
-                val image = prepare()
-                inputPrepared = true
-                val result = checkNotNull(repository.analyzeResult(image))
+                val result = checkNotNull(repository.analyzeResult(prepare()))
                 ensureActive()
                 // 서버 값은 보존하고, 최종 판정 표시 여부는 화면 매핑에서 결정합니다.
                 mutableUiState.value = AnalysisUiState.Success(result)
@@ -65,22 +56,8 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
                     mutableUiState.value = AnalysisUiState.Idle
                     ensureActive()
                 }
-                mutableUiState.value = if (!inputPrepared) {
-                    AnalysisUiState.Error(AnalysisErrorKind.INPUT)
-                } else exception.toUiError()
+                mutableUiState.value = AnalysisUiState.Error
             }
         }
-    }
-
-    private fun Exception.toUiError(): AnalysisUiState.Error = when (this) {
-        is AnalysisApiConfigurationException -> AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION)
-        is AnalysisHttpException -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus)
-        is AnalysisProtocolException -> AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
-        is AnalysisNotCompletedException -> AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS)
-        is AnalysisFailedException -> AnalysisUiState.Error(AnalysisErrorKind.SERVER)
-        // SocketTimeoutException and OkHttp call timeouts both extend InterruptedIOException.
-        is InterruptedIOException -> AnalysisUiState.Error(AnalysisErrorKind.TIMEOUT)
-        is IOException -> AnalysisUiState.Error(AnalysisErrorKind.CONNECTION)
-        else -> AnalysisUiState.Error()
     }
 }

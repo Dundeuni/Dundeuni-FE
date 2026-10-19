@@ -1,8 +1,5 @@
 package com.dundueni.app.feature.analysis
 
-import android.content.Context
-import com.dundueni.app.data.auth.AuthSessionRuntime
-import com.dundueni.app.data.auth.AuthSessionStore
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.remote.api.AnalysisApiService
 import com.dundueni.app.data.remote.api.FakeAnalysisApiService
@@ -22,24 +19,12 @@ object AnalysisFlowDependencies {
     fun createRepository(): AnalysisResultRepository =
         createRepository(BuildConfig.ANALYSIS_API_MODE, BuildConfig.ANALYSIS_API_BASE_URL)
 
-    fun createRepository(context: Context): AnalysisResultRepository = createRepository(
-        BuildConfig.ANALYSIS_API_MODE,
-        BuildConfig.ANALYSIS_API_BASE_URL,
-        AuthSessionRuntime.store(context),
-        AuthSessionRuntime::onUnauthorized,
-    )
-
     /** Exposed for deterministic tests and explicit local composition. */
-    fun createRepository(
-        mode: String,
-        baseUrl: String? = null,
-        sessionStore: AuthSessionStore? = null,
-        onUnauthorized: (String) -> Unit = {},
-    ): AnalysisResultRepository {
+    fun createRepository(mode: String, baseUrl: String? = null): AnalysisResultRepository {
         val service = try {
             when (mode.trim().uppercase()) {
                 FAKE_MODE -> FakeAnalysisApiService()
-                REAL_MODE -> RetrofitClient(validateBaseUrl(baseUrl), sessionStore, onUnauthorized).analysisApiService
+                REAL_MODE -> RetrofitClient(validateBaseUrl(baseUrl)).analysisApiService
                 else -> throw AnalysisApiConfigurationException(
                     "Unknown analysis.api.mode '$mode'. Set it to FAKE or REAL in local.properties."
                 )

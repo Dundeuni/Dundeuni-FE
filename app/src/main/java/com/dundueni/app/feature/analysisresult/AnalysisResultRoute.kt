@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -19,13 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable
-fun AnalysisResultRoute(
-    result: AnalysisResult,
-    onReturn: () -> Unit,
-    onHome: () -> Unit,
-    isDemo: Boolean = false,
-) {
-    BackHandler(onBack = onReturn)
+fun AnalysisResultRoute(result: AnalysisResult, onReturn: () -> Unit, isDemo: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE) }
@@ -59,7 +52,6 @@ fun AnalysisResultRoute(
     AnalysisResultScreen(result, historySaved = saved, isDemo = isDemo, onAction = { action ->
         when (action) {
             ResultAction.RETURN -> onReturn()
-            ResultAction.HOME -> onHome()
             ResultAction.PROFILE -> Toast.makeText(context, "계정 메뉴를 사용할 수 없어요.", Toast.LENGTH_SHORT).show()
             ResultAction.CALL_FAMILY -> open(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
             ResultAction.SHARE, ResultAction.ASK_FAMILY -> share()
