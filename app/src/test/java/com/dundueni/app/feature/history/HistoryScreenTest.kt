@@ -84,4 +84,18 @@ class HistoryScreenTest {
         compose.onNodeWithTag("easy-record-test").performClick()
         compose.onNodeWithText("검사 기록 상세").assertIsDisplayed()
     }
+
+    @Test fun homeEntryWaitsForRecordsThenOpensSelectedDetailAndReturnsHome() {
+        val records = mutableStateOf(emptyList<HistoryRecord>())
+        val loading = mutableStateOf(true)
+        var homes = 0
+        compose.setContent { DundueniFETheme {
+            HistoryScreen(records.value, {}, {}, {}, loading = loading.value,
+                initialRecordId = record.id, onCloseDetail = { homes++ })
+        } }
+        compose.runOnIdle { records.value = listOf(record); loading.value = false }
+        compose.onNodeWithText("검사 기록 상세").assertIsDisplayed()
+        compose.onNodeWithContentDescription("홈으로 돌아가기").performClick()
+        assertEquals(1, homes)
+    }
 }

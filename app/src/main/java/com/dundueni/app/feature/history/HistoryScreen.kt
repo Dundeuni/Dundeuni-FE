@@ -57,19 +57,22 @@ fun HistoryScreen(
     error: String? = null,
     onRetry: () -> Unit = {},
     isDemo: Boolean = false,
+    initialRecordId: String? = null,
+    onCloseDetail: (() -> Unit)? = null,
 ) {
     var easy by rememberSaveable { mutableStateOf(false) }
     var filterName by rememberSaveable { mutableStateOf("ALL") }
     var query by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var searching by rememberSaveable { mutableStateOf(false) }
-    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedId by rememberSaveable { mutableStateOf(initialRecordId) }
+    val closeDetail: () -> Unit = { if (onCloseDetail != null) onCloseDetail() else selectedId = null }
     val selected = records.firstOrNull { it.id == selectedId }
     val filter = HistoryType.entries.firstOrNull { it.name == filterName }
     val visible = remember(records, filter, query.text) { filterHistory(records, filter, query.text) }
     LaunchedEffect(records, loading) {
         if (!loading && selectedId != null && selected == null) selectedId = null
     }
-    BackHandler { if (selectedId != null) selectedId = null else onHome() }
+    BackHandler { if (selectedId != null) closeDetail() else onHome() }
 
     Scaffold(
         containerColor = Background,
@@ -77,7 +80,7 @@ fun HistoryScreen(
             Surface(color = Background) {
                 Row(Modifier.statusBarsPadding().fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (selected != null) {
-                        IconButton(onClick = { selectedId = null }, modifier = Modifier.semantics { contentDescription = "검사 기록 목록으로 돌아가기" }) {
+                        IconButton(onClick = closeDetail, modifier = Modifier.semantics { contentDescription = if (onCloseDetail != null) "홈으로 돌아가기" else "검사 기록 목록으로 돌아가기" }) {
                             ResultGlyph(ResultIcon.BACK, Ink)
                         }
                     } else {
