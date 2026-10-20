@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysisresult
 
 import java.util.Locale
+import com.dundueni.app.feature.history.HistoryType
 
 /** The overall verdict comes from the analysis service; the UI never derives it from scores. */
 enum class RiskLevel(val label: String) {
@@ -38,6 +39,7 @@ data class AnalysisResult(
     val sourceText: String? = null,
     val sourceUrl: String? = null,
     val targetLabel: String = "수신된 문자 메시지 및 첨부 링크",
+    val historyType: HistoryType = HistoryType.UNKNOWN,
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }

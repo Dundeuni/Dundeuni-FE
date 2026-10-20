@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -85,7 +86,8 @@ class AnalysisActivity : ComponentActivity() {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 Box(Modifier.safeDrawingPadding()) {
-                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome)
+                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome,
+                        historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE)
                 }
             }
         }

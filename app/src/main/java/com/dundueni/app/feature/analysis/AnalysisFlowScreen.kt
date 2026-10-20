@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultRoute
 import com.dundueni.app.ui.component.InspectionErrorDialog
@@ -33,10 +34,11 @@ fun AnalysisFlowScreen(
     onClose: () -> Unit,
     onHome: () -> Unit,
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
+    historyType: HistoryType = HistoryType.IMAGE,
 ) {
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
-    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)
+    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.copy(historyType = historyType)
     if (presented != null) {
         AnalysisResultRoute(presented, onReturn = onClose, onHome = onHome, isDemo = isDemo)
         return

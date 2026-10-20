@@ -6,7 +6,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 enum class HistoryType(val label: String) {
-    SCREEN("화면"), LINK("링크"), IMAGE("이미지"), TEXT("텍스트"), UNKNOWN("검사")
+    SCREEN("화면"), LINK("링크"), IMAGE("이미지"), TEXT("텍스트"), PHONE("전화번호"), UNKNOWN("종류 미상")
 }
 
 data class HistoryRecord(

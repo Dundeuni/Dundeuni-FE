@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysisresult
 
 import org.json.JSONObject
+import com.dundueni.app.feature.history.HistoryType
 
 /** FE integration example, not an agreed BE API contract. Invalid verdicts must never become SAFE. */
 object AnalysisResultJsonAdapter {
@@ -10,6 +11,7 @@ object AnalysisResultJsonAdapter {
         val evidence = value.optJSONArray("evidence")
         return AnalysisResult(
             id = value.requiredText("id"),
+            historyType = HistoryType.entries.firstOrNull { it.name == value.optionalText("historyType") } ?: HistoryType.UNKNOWN,
             riskLevel = RiskLevel.fromWireValue(value.requiredText("riskLevel")),
             summary = value.requiredText("summary"),
             keyFinding = value.optionalText("keyFinding"),

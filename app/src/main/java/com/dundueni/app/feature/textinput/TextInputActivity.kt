@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.textinput
 
 import android.os.Bundle
+import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +44,7 @@ class TextInputActivity : ComponentActivity() {
                     TextInputScreen(
                         onInspect = { text ->
                             val result = AnalysisResult(
+                                historyType = HistoryType.TEXT,
                                 id = "text-scan-${System.currentTimeMillis()}",
                                 riskLevel = RiskLevel.CAUTION,
                                 summary = "입력하신 텍스트에 대한 분석 결과입니다 (Mock 데이터).",

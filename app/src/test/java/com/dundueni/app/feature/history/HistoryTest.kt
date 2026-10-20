@@ -52,4 +52,35 @@ class HistoryTest {
         assertEquals(listOf("new", "image", "old"), filterHistory(records, null, "").map { it.id })
         assertTrue(filterHistory(records, null, "없는 검색어").isEmpty())
     }
+
+    @Test fun resultSerializationAndStoragePreserveEveryInputTypeWithoutOriginalContent() {
+        HistoryType.entries.filter { it != HistoryType.UNKNOWN }.forEachIndexed { index, type ->
+            val result = com.dundueni.app.feature.analysisresult.AnalysisResult(
+                id = "typed-$index", riskLevel = RiskLevel.SAFE, summary = "summary",
+                historyType = type, sourceText = "private-message", sourceUrl = "https://private.example",
+            )
+            val decoded = com.dundueni.app.feature.analysisresult.AnalysisResultJsonAdapter.decode(
+                com.google.gson.Gson().toJson(result),
+            )
+            assertTrue(store.save(decoded, 100L + index))
+            assertEquals(result.id, filterHistory(HistoryStore(context).read(), type, "").single().id)
+        }
+        val stored = preferences.getString("results", "")!!
+        assertFalse(stored.contains("private-message"))
+        assertFalse(stored.contains("private.example"))
+        assertEquals(HistoryType.entries.size - 1, store.read().size)
+    }
+
+    @Test fun savingTypedRecordPreservesLegacyRecordAndItsDeletion() {
+        preferences.edit().putString("results", """[{"id":"old","riskLevel":"SAFE","savedAt":100}]""").commit()
+        val result = com.dundueni.app.feature.analysisresult.AnalysisResult(
+            "new", RiskLevel.SAFE, "summary", historyType = HistoryType.IMAGE,
+        )
+        assertTrue(store.save(result, 200))
+        assertTrue(store.save(result, 300))
+        assertEquals(2, store.read().size)
+        assertEquals(HistoryType.UNKNOWN, store.read().last().type)
+        assertTrue(store.delete("old"))
+        assertEquals("new", store.read().single().id)
+    }
 }

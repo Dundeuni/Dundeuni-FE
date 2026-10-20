@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.feature.analysisresult.AnalysisResult as PresentedResult
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
@@ -23,6 +24,7 @@ internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
     val id = analysisId?.takeIf { it.isNotBlank() } ?: return null
     val descriptions = reasons.filter { it.isNotBlank() }
     return PresentedResult(
+        historyType = HistoryType.IMAGE,
         id = id,
         riskLevel = level,
         summary = descriptions.firstOrNull() ?: "이미지 분석 결과를 확인해주세요.",
@@ -44,6 +46,7 @@ private fun AnalysisResult.toUnclassifiedPb05Result(): PresentedResult {
         else -> AiLikelihood.UNKNOWN
     }
     return PresentedResult(
+        historyType = HistoryType.IMAGE,
         id = analysisId?.takeIf { it.isNotBlank() } ?: "image-result-${hashCode()}",
         riskLevel = RiskLevel.UNKNOWN,
         summary = "분석이 완료되었어요. 아래 AI 정보와 분석 근거를 확인해주세요.",

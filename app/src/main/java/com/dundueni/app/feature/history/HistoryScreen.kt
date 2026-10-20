@@ -181,7 +181,7 @@ private fun HistoryCard(record: HistoryRecord, easy: Boolean, onClick: () -> Uni
     Surface(onClick = onClick, color = Color.White, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(if (easy) 18.dp else 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(if (easy) 46.dp else 40.dp).background(tint.copy(alpha = .09f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                ResultGlyph(when(record.type) { HistoryType.IMAGE -> ResultIcon.AI; HistoryType.LINK -> ResultIcon.LINK; HistoryType.TEXT -> ResultIcon.MESSAGE; HistoryType.SCREEN -> ResultIcon.SEARCH; HistoryType.UNKNOWN -> ResultIcon.SHIELD }, tint)
+                ResultGlyph(when(record.type) { HistoryType.IMAGE -> ResultIcon.AI; HistoryType.LINK -> ResultIcon.LINK; HistoryType.TEXT -> ResultIcon.MESSAGE; HistoryType.SCREEN -> ResultIcon.SEARCH; HistoryType.PHONE -> ResultIcon.PHONE; HistoryType.UNKNOWN -> ResultIcon.SHIELD }, tint)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (easy) RiskBadge(record.riskLevel)
