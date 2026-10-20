@@ -5,6 +5,8 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,6 +83,7 @@ fun HomeScreen(
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
     onViewAllHistory: () -> Unit,
+    onRecentHistory: (String) -> Unit = {},
     onNavigationSelected: (HomeDestination) -> Unit,
 ) {
     val context = LocalContext.current
@@ -129,7 +132,7 @@ fun HomeScreen(
                     }
                 }
                 Spacer(Modifier.height(9.dp))
-                RecentHistoryCard(recentRecords)
+                RecentHistoryCard(recentRecords, onRecentHistory)
                 Spacer(Modifier.height(24.dp))
                 SafetyTipCard()
             }
@@ -283,7 +286,7 @@ private fun loadRecentRecords(context: Context): List<HomeRecentRecord> = runCat
 }.getOrDefault(emptyList())
 
 @Composable
-private fun RecentHistoryCard(records: List<HomeRecentRecord>) {
+private fun RecentHistoryCard(records: List<HomeRecentRecord>, onRecord: (String) -> Unit) {
     Surface(shape = RoundedCornerShape(17.dp), color = Color.White, shadowElevation = 1.dp) {
         if (records.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().height(92.dp), contentAlignment = Alignment.Center) {
@@ -292,7 +295,7 @@ private fun RecentHistoryCard(records: List<HomeRecentRecord>) {
         } else {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 records.forEachIndexed { index, record ->
-                    RecentHistoryRow(record)
+                    RecentHistoryRow(record, onRecord)
                     if (index < records.lastIndex) Spacer(Modifier.fillMaxWidth().height(1.dp).background(HomeBorder))
                 }
             }
@@ -301,7 +304,7 @@ private fun RecentHistoryCard(records: List<HomeRecentRecord>) {
 }
 
 @Composable
-private fun RecentHistoryRow(record: HomeRecentRecord) {
+private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Unit) {
     val badge = when (record.risk.uppercase()) {
         "DANGER" -> "위험"
         "CAUTION" -> "주의"
@@ -315,7 +318,7 @@ private fun RecentHistoryRow(record: HomeRecentRecord) {
         else -> Color(0xFFE6E4FF)
     }
     Row(
-        modifier = Modifier.fillMaxWidth().height(77.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onRecord(record.id) }.heightIn(min = 77.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(badgeColor), contentAlignment = Alignment.Center) {

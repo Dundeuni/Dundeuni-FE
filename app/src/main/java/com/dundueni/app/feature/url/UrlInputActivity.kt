@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.url
 
 import android.os.Bundle
+import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,6 +40,7 @@ class UrlInputActivity : ComponentActivity() {
                     UrlInputScreen(
                         onInspect = { url ->
                             val result = AnalysisResult(
+                                historyType = HistoryType.LINK,
                                 id = "url-scan-${System.currentTimeMillis()}",
                                 riskLevel = RiskLevel.CAUTION,
                                 summary = "입력하신 웹 링크(URL)에 대한 분석 결과입니다 (Mock 데이터).",

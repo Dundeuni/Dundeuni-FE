@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.history
 
 import android.content.Context
+import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,6 +27,24 @@ class HistoryStore(context: Context) {
                 )
             }.getOrNull()
         }.sortedByDescending { it.savedAt }
+    }
+
+    fun save(result: AnalysisResult, savedAt: Long = System.currentTimeMillis()): Boolean = synchronized(lock) {
+        val previous = JSONArray(preferences.getString("results", "[]"))
+        val updated = JSONArray().put(JSONObject().apply {
+            put("id", result.id)
+            put("riskLevel", result.riskLevel.name)
+            put("savedAt", savedAt)
+            put("type", result.historyType.name)
+            result.fraudScore?.let { put("fraudScore", it) }
+            result.aiScore?.let { put("aiScore", it) }
+        })
+        for (index in 0 until previous.length()) {
+            val item = previous.optJSONObject(index) ?: continue
+            if (item.optString("id") != result.id && updated.length() < 50) updated.put(item)
+        }
+        // Original message, URL and evidence text are never persisted.
+        preferences.edit().putString("results", updated.toString()).commit()
     }
 
     fun delete(id: String): Boolean = synchronized(lock) {

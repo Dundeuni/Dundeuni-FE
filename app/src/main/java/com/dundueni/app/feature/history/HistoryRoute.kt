@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun HistoryRoute(onHome: () -> Unit) {
+fun HistoryRoute(onHome: () -> Unit, initialRecordId: String? = null) {
     val context = LocalContext.current
     val store = remember(context) { HistoryStore(context) }
     val scope = rememberCoroutineScope()
@@ -29,6 +29,7 @@ fun HistoryRoute(onHome: () -> Unit) {
         loading = false
     }
     HistoryScreen(
+        initialRecordId = initialRecordId, onCloseDetail = if (initialRecordId != null) onHome else null,
         records = records, loading = loading, error = error, onHome = onHome,
         onRetry = { revision++ }, onDelete = { pendingDelete = it }, onClear = { pendingDelete = "*" },
     )

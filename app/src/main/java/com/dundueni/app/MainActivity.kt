@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
                     onPhoneScan = { startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
                     onSettings = { showMessage("준비 중인 기능입니다") },
+                    onRecentHistory = { id -> startActivity(HistoryActivity.createIntent(this@MainActivity, id)) },
                     onViewAllHistory = { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) },
                     onNavigationSelected = { destination ->
                         when (destination) {

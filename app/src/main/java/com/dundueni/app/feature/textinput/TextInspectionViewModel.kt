@@ -1,12 +1,14 @@
 package com.dundueni.app.feature.textinput
 
 import androidx.annotation.MainThread
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
+import com.dundueni.app.feature.history.HistoryType
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -25,17 +27,16 @@ sealed interface TextInspectionUiState {
 }
 
 /** Keeps the submitted text and inspection state across Activity recreation. */
-class TextInspectionViewModel : ViewModel() {
+class TextInspectionViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel() {
     private val mutableUiState = MutableStateFlow<TextInspectionUiState>(TextInspectionUiState.Idle)
     val uiState: StateFlow<TextInspectionUiState> = mutableUiState.asStateFlow()
-    private val mutableInputText = MutableStateFlow("")
-    val inputText: StateFlow<String> = mutableInputText.asStateFlow()
+    val inputText: StateFlow<String> = savedStateHandle.getStateFlow(INPUT_TEXT_KEY, "")
     private var requestJob: Job? = null
     private var submittedText: String? = null
 
     @MainThread
     fun updateInputText(text: String) {
-        if (mutableUiState.value != TextInspectionUiState.Loading) mutableInputText.value = text
+        if (mutableUiState.value != TextInspectionUiState.Loading) savedStateHandle[INPUT_TEXT_KEY] = text
     }
 
     @MainThread
@@ -85,6 +86,7 @@ class TextInspectionViewModel : ViewModel() {
     }
 
     private fun createMockResult(text: String) = AnalysisResult(
+        historyType = HistoryType.TEXT,
         id = "text-scan-${System.currentTimeMillis()}",
         riskLevel = RiskLevel.CAUTION,
         summary = "입력하신 텍스트에 대한 분석 결과입니다 (Mock 데이터).",
@@ -98,4 +100,8 @@ class TextInspectionViewModel : ViewModel() {
         ),
         targetLabel = "입력한 텍스트 내용",
     )
+
+    private companion object {
+        const val INPUT_TEXT_KEY = "inputText"
+    }
 }

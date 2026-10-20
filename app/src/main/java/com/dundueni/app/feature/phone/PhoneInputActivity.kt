@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.phone
 
 import android.os.Bundle
+import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,6 +40,7 @@ class PhoneInputActivity : ComponentActivity() {
                     PhoneInputScreen(
                         onInspect = { phone ->
                             val result = AnalysisResult(
+                                historyType = HistoryType.PHONE,
                                 id = "phone-scan-${System.currentTimeMillis()}",
                                 riskLevel = RiskLevel.CAUTION,
                                 summary = "입력하신 전화번호에 대한 분석 결과입니다 (Mock 데이터).",
