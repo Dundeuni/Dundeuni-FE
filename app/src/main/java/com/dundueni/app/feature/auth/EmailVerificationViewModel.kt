@@ -18,6 +18,8 @@ class EmailVerificationViewModel(
 ) : ViewModel() {
     private val state = MutableStateFlow(EmailVerificationUiState())
     val uiState = state.asStateFlow()
+    internal var resetGrant: String? = null
+        private set
     private var challengeId: String? = null
     private var expiresAt = 0L
     private var operation: Job? = null
@@ -29,6 +31,7 @@ class EmailVerificationViewModel(
         revision++
         operation?.cancel()
         timer?.cancel()
+        resetGrant = null
         challengeId = null
         expiresAt = 0
         state.value = EmailVerificationUiState(email = value)
@@ -109,7 +112,8 @@ class EmailVerificationViewModel(
                     return@launch
                 }
                 when (response) {
-                    VerifyCodeOutcome.Verified -> {
+                    VerifyCodeOutcome.Verified, is VerifyCodeOutcome.VerifiedForReset -> {
+                        resetGrant = (response as? VerifyCodeOutcome.VerifiedForReset)?.grant?.also { require(it.isNotBlank()) }
                         timer?.cancel()
                         state.update { it.copy(busy = false, verified = true, navigationPending = true, code = "", codeError = null, notice = "이메일 인증을 완료했습니다.") }
                         onVerified(state.value.email)
