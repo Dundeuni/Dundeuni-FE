@@ -142,7 +142,7 @@ fun HomeScreen(
     }
 }
 
-enum class HomeDestination { HOME, DIAGNOSIS, REPORT, CONSULTATION, MY_SHELTER }
+enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER }
 
 @Composable
 private fun HomeHeader(onNotifications: () -> Unit, onSettings: () -> Unit) {
@@ -358,19 +358,27 @@ private fun SafetyTipCard() {
 private fun HomeBottomNavigation(onNavigationSelected: (HomeDestination) -> Unit) {
     val items = listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
-        Triple(HomeDestination.DIAGNOSIS, "diagnosis", "진단"),
         Triple(HomeDestination.REPORT, "report", "리포트"),
         Triple(HomeDestination.CONSULTATION, "chat", "맞춤 상담"),
         Triple(HomeDestination.MY_SHELTER, "profile", "My 쉼터"),
     )
     NavigationBar(containerColor = Color.White, tonalElevation = 3.dp, windowInsets = WindowInsets.navigationBars) {
         items.forEach { (destination, icon, label) ->
-            val selected = destination == HomeDestination.DIAGNOSIS
+            val selected = destination == HomeDestination.HOME
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigationSelected(destination) },
+                modifier = Modifier.weight(1f),
                 icon = { HomeGlyph(icon, if (selected) HomeInk else Color(0xFF9BA0A8), Modifier.size(24.dp)) },
-                label = { Text(label, fontSize = 10.sp, maxLines = 1) },
+                label = {
+                    Text(
+                        label,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = HomeInk,
                     selectedTextColor = HomeInk,
@@ -397,12 +405,6 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
                 drawLine(color, p(10f, 21f), p(10f, 15f), strokeWidth = 2f*sx)
                 drawLine(color, p(10f, 15f), p(14f, 15f), strokeWidth = 2f*sx)
                 drawLine(color, p(14f, 15f), p(14f, 21f), strokeWidth = 2f*sx)
-            }
-            "diagnosis" -> {
-                drawRoundRect(color, p(3f, 4f), Size(13f*sx, 16f*sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f*sx), style = stroke)
-                drawCircle(color, 4f*sx, p(16f, 16f), style = stroke)
-                drawLine(color, p(19f, 19f), p(22f, 22f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
-                listOf(7f, 10f, 13f).forEach { drawLine(color, p(6f, it), p(12f, it), strokeWidth = 1.2f*sx) }
             }
             "report" -> {
                 drawRoundRect(color, p(5f, 3f), Size(14f*sx, 18f*sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f*sx), style = stroke)
