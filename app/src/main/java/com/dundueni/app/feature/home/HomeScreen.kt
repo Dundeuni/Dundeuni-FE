@@ -33,6 +33,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -62,6 +63,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dundueni.app.R
 import com.dundueni.app.ui.theme.DundueniDimens
+import com.dundueni.app.ui.theme.ProtectiveBlue
 import org.json.JSONArray
 
 private val HomeBackground = Color(0xFFF7F8FC)
@@ -219,22 +221,18 @@ private fun FloatingHeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Uni
                     .background(Color(0xFFE7EBF8)).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("◈", color = HomeInk, fontSize = 19.sp)
-                }
-                Spacer(Modifier.width(11.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("화면 위 플로팅 버튼", color = HomeInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (enabled) "항상 화면 우측에 고정됨" else "필요할 때 화면 위에 표시",
-                        color = Color(0xFF687080),
-                        fontSize = 11.sp,
-                    )
-                }
-                Switch(checked = enabled, onCheckedChange = onEnabledChange)
+                Text(
+                    if (enabled) "화면 위 플로팅 버튼 숨기기" else "화면 위 플로팅 버튼 띄우기",
+                    modifier = Modifier.weight(1f),
+                    color = HomeInk,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange,
+                    colors = SwitchDefaults.colors(checkedTrackColor = ProtectiveBlue),
+                )
             }
         }
     }
