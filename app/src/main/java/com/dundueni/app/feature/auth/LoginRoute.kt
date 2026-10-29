@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.auth
 
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -15,8 +16,9 @@ fun LoginRoute(
     onResetPassword: () -> Unit,
     onKakaoLogin: () -> Unit,
     onGoogleLogin: () -> Unit,
-    onBack: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
+    if (onBack != null) BackHandler(onBack = onBack)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle, state.navigationPending) {
@@ -30,7 +32,6 @@ fun LoginRoute(
     LoginScreen(
         state, viewModel::changeEmail, viewModel::changePassword, viewModel::togglePasswordVisibility,
         onLogin = viewModel::login,
-        onBack = onBack,
         onSignUp = onSignUp, onResetPassword = onResetPassword,
         onKakaoLogin = onKakaoLogin, onGoogleLogin = onGoogleLogin,
     )

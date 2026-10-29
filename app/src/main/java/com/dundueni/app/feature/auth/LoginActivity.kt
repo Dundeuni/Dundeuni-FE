@@ -38,8 +38,12 @@ class LoginActivity : ComponentActivity() {
                             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
                         ))
                     },
-                    onSignUp = { startActivity(Intent(this, SignUpTermsActivity::class.java)) },
-                    onResetPassword = { pending("비밀번호 재설정") },
+                    onSignUp = {
+                        startActivity(Intent(this, SignUpTermsActivity::class.java).apply {
+                            putExtra(EmailVerificationActivity.EXTRA_DEMO, BuildConfig.DEBUG)
+                        })
+                    },
+                    onResetPassword = { startActivity(Intent(this, PasswordResetActivity::class.java)) },
                     onKakaoLogin = { pending("카카오 로그인") },
                     onGoogleLogin = { pending("Google 로그인") },
                 )

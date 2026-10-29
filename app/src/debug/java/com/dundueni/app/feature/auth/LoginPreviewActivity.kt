@@ -53,7 +53,7 @@ class LoginPreviewActivity : ComponentActivity() {
                         { startActivity(Intent(this@LoginPreviewActivity, SignUpTermsActivity::class.java).apply {
                             putExtra(EmailVerificationActivity.EXTRA_DEMO, true)
                         }) },
-                        pending, pending, pending)
+                        { startActivity(Intent(this@LoginPreviewActivity, PasswordResetActivity::class.java)) }, pending, pending)
                 }
             }
         }
