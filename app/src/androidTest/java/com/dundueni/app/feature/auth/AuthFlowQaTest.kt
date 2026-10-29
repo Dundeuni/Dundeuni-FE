@@ -125,10 +125,41 @@ class AuthFlowQaTest {
         waitForText("본인 인증")
     }
 
+    @Test fun homeAccountSignupUsesDebugGatewayAndCompletes() {
+        waitForText("빠른 검사")
+        click("My 쉼터")
+        waitForText("회원가입")
+        click("회원가입")
+        waitForText("약관 동의")
+        click("서비스 이용약관 동의")
+        click("개인정보 수집 동의")
+        click("연령 확인 및 보호자 동의")
+        click("다음 단계로")
+        waitForText("본인 인증")
+        compose.onNodeWithText("UI 테스트 · 실제 발송 없음 · 샘플 번호 123456").assertExists()
+        sendCode()
+        input("인증번호 6자리", "123456")
+        click("다음 단계로")
+        waitForText("닉네임 / 비밀번호 설정")
+        input("비밀번호", "ValidPass123!")
+        input("비밀번호 확인", "ValidPass123!")
+        input("닉네임 설정", "tester")
+        click("회원가입 완료하기")
+        waitForText("회원가입이 완료되었습니다!")
+        compose.onNodeWithText("UI 테스트 · 실제 가입·보호 활성화 없음").performScrollTo().assertIsDisplayed()
+        click("든든이 시작하기 (홈으로)")
+        waitForText("빠른 검사")
+        assertTrue(AuthSessionRuntime.store(InstrumentationRegistry.getInstrumentation().targetContext).read() == null)
+    }
+
     private fun sendCode() {
         input("이메일 주소", "qa@kau.kr")
         click("인증번호 받기")
         waitForText("새 번호 발송")
+        compose.waitUntil(10_000) {
+            !compose.onNodeWithContentDescription("인증번호 6자리").fetchSemanticsNode().config
+                .contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled)
+        }
     }
 
     @Test fun signupErrorsResendCorrectionCompletionAndHome() {
@@ -142,6 +173,11 @@ class AuthFlowQaTest {
         compose.onNodeWithText("다음 단계로").assertIsNotEnabled()
         click("새 번호 발송")
         compose.waitUntil(10_000) { compose.onAllNodesWithText("인증번호가 일치하지 않습니다.").fetchSemanticsNodes().isEmpty() }
+        // The error clears before the asynchronous resend completes; wait for editable input.
+        compose.waitUntil(10_000) {
+            !compose.onNodeWithContentDescription("인증번호 6자리").fetchSemanticsNode().config
+                .contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled)
+        }
         input("인증번호 6자리", "123456")
         click("다음 단계로")
         waitForText("닉네임 / 비밀번호 설정")
@@ -157,7 +193,7 @@ class AuthFlowQaTest {
         waitForText("회원가입이 완료되었습니다!")
         compose.onNodeWithText("tester 님, 환영합니다!").assertIsDisplayed()
         compose.onNodeWithText("qa@kau.kr").assertIsDisplayed()
-        click("든든이 시작하기 (홈으로) →")
+        click("든든이 시작하기 (홈으로)")
         waitForText("빠른 검사")
     }
 
@@ -165,6 +201,7 @@ class AuthFlowQaTest {
         openEmail()
         sendCode()
         input("인증번호 6자리", "123456")
+        compose.onNodeWithContentDescription("인증번호 6자리").assertTextEquals("123456")
         rotate(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
         compose.onNodeWithContentDescription("이메일 주소").assertTextEquals("qa@kau.kr")
         compose.onNodeWithContentDescription("인증번호 6자리").assertTextEquals("123456")
@@ -246,7 +283,7 @@ class AuthFlowQaTest {
         assertAboveKeyboard(compose.onNodeWithText("회원가입 완료하기"))
         compose.onNodeWithContentDescription("닉네임 설정").performImeAction()
         waitForText("회원가입이 완료되었습니다!")
-        click("든든이 시작하기 (홈으로) →")
+        click("든든이 시작하기 (홈으로)")
         waitForText("빠른 검사")
     }
 }
