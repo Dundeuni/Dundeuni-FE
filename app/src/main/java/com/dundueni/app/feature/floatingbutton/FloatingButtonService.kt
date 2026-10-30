@@ -137,8 +137,8 @@ class FloatingButtonService : Service() {
             }
         }
 
-        // 72dp → px 변환
         val buttonSize = (72 * resources.displayMetrics.density).toInt()
+        floatingButton?.alpha = 1.0f
 
         // 앱 밖에 표시할 창으로 설정하고, 키보드 입력 포커스는 가져오지 않는다.
         val params = WindowManager.LayoutParams(
@@ -218,7 +218,9 @@ class FloatingButtonService : Service() {
                             screenCenterX > centerLine + crossingThreshold -> false
                             else -> startWasLeft
                         }
-                        animateButtonToEdge(view, params, if (snapToLeft) maxX else 0)
+                        if (getSharedPreferences("dundueni_settings", MODE_PRIVATE).getBoolean("edge_snap", true)) {
+                            animateButtonToEdge(view, params, if (snapToLeft) maxX else 0)
+                        }
                     } else {
                         view.performClick()
                     }

@@ -86,8 +86,7 @@ fun HomeScreen(
     onUrlScan: () -> Unit,
     onPhoneScan: () -> Unit,
     onNotifications: () -> Unit,
-    onSettings: () -> Unit,
-    onMembership: () -> Unit = onSettings,
+    onMembership: () -> Unit,
     onViewAllHistory: () -> Unit,
     onRecentHistory: (String) -> Unit = {},
     onNavigationSelected: (HomeDestination) -> Unit,
@@ -109,12 +108,12 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = HomeBackground,
-        bottomBar = { HomeBottomNavigation(onNavigationSelected) },
+        bottomBar = { HomeBottomNavigation(HomeDestination.HOME, onNavigationSelected) },
     ) { contentPadding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(contentPadding),
         ) {
-            HomeHeader(onNotifications, onSettings)
+            HomeHeader(onNotifications)
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                     .padding(horizontal = 22.dp).padding(top = 14.dp, bottom = 22.dp),
@@ -161,10 +160,10 @@ fun HomeScreen(
     }
 }
 
-enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER }
+enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS }
 
 @Composable
-private fun HomeHeader(onNotifications: () -> Unit, onSettings: () -> Unit) {
+private fun HomeHeader(onNotifications: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxWidth().height(66.dp).background(Color.White),
         contentAlignment = Alignment.Center,
@@ -181,7 +180,6 @@ private fun HomeHeader(onNotifications: () -> Unit, onSettings: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HeaderAction("알림", "notification", onNotifications)
-            HeaderAction("설정", "settings", onSettings)
         }
     }
 }
@@ -263,7 +261,7 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun QuickScanCard(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
+internal fun QuickScanCard(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = modifier.height(104.dp),
@@ -374,16 +372,20 @@ private fun SafetyTipCard() {
 }
 
 @Composable
-private fun HomeBottomNavigation(onNavigationSelected: (HomeDestination) -> Unit) {
+fun HomeBottomNavigation(
+    selectedDestination: HomeDestination,
+    onNavigationSelected: (HomeDestination) -> Unit,
+) {
     val items = listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
         Triple(HomeDestination.REPORT, "report", "리포트"),
         Triple(HomeDestination.CONSULTATION, "chat", "맞춤 상담"),
         Triple(HomeDestination.MY_SHELTER, "profile", "My 쉼터"),
+        Triple(HomeDestination.SETTINGS, "settings", "설정"),
     )
     NavigationBar(containerColor = Color.White, tonalElevation = 3.dp, windowInsets = WindowInsets.navigationBars) {
         items.forEach { (destination, icon, label) ->
-            val selected = destination == HomeDestination.HOME
+            val selected = destination == selectedDestination
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigationSelected(destination) },
@@ -447,16 +449,30 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
                 drawArc(color, 0f, 180f, false, p(9f,17f), Size(6f*sx, 5f*sy), style = stroke)
             }
             "settings" -> {
-                drawCircle(color, 7f*sx, p(12f, 12f), style = stroke)
-                drawCircle(color, 2.5f*sx, p(12f, 12f), style = stroke)
-                for (index in 0 until 8) {
-                    val angle = index * (Math.PI / 4.0)
-                    val x1 = 12f + kotlin.math.cos(angle).toFloat() * 8f
-                    val y1 = 12f + kotlin.math.sin(angle).toFloat() * 8f
-                    val x2 = 12f + kotlin.math.cos(angle).toFloat() * 10f
-                    val y2 = 12f + kotlin.math.sin(angle).toFloat() * 10f
-                    drawLine(color, p(x1,y1), p(x2,y2), strokeWidth = 2.2f*sx, cap = StrokeCap.Round)
+                val gear = Path()
+                val toothProfile = listOf(7.2f, 7.2f, 9.8f, 9.8f, 9.8f, 9.8f, 7.2f, 7.2f)
+                toothProfile.forEachIndexed { index, radiusStep ->
+                    val angle = (index * (Math.PI / 32.0)) - Math.PI / 2.0
+                    val radius = radiusStep * sx
+                    val x = size.width / 2f + kotlin.math.cos(angle).toFloat() * radius
+                    val y = size.height / 2f + kotlin.math.sin(angle).toFloat() * radius
+                    if (index == 0) gear.moveTo(x, y) else gear.lineTo(x, y)
                 }
+                // Eight broad teeth make the icon read as a gear instead of a sun or target.
+                for (tooth in 1 until 8) {
+                    toothProfile.forEachIndexed { index, radiusStep ->
+                        val profileIndex = tooth * toothProfile.size + index
+                        val angle = (profileIndex * (Math.PI / 32.0)) - Math.PI / 2.0
+                        val radius = radiusStep * sx
+                        gear.lineTo(
+                            size.width / 2f + kotlin.math.cos(angle).toFloat() * radius,
+                            size.height / 2f + kotlin.math.sin(angle).toFloat() * radius,
+                        )
+                    }
+                }
+                gear.close()
+                drawPath(gear, color, style = stroke)
+                drawCircle(color, 2.8f * sx, p(12f, 12f), style = stroke)
             }
             "screen" -> {
                 drawLine(color, p(4f,9f), p(4f,5f), strokeWidth = 2f*sx); drawLine(color, p(4f,5f), p(8f,5f), strokeWidth = 2f*sx)
