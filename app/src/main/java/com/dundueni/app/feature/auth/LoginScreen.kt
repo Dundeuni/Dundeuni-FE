@@ -57,7 +57,6 @@ fun LoginScreen(
     onKakaoLogin: () -> Unit,
     onGoogleLogin: () -> Unit,
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val keyboardVisible = WindowInsets.isImeVisible
@@ -71,12 +70,6 @@ fun LoginScreen(
                 .padding(bottom = if (keyboardVisible) 72.dp else 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onBack),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Text("← 뒤로가기", Modifier.padding(horizontal = 20.dp), color = LoginColors.Link, fontSize = 14.sp)
-            }
             // 390px 원본의 로고 위치를 유지하고 큰 화면에서는 폼 너비만 제한한다.
             if (!keyboardVisible) {
                 Spacer(Modifier.height(111.dp))
@@ -135,6 +128,11 @@ fun LoginScreen(
                 SocialButton("Google로 시작하기", R.drawable.auth_google, Color.White, !state.submitting, onGoogleLogin)
                 Spacer(Modifier.height(60.dp))
             }
+        }
+        if (!keyboardVisible) {
+            // Figma's empty ambient header overlays the graphic; it must not push the form down.
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(64.dp)
+                .shadow(1.dp).background(LoginColors.Background.copy(alpha = .8f)))
         }
         if (keyboardVisible) {
             Box(Modifier.align(Alignment.BottomCenter).widthIn(max = 480.dp).fillMaxWidth()

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import com.dundueni.app.R
 import com.dundueni.app.ui.theme.Danger
 
@@ -97,7 +98,7 @@ fun SignUpCredentialsScreen(
                             else -> "보통"
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(painterResource(R.drawable.auth_terms_protection), null, Modifier.size(11.dp, 14.dp),
+                            Image(painterResource(R.drawable.auth_reset_strength), null, Modifier.size(10.5.dp, 11.667.dp),
                                 colorFilter = ColorFilter.tint(if (strength == "높음") TermsColors.Link else Color(0xFFCC8B00)))
                             Text("보안 강도: $strength", Modifier.padding(start = 6.dp), fontSize = 11.sp,
                                 color = if (strength == "높음") TermsColors.Link else Color(0xFFCC8B00))
@@ -108,9 +109,9 @@ fun SignUpCredentialsScreen(
                         enabled, font, state.passwordVisible, onTogglePassword)
                     Spacer(Modifier.height(6.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ValidationChip("8~20자 이내", state.lengthSatisfied)
-                        ValidationChip("특수문자 포함", state.specialSatisfied)
-                        ValidationChip("영문/숫자 조합", state.combinationSatisfied)
+                        ValidationChip("8~20자 이내", state.lengthSatisfied, filled = true)
+                        ValidationChip("특수문자 포함", state.specialSatisfied, filled = true)
+                        ValidationChip("영문/숫자 조합", state.combinationSatisfied, filled = true)
                     }
                     state.passwordError?.let { CredentialsMessage(it, true) }
                     Spacer(Modifier.height(12.dp))
@@ -146,19 +147,23 @@ private fun RequiredLabel(label: String) {
 }
 
 @Composable
-private fun ValidationChip(label: String, satisfied: Boolean) {
+internal fun ValidationChip(label: String, satisfied: Boolean, filled: Boolean = false) {
     Row(Modifier.background(TermsColors.LightBlue, CircleShape).padding(horizontal = 10.dp, vertical = 4.dp)
         .semantics { contentDescription = "$label ${if (satisfied) "충족" else "미충족"}" }, verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.auth_terms_badge), null, Modifier.size(12.dp), colorFilter = ColorFilter.tint(if (satisfied) TermsColors.Link else TermsColors.Muted))
+        Image(painterResource(if (filled) {
+            if (satisfied) R.drawable.auth_reset_chip else R.drawable.auth_reset_chip_muted
+        } else R.drawable.auth_terms_badge), null, Modifier.size(if (filled) 11.667.dp else 12.dp),
+            colorFilter = if (filled) null else ColorFilter.tint(if (satisfied) TermsColors.Link else TermsColors.Muted))
         Text(label, Modifier.padding(start = 4.dp), fontSize = 12.sp, color = if (satisfied) TermsColors.Link else TermsColors.Muted)
     }
 }
 
 @Composable
-private fun CredentialsField(
+internal fun CredentialsField(
     value: String, placeholder: String, label: String, onChange: (String) -> Unit, errorMessage: String?,
     enabled: Boolean, font: FontFamily, visible: Boolean?, onToggle: (() -> Unit)? = null,
     valid: Boolean = false, onDone: () -> Unit = {},
+    imeAction: ImeAction = if (visible == null) ImeAction.Done else ImeAction.Next,
 ) {
     val focus = LocalFocusManager.current
     val shape = RoundedCornerShape(12.dp)
@@ -170,7 +175,7 @@ private fun CredentialsField(
         cursorBrush = SolidColor(TermsColors.Link),
         visualTransformation = if (visible == false) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (visible == null) KeyboardType.Text else KeyboardType.Password,
-            autoCorrectEnabled = false, imeAction = if (visible == null) ImeAction.Done else ImeAction.Next),
+            autoCorrectEnabled = false, imeAction = imeAction),
         keyboardActions = KeyboardActions(onNext = { focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) }, onDone = { onDone() }),
         decorationBox = { input ->
             Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -195,19 +200,23 @@ private fun CredentialsField(
 }
 
 @Composable
-private fun CredentialsMessage(message: String, isError: Boolean) {
+internal fun CredentialsMessage(message: String, isError: Boolean) {
     Row(Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically) {
-        TermsIcon(if (isError) R.drawable.auth_error else R.drawable.auth_terms_badge, 14, 14)
+        TermsIcon(if (isError) R.drawable.auth_error else R.drawable.auth_reset_match, 14, 14)
         Text(message, Modifier.padding(start = 6.dp), fontSize = 12.sp, lineHeight = 20.sp, color = if (isError) Danger else TermsColors.Link)
     }
 }
 
 @Composable
-internal fun CredentialsButton(label: String, enabled: Boolean, onClick: () -> Unit, compact: Boolean = false) {
+internal fun CredentialsButton(label: String, enabled: Boolean, onClick: () -> Unit, compact: Boolean = false, showArrow: Boolean = false) {
     Box(Modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp).clip(CircleShape)
         .background(if (enabled) TermsColors.Blue else TermsColors.Disabled)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(vertical = 12.dp, horizontal = 12.dp), contentAlignment = Alignment.Center) {
-        Text(label, fontSize = 16.sp, color = if (enabled) Color.White else TermsColors.Muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 16.sp, color = if (enabled) Color.White else TermsColors.Muted)
+            if (showArrow) Image(painterResource(R.drawable.auth_terms_next), null, Modifier.size(13.333.dp),
+                colorFilter = ColorFilter.tint(if (enabled) Color.White else TermsColors.Muted))
+        }
     }
 }
 
@@ -220,7 +229,10 @@ private fun SignUpCompletedDialog(email: String, nickname: String, onHome: () ->
                 Image(painterResource(R.drawable.auth_success_shield), null, Modifier.size(26.dp, 32.dp))
             }
             Spacer(Modifier.height(24.dp))
-            Text("보호 시스템 활성화", Modifier.background(TermsColors.LightBlue, CircleShape).padding(horizontal = 12.dp, vertical = 4.dp), color = TermsColors.Link, fontSize = 12.sp)
+            Row(Modifier.background(TermsColors.LightBlue, CircleShape).padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource(R.drawable.auth_reset_verified), null, Modifier.size(9.dp, 11.dp))
+                Text("보호 시스템 활성화", Modifier.padding(start = 6.dp), color = TermsColors.Link, fontSize = 12.sp)
+            }
             Spacer(Modifier.height(16.dp))
             Text("회원가입이 완료되었습니다!", fontSize = 20.sp, color = TermsColors.Ink)
             Spacer(Modifier.height(12.dp))
@@ -233,21 +245,25 @@ private fun SignUpCompletedDialog(email: String, nickname: String, onHome: () ->
                     TermsIcon(R.drawable.auth_profile, 14, 14)
                     Text("가입 계정", Modifier.padding(start = 8.dp), color = TermsColors.Body, fontSize = 12.sp)
                     Spacer(Modifier.width(12.dp))
-                    Text(email, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = TermsColors.Ink, fontSize = 14.sp)
+                    Text(email, Modifier.weight(1f), textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis, color = TermsColors.Ink, fontSize = 14.sp)
                 }
                 HorizontalDivider(Modifier.padding(vertical = 12.dp), color = TermsColors.Disabled)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TermsIcon(R.drawable.auth_terms_badge, 14, 14)
+                    TermsIcon(R.drawable.auth_plan_badge, 14, 14)
                     Text("기본 안심 플랜", Modifier.padding(start = 8.dp), color = TermsColors.Body, fontSize = 12.sp)
                     Spacer(Modifier.weight(1f))
                     Text("든든이 베이직 무료 시작", Modifier.background(Color(0xFFDCE3FF), CircleShape).padding(horizontal = 8.dp, vertical = 2.dp),
                         color = TermsColors.Ink, fontSize = 12.sp)
                 }
             }
-            Spacer(Modifier.height(36.dp))
-            CredentialsButton("든든이 시작하기 (홈으로) →", true, onHome)
-            Text("내 프로필 및 안심 보호자 설정하기", Modifier.padding(top = 12.dp).heightIn(min = 48.dp)
-                .clickable(role = Role.Button, onClick = onProfile).padding(vertical = 14.dp), color = TermsColors.Body, fontSize = 12.sp)
+            Spacer(Modifier.height(84.dp))
+            CredentialsButton("든든이 시작하기 (홈으로)", true, onHome, showArrow = true)
+            Row(Modifier.padding(top = 12.dp).heightIn(min = 48.dp)
+                .clickable(role = Role.Button, onClick = onProfile).padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("내 프로필 및 안심 보호자 설정하기", color = TermsColors.Body, fontSize = 12.sp)
+                Image(painterResource(R.drawable.auth_settings), null, Modifier.size(12.dp))
+            }
             if (demo) Text("UI 테스트 · 실제 가입·보호 활성화 없음", color = TermsColors.Muted, fontSize = 11.sp)
         }
     }

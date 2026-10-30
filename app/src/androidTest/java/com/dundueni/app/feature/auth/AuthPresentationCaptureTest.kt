@@ -87,7 +87,9 @@ class AuthPresentationCaptureTest {
         captures.forEachIndexed { index, capture ->
             compose.runOnIdle { selected.intValue = index }
             compose.waitForIdle()
-            compose.onNodeWithText(capture.anchor).assertIsDisplayed()
+            val anchor = compose.onNodeWithText(capture.anchor)
+            if (!anchor.isDisplayed()) anchor.performScrollTo()
+            anchor.assertIsDisplayed()
             // semantics 갱신과 SurfaceFlinger 반영 사이의 차이 및 Dialog 전환 애니메이션을 기다린다.
             instrumentation.waitForIdleSync()
             SystemClock.sleep(600)

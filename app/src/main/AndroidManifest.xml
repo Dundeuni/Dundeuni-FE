@@ -42,6 +42,8 @@
         </activity>
 
         <!-- PB-09 인증 화면 -->
+        <activity android:name=".feature.auth.PasswordResetActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name=".feature.auth.SignUpTermsActivity" android:exported="false" />
         <activity android:name=".feature.auth.EmailVerificationActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />

@@ -49,7 +49,7 @@ class SignUpCredentialsScreenTest {
         compose.onNodeWithText("tester 님, 환영합니다!").assertIsDisplayed()
         compose.onNodeWithText("example@kau.kr").assertIsDisplayed()
         compose.onNodeWithText("UI 테스트 · 실제 가입·보호 활성화 없음").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("든든이 시작하기 (홈으로) →").performScrollTo().performClick()
+        compose.onNodeWithText("든든이 시작하기 (홈으로)").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, home) }
     }
 }

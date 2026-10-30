@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -135,13 +136,13 @@ fun SignUpTermsScreen(
 }
 
 @Composable
-internal fun TermsHeader(onBack: () -> Unit, backLabel: String = "로그인으로 돌아가기", compact: Boolean = false) {
-    Row(Modifier.fillMaxWidth().height(if (compact) 48.dp else 64.dp).background(TermsColors.Background).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+internal fun TermsHeader(onBack: () -> Unit, backLabel: String = "로그인으로 돌아가기", compact: Boolean = false, title: String = "회원가입") {
+    Row(Modifier.fillMaxWidth().height(if (compact) 48.dp else 64.dp).shadow(1.dp).background(TermsColors.Background).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(44.dp).clickable(role = Role.Button, onClick = onBack)
             .semantics { contentDescription = backLabel }, contentAlignment = Alignment.Center) {
             TermsIcon(R.drawable.auth_terms_back, 12, 20)
         }
-        Text("회원가입", Modifier.padding(start = 8.dp), color = TermsColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(title, Modifier.padding(start = 8.dp), color = TermsColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
 }
 

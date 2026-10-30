@@ -26,6 +26,7 @@ sealed interface SendCodeOutcome {
 
 sealed interface VerifyCodeOutcome {
     data object Verified : VerifyCodeOutcome
+    data class VerifiedForReset(val grant: String) : VerifyCodeOutcome
     data object Mismatch : VerifyCodeOutcome
     data object Expired : VerifyCodeOutcome
     data object Unavailable : VerifyCodeOutcome
