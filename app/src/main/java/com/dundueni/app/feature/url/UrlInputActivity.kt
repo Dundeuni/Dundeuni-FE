@@ -14,6 +14,8 @@ import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.google.gson.Gson
 import java.util.UUID
@@ -39,9 +41,10 @@ class UrlInputActivity : ComponentActivity() {
                 Box(modifier = Modifier.safeDrawingPadding()) {
                     UrlInputScreen(
                         onInspect = { url ->
+                            if (showLimitIfExhausted(this@UrlInputActivity)) return@UrlInputScreen
                             val result = AnalysisResult(
                                 historyType = HistoryType.LINK,
-                                id = "url-scan-${System.currentTimeMillis()}",
+                                id = "url-scan-${UUID.randomUUID()}",
                                 riskLevel = RiskLevel.CAUTION,
                                 summary = "입력하신 웹 링크(URL)에 대한 분석 결과입니다 (Mock 데이터).",
                                 keyFinding = "제공된 링크 주소의 도메인 안전성을 가상 검사했습니다.",
@@ -54,6 +57,10 @@ class UrlInputActivity : ComponentActivity() {
                                 ),
                                 targetLabel = "입력한 웹 링크"
                             )
+                            if (!BasicInspectionQuota(this@UrlInputActivity).recordCompleted(result.id)) {
+                                showLimitIfExhausted(this@UrlInputActivity)
+                                return@UrlInputScreen
+                            }
                             val json = Gson().toJson(result)
                             val intent = AnalysisResultActivity.createIntent(
                                 this@UrlInputActivity, json, isDemo = true, suspendFloatingButton = true,

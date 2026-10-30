@@ -52,6 +52,9 @@
         <activity android:name=".feature.auth.LoginActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".feature.history.HistoryActivity" android:exported="false" />
+        <activity android:name=".feature.payment.PaymentActivity" android:exported="false" />
+        <activity android:name=".feature.payment.InspectionLimitActivity" android:exported="false"
+            android:theme="@style/Theme.DundueniFE.PhotoPickerHost" />
         <!-- PB-05 분석 결과 -->
         <activity
             android:name=".feature.analysisresult.AnalysisResultActivity"

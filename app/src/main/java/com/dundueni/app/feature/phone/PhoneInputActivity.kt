@@ -14,6 +14,8 @@ import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.google.gson.Gson
 import java.util.UUID
@@ -39,9 +41,10 @@ class PhoneInputActivity : ComponentActivity() {
                 Box(modifier = Modifier.safeDrawingPadding()) {
                     PhoneInputScreen(
                         onInspect = { phone ->
+                            if (showLimitIfExhausted(this@PhoneInputActivity)) return@PhoneInputScreen
                             val result = AnalysisResult(
                                 historyType = HistoryType.PHONE,
-                                id = "phone-scan-${System.currentTimeMillis()}",
+                                id = "phone-scan-${UUID.randomUUID()}",
                                 riskLevel = RiskLevel.CAUTION,
                                 summary = "입력하신 전화번호에 대한 분석 결과입니다 (Mock 데이터).",
                                 keyFinding = "발신자 번호(발신처)의 신고 이력 및 스팸 여부를 가상 조회했습니다.",
@@ -53,6 +56,10 @@ class PhoneInputActivity : ComponentActivity() {
                                 ),
                                 targetLabel = "입력한 전화번호"
                             )
+                            if (!BasicInspectionQuota(this@PhoneInputActivity).recordCompleted(result.id)) {
+                                showLimitIfExhausted(this@PhoneInputActivity)
+                                return@PhoneInputScreen
+                            }
                             val json = Gson().toJson(result)
                             val intent = AnalysisResultActivity.createIntent(
                                 this@PhoneInputActivity, json, isDemo = true, suspendFloatingButton = true,
