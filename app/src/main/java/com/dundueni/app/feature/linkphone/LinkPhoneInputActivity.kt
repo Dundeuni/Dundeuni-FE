@@ -12,8 +12,11 @@ import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
+import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.google.gson.Gson
+import java.util.UUID
 
 /**
  * 링크 및 전화번호 입력 및 검사 화면을 관리하는 Activity.
@@ -30,12 +33,13 @@ class LinkPhoneInputActivity : ComponentActivity() {
                 Box(modifier = Modifier.safeDrawingPadding()) {
                     LinkPhoneInputScreen(
                         onInspect = { link, phone ->
+                            if (showLimitIfExhausted(this@LinkPhoneInputActivity)) return@LinkPhoneInputScreen
                             val descBuilder = StringBuilder("입력된 URL과 발신자 번호의 패턴을 분석했습니다.")
                             if (phone.isNotBlank()) {
                                 descBuilder.append(" (발신 번호: $phone)")
                             }
                             val result = AnalysisResult(
-                                id = "link-phone-scan-${System.currentTimeMillis()}",
+                                id = "link-phone-scan-${UUID.randomUUID()}",
                                 riskLevel = RiskLevel.CAUTION,
                                 summary = "입력하신 링크 및 전화번호에 대한 분석 결과입니다.",
                                 keyFinding = "제공된 링크나 발신 번호에서 주의가 필요한 항목이 감지되었습니다.",
@@ -48,6 +52,10 @@ class LinkPhoneInputActivity : ComponentActivity() {
                                 ),
                                 targetLabel = "입력된 링크 및 전화번호"
                             )
+                            if (!BasicInspectionQuota(this@LinkPhoneInputActivity).recordCompleted(result.id)) {
+                                showLimitIfExhausted(this@LinkPhoneInputActivity)
+                                return@LinkPhoneInputScreen
+                            }
                             val json = Gson().toJson(result)
                             val intent = AnalysisResultActivity.createIntent(this@LinkPhoneInputActivity, json)
                             startActivity(intent)

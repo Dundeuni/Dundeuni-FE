@@ -53,6 +53,7 @@ import com.dundueni.app.feature.floatingbutton.view.FloatingButtonView
 import com.dundueni.app.feature.floatingbutton.view.FloatingMenuView
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
@@ -300,6 +301,7 @@ class FloatingButtonService : Service() {
             onScreenScanClick = { startScreenScan() },
             // 이미지 검사 선택은 메뉴를 닫고 사진 선택 화면으로 넘긴다.
             onImageScanClick = {
+                if (showLimitIfExhausted(this)) { hideFloatingMenu(); return@create }
                 if (isMenuOpen) {
                     hideFloatingMenu()
                     try {
@@ -318,6 +320,7 @@ class FloatingButtonService : Service() {
                 }
             },
             onTextScanClick = {
+                if (showLimitIfExhausted(this)) { hideFloatingMenu(); return@create }
                 if (isMenuOpen) {
                     hideFloatingMenu()
                     startActivity(
@@ -419,6 +422,7 @@ class FloatingButtonService : Service() {
 
     // 메뉴의 화면 검사 요청부터 승인·캡처·정리까지 이 서비스가 진행 순서를 관리한다.
     private fun startScreenScan() {
+        if (showLimitIfExhausted(this)) { hideFloatingMenu(); return }
         if (scanInProgress || destroyed) return
         scanInProgress = true
         // 이전 요청의 늦은 응답을 새 검사에 섞지 않도록 요청 번호를 구분한다.

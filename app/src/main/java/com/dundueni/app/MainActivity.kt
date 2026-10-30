@@ -24,6 +24,8 @@ import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
 import com.dundueni.app.feature.url.UrlInputActivity
 import com.dundueni.app.feature.phone.PhoneInputActivity
+import com.dundueni.app.feature.payment.PaymentActivity
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 class MainActivity : ComponentActivity() {
@@ -71,11 +73,12 @@ class MainActivity : ComponentActivity() {
                     onFloatingButtonChange = ::onFloatingButtonChange,
                     onScreenScan = ::requestScreenScan,
                     onImageScan = ::openPhotoPicker,
-                    onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
-                    onUrlScan = { startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
-                    onPhoneScan = { startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
+                    onTextScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
+                    onUrlScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
+                    onPhoneScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
                     onSettings = { showMessage("준비 중인 기능입니다") },
+                    onMembership = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
                     onRecentHistory = { id -> startActivity(HistoryActivity.createIntent(this@MainActivity, id)) },
                     onViewAllHistory = { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) },
                     onNavigationSelected = { destination ->
@@ -154,6 +157,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestScreenScan() {
+        if (showLimitIfExhausted(this)) return
         if (FloatingButtonManager.hasOverlayPermission(this)) {
             startScreenScan()
         } else {
@@ -183,6 +187,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startScreenScan() {
+        if (showLimitIfExhausted(this)) return
         try {
             FloatingButtonManager.startScreenScan(this)
         } catch (_: Exception) {
@@ -204,6 +209,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openPhotoPicker() {
+        if (showLimitIfExhausted(this)) return
         try {
             startActivity(Intent(this, PhotoPickerActivity::class.java).apply {
                 putExtra(PhotoPickerActivity.EXTRA_OPEN_PICKER, true)

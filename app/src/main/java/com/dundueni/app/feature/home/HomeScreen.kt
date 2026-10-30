@@ -62,8 +62,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dundueni.app.R
+import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.component.DundueniButton
+import com.dundueni.app.ui.component.DundueniButtonType
 import org.json.JSONArray
 
 private val HomeBackground = Color(0xFFF7F8FC)
@@ -84,6 +87,7 @@ fun HomeScreen(
     onPhoneScan: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
+    onMembership: () -> Unit = onSettings,
     onViewAllHistory: () -> Unit,
     onRecentHistory: (String) -> Unit = {},
     onNavigationSelected: (HomeDestination) -> Unit,
@@ -91,9 +95,13 @@ fun HomeScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var recentRecords by remember(context) { mutableStateOf(loadRecentRecords(context)) }
+    var remainingInspections by remember(context) { mutableStateOf(BasicInspectionQuota(context).remaining()) }
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) recentRecords = loadRecentRecords(context)
+            if (event == Lifecycle.Event.ON_RESUME) {
+                recentRecords = loadRecentRecords(context)
+                remainingInspections = BasicInspectionQuota(context).remaining()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -135,6 +143,17 @@ fun HomeScreen(
                 }
                 Spacer(Modifier.height(9.dp))
                 RecentHistoryCard(recentRecords, onRecentHistory)
+                Spacer(Modifier.height(22.dp))
+                SectionTitle("남은 검사 횟수")
+                Spacer(Modifier.height(10.dp))
+                Surface(shape = RoundedCornerShape(16.dp), color = Color.White, shadowElevation = 1.dp) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("베이직", modifier = Modifier.weight(1f), color = HomeInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("$remainingInspections/${BasicInspectionQuota.LIMIT}회", color = HomeBlue, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth(), type = DundueniButtonType.SECONDARY)
                 Spacer(Modifier.height(24.dp))
                 SafetyTipCard()
             }

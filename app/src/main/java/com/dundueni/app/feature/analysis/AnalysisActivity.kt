@@ -11,6 +11,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -23,6 +27,8 @@ import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.data.model.ImageInput
 import com.dundueni.app.feature.home.returnToHome
+import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
 import java.util.UUID
@@ -80,20 +86,39 @@ class AnalysisActivity : ComponentActivity() {
         })[AnalysisViewModel::class.java]
 
         // 회전 시 진행 중 요청/결과는 ViewModel에서 유지합니다. 프로세스 재생성 시에는 재시도합니다.
-        if (viewModel.uiState.value == AnalysisUiState.Idle) startAnalysis()
+        if (viewModel.uiState.value == AnalysisUiState.Idle) {
+            if (showLimitIfExhausted(this)) { finish(); return }
+            startAnalysis()
+        }
         setContent {
             DundueniFETheme {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
+                val success = state as? AnalysisUiState.Success
+                // Fake transport reuses its server analysis ID; each completed request uses its own local attempt ID.
+                val resultId = if (success != null) viewModel.attemptId else null
+                LaunchedEffect(resultId) {
+                    if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
+                    if (BasicInspectionQuota(this@AnalysisActivity).recordCompleted(resultId)) {
+                        allowedResultId = resultId
+                    } else {
+                        showLimitIfExhausted(this@AnalysisActivity)
+                        finish()
+                    }
+                }
                 Box(Modifier.safeDrawingPadding()) {
-                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome,
-                        historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE)
+                    if (resultId == null || allowedResultId == resultId) {
+                        AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome,
+                            historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE)
+                    }
                 }
             }
         }
     }
 
     private fun startAnalysis() {
+        if (showLimitIfExhausted(this)) { finish(); return }
         val processor = AnalysisInputProcessor(applicationContext.contentResolver, applicationContext.cacheDir)
         val file = captureFile
         val uri = intent.data
