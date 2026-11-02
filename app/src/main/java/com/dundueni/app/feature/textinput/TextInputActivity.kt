@@ -16,6 +16,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.feature.payment.showLimitIfExhausted
+import com.google.gson.JsonParser
 import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
 import com.dundueni.app.ui.theme.DundueniFETheme
@@ -53,6 +56,7 @@ class TextInputActivity : ComponentActivity() {
                         textInput = inputText,
                         onTextChange = viewModel::updateInputText,
                         onInspect = { text ->
+                            if (showLimitIfExhausted(this@TextInputActivity)) return@TextInputScreen
                             loadingPopupDismissed = false
                             viewModel.inspect(text)
                         },
@@ -67,6 +71,7 @@ class TextInputActivity : ComponentActivity() {
                     TextInspectionUiState.Error -> InspectionErrorDialog(
                         message = "텍스트 검사를 완료하지 못했어요. 다시 시도하면 같은 텍스트로 검사합니다.",
                         onRetry = {
+                            if (!viewModel.hasResultPendingOpen && showLimitIfExhausted(this@TextInputActivity)) return@InspectionErrorDialog
                             loadingPopupDismissed = false
                             viewModel.retry()
                         },
@@ -77,6 +82,12 @@ class TextInputActivity : ComponentActivity() {
                 LaunchedEffect(state) {
                     val success = state as? TextInspectionUiState.Success ?: return@LaunchedEffect
                     try {
+                        val id = JsonParser.parseString(success.resultJson).asJsonObject.get("id").asString
+                        if (!BasicInspectionQuota(this@TextInputActivity).recordCompleted(id)) {
+                            showLimitIfExhausted(this@TextInputActivity)
+                            viewModel.onResultOpened()
+                            return@LaunchedEffect
+                        }
                         startActivity(AnalysisResultActivity.createIntent(
                             this@TextInputActivity, success.resultJson, isDemo = true, suspendFloatingButton = true,
                         ))

@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
 import com.dundueni.app.feature.analysisresult.RiskLevel
+import com.dundueni.app.feature.home.HomeBottomNavigation
+import com.dundueni.app.feature.home.HomeDestination
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -59,6 +61,7 @@ fun HistoryScreen(
     isDemo: Boolean = false,
     initialRecordId: String? = null,
     onCloseDetail: (() -> Unit)? = null,
+    onNavigationSelected: ((HomeDestination) -> Unit)? = null,
 ) {
     var easy by rememberSaveable { mutableStateOf(false) }
     var filterName by rememberSaveable { mutableStateOf("ALL") }
@@ -95,9 +98,10 @@ fun HistoryScreen(
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(selected = false, onClick = onHome, icon = { ResultGlyph(ResultIcon.SHIELD, Muted) }, label = { Text("홈") })
-                NavigationBarItem(selected = true, onClick = { selectedId = null }, icon = { ResultGlyph(ResultIcon.CLOCK, Blue) }, label = { Text("검사 기록", color = Blue) })
+            HomeBottomNavigation(HomeDestination.REPORT) { destination ->
+                if (onNavigationSelected != null) onNavigationSelected(destination)
+                else if (destination == HomeDestination.HOME) onHome()
+                else if (destination == HomeDestination.REPORT) selectedId = null
             }
         },
     ) { padding ->

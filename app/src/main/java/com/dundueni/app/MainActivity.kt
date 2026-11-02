@@ -12,6 +12,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.auth.LoginActivity
@@ -24,10 +25,25 @@ import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
 import com.dundueni.app.feature.url.UrlInputActivity
 import com.dundueni.app.feature.phone.PhoneInputActivity
+import com.dundueni.app.feature.payment.PaymentActivity
+import com.dundueni.app.feature.settings.SettingsScreen
+import com.dundueni.app.feature.onboarding.OnboardingScreen
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_OPEN_SETTINGS = "com.dundueni.app.extra.OPEN_SETTINGS"
+        const val EXTRA_OPEN_ACCOUNT = "com.dundueni.app.extra.OPEN_ACCOUNT"
+        private const val ONBOARDING_PREFERENCES = "dundueni_onboarding"
+        private const val ONBOARDING_COMPLETED = "completed"
+        private const val STATE_ONBOARDING_PAGE = "onboarding_page"
+    }
+
     private var floatingButtonEnabled by mutableStateOf(false)
+    private var showingSettings by mutableStateOf(false)
+    private var showingOnboarding by mutableStateOf(false)
+    private var onboardingPage by mutableIntStateOf(1)
     private var pendingOverlayAction: OverlayAction? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastUnauthorizedRevision = 0L
@@ -55,6 +71,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        showingSettings = intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false)
+        showingOnboarding = !getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
+            .getBoolean(ONBOARDING_COMPLETED, false)
+        onboardingPage = savedInstanceState?.getInt(STATE_ONBOARDING_PAGE, 1) ?: 1
         val authStore = AuthSessionRuntime.store(applicationContext)
         lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
         authStore.read()?.takeIf { !it.isValid() }?.let {
@@ -66,23 +86,47 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DundueniFETheme {
-                HomeScreen(
+                if (showingOnboarding) {
+                    OnboardingScreen(
+                        page = onboardingPage,
+                        onNext = { onboardingPage = (onboardingPage + 1).coerceAtMost(4) },
+                        onSkip = { showingOnboarding = false },
+                        onOverlayPermission = {
+                            onboardingOverlayPermissionLauncher.launch(
+                                FloatingButtonManager.createOverlayPermissionIntent(this@MainActivity),
+                            )
+                        },
+                        onStart = ::completeOnboarding,
+                    )
+                } else if (showingSettings) {
+                    SettingsScreen { destination ->
+                        when (destination) {
+                            HomeDestination.HOME -> showingSettings = false
+                            HomeDestination.REPORT -> startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+                            HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
+                            HomeDestination.MY_SHELTER -> openAccount()
+                            HomeDestination.SETTINGS -> Unit
+                        }
+                    }
+                } else HomeScreen(
                     floatingButtonEnabled = floatingButtonEnabled,
                     onFloatingButtonChange = ::onFloatingButtonChange,
                     onScreenScan = ::requestScreenScan,
                     onImageScan = ::openPhotoPicker,
-                    onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
-                    onUrlScan = { startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
-                    onPhoneScan = { startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
+                    onTextScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
+                    onUrlScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
+                    onPhoneScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
-                    onSettings = { showMessage("준비 중인 기능입니다") },
+                    onMembership = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
                     onRecentHistory = { id -> startActivity(HistoryActivity.createIntent(this@MainActivity, id)) },
                     onViewAllHistory = { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) },
                     onNavigationSelected = { destination ->
                         when (destination) {
                             HomeDestination.MY_SHELTER -> openAccount()
                             HomeDestination.HOME -> Unit
-                            else -> showMessage("준비 중인 기능입니다")
+                            HomeDestination.SETTINGS -> showingSettings = true
+                            HomeDestination.REPORT -> startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+                            HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
                         }
                     },
                 )
@@ -105,6 +149,37 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (pendingOverlayAction == null) syncFloatingButtonState()
+    }
+
+    private val onboardingOverlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        if (showingOnboarding && onboardingPage == 3) onboardingPage = 4
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        when {
+            intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) -> showingSettings = true
+            intent.getBooleanExtra(EXTRA_OPEN_ACCOUNT, false) -> {
+                showingSettings = false
+                openAccount()
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(STATE_ONBOARDING_PAGE, onboardingPage)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun completeOnboarding() {
+        getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putBoolean(ONBOARDING_COMPLETED, true)
+            .apply()
+        showingOnboarding = false
     }
 
     private fun openAccount() {
@@ -154,6 +229,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestScreenScan() {
+        if (showLimitIfExhausted(this)) return
         if (FloatingButtonManager.hasOverlayPermission(this)) {
             startScreenScan()
         } else {
@@ -183,6 +259,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startScreenScan() {
+        if (showLimitIfExhausted(this)) return
         try {
             FloatingButtonManager.startScreenScan(this)
         } catch (_: Exception) {
@@ -204,6 +281,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openPhotoPicker() {
+        if (showLimitIfExhausted(this)) return
         try {
             startActivity(Intent(this, PhotoPickerActivity::class.java).apply {
                 putExtra(PhotoPickerActivity.EXTRA_OPEN_PICKER, true)

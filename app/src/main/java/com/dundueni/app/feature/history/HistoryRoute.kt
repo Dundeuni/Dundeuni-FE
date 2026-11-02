@@ -6,12 +6,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.dundueni.app.feature.home.HomeDestination
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun HistoryRoute(onHome: () -> Unit, initialRecordId: String? = null) {
+fun HistoryRoute(
+    onHome: () -> Unit,
+    initialRecordId: String? = null,
+    onNavigationSelected: ((HomeDestination) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val store = remember(context) { HistoryStore(context) }
     val scope = rememberCoroutineScope()
@@ -30,6 +35,7 @@ fun HistoryRoute(onHome: () -> Unit, initialRecordId: String? = null) {
     }
     HistoryScreen(
         initialRecordId = initialRecordId, onCloseDetail = if (initialRecordId != null) onHome else null,
+        onNavigationSelected = onNavigationSelected,
         records = records, loading = loading, error = error, onHome = onHome,
         onRetry = { revision++ }, onDelete = { pendingDelete = it }, onClear = { pendingDelete = "*" },
     )

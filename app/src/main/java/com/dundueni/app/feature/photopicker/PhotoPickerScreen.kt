@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.dundueni.app.feature.analysis.AnalysisActivity
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 
 /** Hosts the system photo picker without showing the old temporary diagnostics UI behind it. */
 @Composable
@@ -30,6 +31,7 @@ fun PhotoPickerTestScreen(
         if (uri == null) {
             if (closeOnCancel) onCancel()
         } else {
+            if (showLimitIfExhausted(context)) { (context as? Activity)?.finish(); return@rememberLauncherForActivityResult }
             try {
                 context.startActivity(AnalysisActivity.forPhoto(context, uri, suspendFloatingButton = true))
                 (context as? Activity)?.finish()

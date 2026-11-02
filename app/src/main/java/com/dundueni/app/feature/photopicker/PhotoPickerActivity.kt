@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import java.util.UUID
 
 // 버튼 누르면 사진 선택 화면이 뜨고, 사진 선택 후 uri를 받아오는 테스트용 Activity
@@ -23,6 +24,7 @@ class PhotoPickerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (showLimitIfExhausted(this)) { finish(); return }
         // The system picker stops this host activity; keep the button hidden until it closes.
         FloatingButtonManager.suspendForActivity(overlayOwner)
 

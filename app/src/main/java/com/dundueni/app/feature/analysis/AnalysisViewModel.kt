@@ -10,6 +10,7 @@ import com.dundueni.app.data.repository.AnalysisFailedException
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -32,6 +33,8 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
     private val mutableUiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = mutableUiState.asStateFlow()
     private var requestJob: Job? = null
+    var attemptId: String = UUID.randomUUID().toString()
+        private set
 
     /** UI 메인 스레드에서 호출합니다. 진행 중 재요청은 무시하며 완료 후 재시도할 수 있습니다. */
     @MainThread
@@ -44,6 +47,7 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
     fun analyzePrepared(prepare: suspend () -> MultipartBody.Part) {
         // 빠른 재클릭으로 같은 이미지를 중복 준비하거나 분석 요청이 겹치는 것을 막는다.
         if (requestJob?.isActive == true) return
+        attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
             var inputPrepared = false

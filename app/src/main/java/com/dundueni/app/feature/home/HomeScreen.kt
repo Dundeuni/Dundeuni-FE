@@ -62,8 +62,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dundueni.app.R
+import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.component.DundueniButton
+import com.dundueni.app.ui.component.DundueniButtonType
 import org.json.JSONArray
 
 private val HomeBackground = Color(0xFFF7F8FC)
@@ -83,7 +86,7 @@ fun HomeScreen(
     onUrlScan: () -> Unit,
     onPhoneScan: () -> Unit,
     onNotifications: () -> Unit,
-    onSettings: () -> Unit,
+    onMembership: () -> Unit,
     onViewAllHistory: () -> Unit,
     onRecentHistory: (String) -> Unit = {},
     onNavigationSelected: (HomeDestination) -> Unit,
@@ -91,9 +94,13 @@ fun HomeScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var recentRecords by remember(context) { mutableStateOf(loadRecentRecords(context)) }
+    var remainingInspections by remember(context) { mutableStateOf(BasicInspectionQuota(context).remaining()) }
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) recentRecords = loadRecentRecords(context)
+            if (event == Lifecycle.Event.ON_RESUME) {
+                recentRecords = loadRecentRecords(context)
+                remainingInspections = BasicInspectionQuota(context).remaining()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -101,12 +108,12 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = HomeBackground,
-        bottomBar = { HomeBottomNavigation(onNavigationSelected) },
+        bottomBar = { HomeBottomNavigation(HomeDestination.HOME, onNavigationSelected) },
     ) { contentPadding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(contentPadding),
         ) {
-            HomeHeader(onNotifications, onSettings)
+            HomeHeader(onNotifications)
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                     .padding(horizontal = 22.dp).padding(top = 14.dp, bottom = 22.dp),
@@ -135,6 +142,17 @@ fun HomeScreen(
                 }
                 Spacer(Modifier.height(9.dp))
                 RecentHistoryCard(recentRecords, onRecentHistory)
+                Spacer(Modifier.height(22.dp))
+                SectionTitle("남은 검사 횟수")
+                Spacer(Modifier.height(10.dp))
+                Surface(shape = RoundedCornerShape(16.dp), color = Color.White, shadowElevation = 1.dp) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("베이직", modifier = Modifier.weight(1f), color = HomeInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("$remainingInspections/${BasicInspectionQuota.LIMIT}회", color = HomeBlue, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth(), type = DundueniButtonType.SECONDARY)
                 Spacer(Modifier.height(24.dp))
                 SafetyTipCard()
             }
@@ -142,10 +160,10 @@ fun HomeScreen(
     }
 }
 
-enum class HomeDestination { HOME, DIAGNOSIS, REPORT, CONSULTATION, MY_SHELTER }
+enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS }
 
 @Composable
-private fun HomeHeader(onNotifications: () -> Unit, onSettings: () -> Unit) {
+private fun HomeHeader(onNotifications: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxWidth().height(66.dp).background(Color.White),
         contentAlignment = Alignment.Center,
@@ -162,7 +180,6 @@ private fun HomeHeader(onNotifications: () -> Unit, onSettings: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HeaderAction("알림", "notification", onNotifications)
-            HeaderAction("설정", "settings", onSettings)
         }
     }
 }
@@ -244,7 +261,7 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun QuickScanCard(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
+internal fun QuickScanCard(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = modifier.height(104.dp),
@@ -355,22 +372,34 @@ private fun SafetyTipCard() {
 }
 
 @Composable
-private fun HomeBottomNavigation(onNavigationSelected: (HomeDestination) -> Unit) {
+fun HomeBottomNavigation(
+    selectedDestination: HomeDestination,
+    onNavigationSelected: (HomeDestination) -> Unit,
+) {
     val items = listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
-        Triple(HomeDestination.DIAGNOSIS, "diagnosis", "진단"),
         Triple(HomeDestination.REPORT, "report", "리포트"),
         Triple(HomeDestination.CONSULTATION, "chat", "맞춤 상담"),
         Triple(HomeDestination.MY_SHELTER, "profile", "My 쉼터"),
+        Triple(HomeDestination.SETTINGS, "settings", "설정"),
     )
     NavigationBar(containerColor = Color.White, tonalElevation = 3.dp, windowInsets = WindowInsets.navigationBars) {
         items.forEach { (destination, icon, label) ->
-            val selected = destination == HomeDestination.DIAGNOSIS
+            val selected = destination == selectedDestination
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigationSelected(destination) },
+                modifier = Modifier.weight(1f),
                 icon = { HomeGlyph(icon, if (selected) HomeInk else Color(0xFF9BA0A8), Modifier.size(24.dp)) },
-                label = { Text(label, fontSize = 10.sp, maxLines = 1) },
+                label = {
+                    Text(
+                        label,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = HomeInk,
                     selectedTextColor = HomeInk,
@@ -398,12 +427,6 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
                 drawLine(color, p(10f, 15f), p(14f, 15f), strokeWidth = 2f*sx)
                 drawLine(color, p(14f, 15f), p(14f, 21f), strokeWidth = 2f*sx)
             }
-            "diagnosis" -> {
-                drawRoundRect(color, p(3f, 4f), Size(13f*sx, 16f*sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f*sx), style = stroke)
-                drawCircle(color, 4f*sx, p(16f, 16f), style = stroke)
-                drawLine(color, p(19f, 19f), p(22f, 22f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
-                listOf(7f, 10f, 13f).forEach { drawLine(color, p(6f, it), p(12f, it), strokeWidth = 1.2f*sx) }
-            }
             "report" -> {
                 drawRoundRect(color, p(5f, 3f), Size(14f*sx, 18f*sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f*sx), style = stroke)
                 listOf(8f, 12f, 16f).forEach { drawLine(color, p(8f, it), p(15f, it), strokeWidth = 1.6f*sx) }
@@ -426,16 +449,30 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
                 drawArc(color, 0f, 180f, false, p(9f,17f), Size(6f*sx, 5f*sy), style = stroke)
             }
             "settings" -> {
-                drawCircle(color, 7f*sx, p(12f, 12f), style = stroke)
-                drawCircle(color, 2.5f*sx, p(12f, 12f), style = stroke)
-                for (index in 0 until 8) {
-                    val angle = index * (Math.PI / 4.0)
-                    val x1 = 12f + kotlin.math.cos(angle).toFloat() * 8f
-                    val y1 = 12f + kotlin.math.sin(angle).toFloat() * 8f
-                    val x2 = 12f + kotlin.math.cos(angle).toFloat() * 10f
-                    val y2 = 12f + kotlin.math.sin(angle).toFloat() * 10f
-                    drawLine(color, p(x1,y1), p(x2,y2), strokeWidth = 2.2f*sx, cap = StrokeCap.Round)
+                val gear = Path()
+                val toothProfile = listOf(7.2f, 7.2f, 9.8f, 9.8f, 9.8f, 9.8f, 7.2f, 7.2f)
+                toothProfile.forEachIndexed { index, radiusStep ->
+                    val angle = (index * (Math.PI / 32.0)) - Math.PI / 2.0
+                    val radius = radiusStep * sx
+                    val x = size.width / 2f + kotlin.math.cos(angle).toFloat() * radius
+                    val y = size.height / 2f + kotlin.math.sin(angle).toFloat() * radius
+                    if (index == 0) gear.moveTo(x, y) else gear.lineTo(x, y)
                 }
+                // Eight broad teeth make the icon read as a gear instead of a sun or target.
+                for (tooth in 1 until 8) {
+                    toothProfile.forEachIndexed { index, radiusStep ->
+                        val profileIndex = tooth * toothProfile.size + index
+                        val angle = (profileIndex * (Math.PI / 32.0)) - Math.PI / 2.0
+                        val radius = radiusStep * sx
+                        gear.lineTo(
+                            size.width / 2f + kotlin.math.cos(angle).toFloat() * radius,
+                            size.height / 2f + kotlin.math.sin(angle).toFloat() * radius,
+                        )
+                    }
+                }
+                gear.close()
+                drawPath(gear, color, style = stroke)
+                drawCircle(color, 2.8f * sx, p(12f, 12f), style = stroke)
             }
             "screen" -> {
                 drawLine(color, p(4f,9f), p(4f,5f), strokeWidth = 2f*sx); drawLine(color, p(4f,5f), p(8f,5f), strokeWidth = 2f*sx)

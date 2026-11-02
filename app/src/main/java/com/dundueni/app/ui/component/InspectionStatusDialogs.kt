@@ -1,5 +1,6 @@
 package com.dundueni.app.ui.component
 
+import android.view.WindowManager
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -17,13 +18,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.dundueni.app.R
 import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniDimens
@@ -91,6 +95,31 @@ fun InspectionErrorDialog(
 }
 
 @Composable
+fun InspectionLimitDialog(onUpgrade: () -> Unit, onLater: () -> Unit) {
+    InspectionStatusDialog(
+        mascotResId = R.drawable.dundeuni_mascot_sleep,
+        mascotDescription = "잠든 든든이",
+        title = "검사 횟수를 모두 소진했어요",
+        description = "베이직 검사 5회를 모두 사용했어요.",
+        onDismissRequest = onLater,
+    ) {
+        DundueniButton(
+            text = "업그레이드",
+            onClick = onUpgrade,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onLater,
+            modifier = Modifier.fillMaxWidth().height(DundueniDimens.ButtonHeight),
+            shape = DundueniDefaultShape,
+        ) {
+            Text("나중에", style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
 private fun InspectionStatusDialog(
     @DrawableRes mascotResId: Int,
     mascotDescription: String,
@@ -107,6 +136,21 @@ private fun InspectionStatusDialog(
             dismissOnClickOutside = dismissible,
         ),
     ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        DisposableEffect(window) {
+            if (window == null) {
+                onDispose { }
+            } else {
+                val originalDimAmount = window.attributes.dimAmount
+                val hadDimBehind = window.attributes.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND != 0
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                window.setDimAmount(0.45f)
+                onDispose {
+                    window.setDimAmount(originalDimAmount)
+                    if (!hadDimBehind) window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                }
+            }
+        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
