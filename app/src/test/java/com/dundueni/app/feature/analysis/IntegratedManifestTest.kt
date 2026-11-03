@@ -22,7 +22,8 @@ class IntegratedManifestTest {
             "feature.photopicker.PhotoPickerActivity" to true,
             "feature.capture.MediaProjectionTestActivity" to false,
             "feature.analysisresult.AnalysisResultActivity" to false,
-            "feature.analysisresult.AnalysisResultPreviewActivity" to false,
+            "feature.textinput.TextInputActivity" to false,
+            "feature.phoneinput.PhoneInputActivity" to false,
         )) {
             val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
             assertEquals(name, exported, info.exported)
@@ -34,7 +35,7 @@ class IntegratedManifestTest {
             val info = pm.getServiceInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
             assertFalse(info.exported)
         }
-        val permissions = pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.toSet()
+        val permissions = (pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions ?: emptyArray()).toSet()
         for (permission in listOf("INTERNET", "SYSTEM_ALERT_WINDOW", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PROJECTION", "FOREGROUND_SERVICE_SPECIAL_USE")) {
             assertTrue(permission, "android.permission.$permission" in permissions)
         }

@@ -63,6 +63,16 @@
             android:name=".feature.photopicker.PhotoPickerActivity"
             android:exported="true" />
 
+        <!-- PB-03 텍스트 검사 -->
+        <activity
+            android:name=".feature.textinput.TextInputActivity"
+            android:exported="false" />
+
+        <!-- PB-04 전화번호 검사 -->
+        <activity
+            android:name=".feature.phoneinput.PhoneInputActivity"
+            android:exported="false" />
+
 
         <!-- MediaProjection Foreground Service -->
         <service

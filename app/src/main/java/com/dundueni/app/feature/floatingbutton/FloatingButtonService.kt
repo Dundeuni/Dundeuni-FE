@@ -42,7 +42,9 @@ import com.dundueni.app.feature.capture.MediaProjectionService
 import com.dundueni.app.feature.capture.MediaProjectionTestActivity
 import com.dundueni.app.feature.floatingbutton.view.FloatingButtonView
 import com.dundueni.app.feature.floatingbutton.view.FloatingMenuView
+import com.dundueni.app.feature.phoneinput.PhoneInputActivity
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
+import com.dundueni.app.feature.textinput.TextInputActivity
 import java.io.File
 import java.io.IOException
 
@@ -160,7 +162,28 @@ class FloatingButtonService : Service() {
                     )
                 }
             },
-            onEmptyClick = { /* TODO: 빈 메뉴 기능 정의 */ }
+            // 텍스트 검사 선택은 텍스트 입력 화면으로 이동한다.
+            onTextScanClick = {
+                if (isMenuOpen) {
+                    hideFloatingMenu()
+                    startActivity(
+                        Intent(this, TextInputActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                    )
+                }
+            },
+            // 전화번호 검사 선택은 전화번호 입력 화면으로 이동한다.
+            onPhoneScanClick = {
+                if (isMenuOpen) {
+                    hideFloatingMenu()
+                    startActivity(
+                        Intent(this, PhoneInputActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                    )
+                }
+            }
         ).also { floatingMenu = it }
 
         val density = resources.displayMetrics.density
@@ -168,7 +191,7 @@ class FloatingButtonService : Service() {
         val params = WindowManager.LayoutParams(
             minOf((300 * density).toInt(), resources.displayMetrics.widthPixels - offset)
                 .coerceAtLeast(1),
-            (280 * density).toInt(),
+            (320 * density).toInt(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
