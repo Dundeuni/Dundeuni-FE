@@ -52,6 +52,7 @@ import com.dundueni.app.feature.capture.MediaProjectionTestActivity
 import com.dundueni.app.feature.floatingbutton.view.FloatingButtonView
 import com.dundueni.app.feature.floatingbutton.view.FloatingMenuView
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
+import com.dundueni.app.feature.phone.PhoneInputActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
 import com.dundueni.app.feature.payment.showLimitIfExhausted
 import java.io.File
@@ -64,7 +65,7 @@ import kotlin.math.abs
  * 시작 시 알림과 Overlay 권한을 준비한 뒤 WindowManager로 버튼을 표시한다.
  * WindowManager는 View를 화면의 창으로 등록하고 제거하는 Android 기능이다.
  * FloatingButtonView와 FloatingMenuView는 모양과 클릭 전달을 담당한다.
- * 이 서비스는 메뉴 선택을 화면 검사 또는 사진 선택 흐름에 연결한다.
+ * 이 서비스는 메뉴 선택을 화면·이미지·텍스트·전화번호 검사 흐름에 연결한다.
  * 화면 캡처 제어도 함께 들어 있지만, 버튼·메뉴 표시와는 별도 책임이다.
  */
 class FloatingButtonService : Service() {
@@ -327,6 +328,17 @@ class FloatingButtonService : Service() {
                     hideFloatingMenu()
                     startActivity(
                         Intent(this, TextInputActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                        }
+                    )
+                }
+            },
+            onPhoneScanClick = {
+                if (showLimitIfExhausted(this)) { hideFloatingMenu(); return@create }
+                if (isMenuOpen) {
+                    hideFloatingMenu()
+                    startActivity(
+                        Intent(this, PhoneInputActivity::class.java).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
                         }
                     )

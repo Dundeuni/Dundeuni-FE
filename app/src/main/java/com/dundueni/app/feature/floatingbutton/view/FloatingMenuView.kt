@@ -19,7 +19,8 @@ object FloatingMenuView {
         opensTowardLeft: Boolean,
         onScreenScanClick: () -> Unit,
         onImageScanClick: () -> Unit,
-        onTextScanClick: () -> Unit
+        onTextScanClick: () -> Unit,
+        onPhoneScanClick: () -> Unit
     ): View {
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
@@ -89,11 +90,11 @@ object FloatingMenuView {
             container.addView(row, params)
         }
 
-        val middleTop = (280 - 48) / 2
-        val verticalOffset = 62
-        addItem("AI 화면 검사", R.drawable.menu_icon_screen, middleTop - verticalOffset, 0, onScreenScanClick)
-        addItem("이미지 검사", R.drawable.menu_icon_image, middleTop, 28, onImageScanClick)
-        addItem("텍스트 검사", R.drawable.menu_icon_text, middleTop + verticalOffset, 30, onTextScanClick)
+        val firstTop = (280 - 48 - 3 * 58) / 2
+        addItem("AI 화면 검사", R.drawable.menu_icon_screen, firstTop, 0, onScreenScanClick)
+        addItem("이미지 검사", R.drawable.menu_icon_image, firstTop + 58, 28, onImageScanClick)
+        addItem("텍스트 검사", R.drawable.menu_icon_text, firstTop + 116, 30, onTextScanClick)
+        addItem("전화번호 검사", android.R.drawable.ic_menu_call, firstTop + 174, 0, onPhoneScanClick)
 
         return container
     }
