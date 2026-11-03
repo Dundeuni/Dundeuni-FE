@@ -9,18 +9,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.dundueni.app.ui.theme.DundueniFETheme
-import com.dundueni.app.BuildConfig
 import com.dundueni.app.MainActivity
 import com.dundueni.app.data.auth.AuthSessionRuntime
+import com.dundueni.app.data.auth.AuthDependencies
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val submitter = if (BuildConfig.DEBUG) {
-            Class.forName("com.dundueni.app.feature.auth.DebugMockLoginSubmitter")
-                .getDeclaredConstructor().newInstance() as LoginSubmitter
-        } else LoginSubmitter { _, _ -> LoginOutcome.Unavailable }
+        val submitter = AuthDependencies.loginSubmitter()
         val viewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == LoginViewModel::class.java)
@@ -40,7 +37,7 @@ class LoginActivity : ComponentActivity() {
                     },
                     onSignUp = {
                         startActivity(Intent(this, SignUpTermsActivity::class.java).apply {
-                            putExtra(EmailVerificationActivity.EXTRA_DEMO, BuildConfig.DEBUG)
+                            putExtra(EmailVerificationActivity.EXTRA_DEMO, AuthDependencies.defaultDebugMock)
                         })
                     },
                     onResetPassword = { startActivity(Intent(this, PasswordResetActivity::class.java)) },

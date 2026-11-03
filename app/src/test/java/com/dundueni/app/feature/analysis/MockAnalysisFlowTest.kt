@@ -165,14 +165,20 @@ class MockAnalysisFlowTest {
             val vm = AnalysisViewModel(AnalysisRepository(api))
             store.put("analysis", vm)
             val states = mutableListOf<AnalysisUiState>()
-            val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.toList(states) }
+            val observedTerminal = CompletableDeferred<Unit>()
+            val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.uiState.collect {
+                    states.add(it)
+                    if (it is AnalysisUiState.Error || it is AnalysisUiState.Success) observedTerminal.complete(Unit)
+                }
+            }
             val completed = async { vm.uiState.first { it is AnalysisUiState.Error || it is AnalysisUiState.Success } }
             vm.analyze(part)
             assertEquals(AnalysisUiState.Loading, vm.uiState.value)
             responseGate.complete(Unit)
             val error = AnalysisUiState.Error(AnalysisErrorKind.HTTP, response.code())
             assertEquals(error, completed.await())
-            runCurrent()
+            observedTerminal.await()
             assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading, error), states)
             collector.cancel()
         }

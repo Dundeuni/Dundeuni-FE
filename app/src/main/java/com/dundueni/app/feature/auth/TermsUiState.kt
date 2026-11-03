@@ -12,9 +12,10 @@ data class TermsUiState(
     val privacy: Boolean = false,
     val age: Boolean = false,
     val marketing: Boolean = false,
+    val requiredTerms: Set<SignUpTerm> = setOf(SignUpTerm.SERVICE, SignUpTerm.PRIVACY, SignUpTerm.AGE),
 ) {
-    val canContinue: Boolean get() = service && privacy && age
-    val allSelected: Boolean get() = canContinue && marketing
+    val canContinue: Boolean get() = requiredTerms.all(::selected)
+    val allSelected: Boolean get() = canContinue && (SignUpTerm.AGE !in requiredTerms || marketing)
 
     fun selected(term: SignUpTerm): Boolean = when (term) {
         SignUpTerm.SERVICE -> service
@@ -30,5 +31,5 @@ data class TermsUiState(
         SignUpTerm.MARKETING -> copy(marketing = selected)
     }
 
-    fun setAll(selected: Boolean) = TermsUiState(selected, selected, selected, selected)
+    fun setAll(selected: Boolean) = copy(service = selected, privacy = selected, age = selected, marketing = selected)
 }

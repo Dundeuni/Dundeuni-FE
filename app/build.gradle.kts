@@ -14,6 +14,9 @@ fun buildConfigString(value: String): String =
 
 val analysisApiMode = localApiConfig.getProperty("analysis.api.mode", "FAKE").trim()
 val analysisApiBaseUrl = localApiConfig.getProperty("analysis.api.baseUrl", "").trim()
+// TODO(BE_CONTRACT): enable HTTP only after the draft contract and deployment URL are confirmed.
+val authApiMode = localApiConfig.getProperty("auth.api.mode", "UNCONNECTED").trim()
+val authApiBaseUrl = localApiConfig.getProperty("auth.api.baseUrl", "").trim()
 // The current BE integration uses mock results independently of FAKE/REAL transport.
 val analysisApiMockResults = localApiConfig.getProperty("analysis.api.mockResults", "true")
     .trim().toBooleanStrict()
@@ -32,6 +35,8 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "ANALYSIS_API_MODE", buildConfigString(analysisApiMode))
+        buildConfigField("String", "AUTH_API_MODE", buildConfigString(authApiMode))
+        buildConfigField("String", "AUTH_API_BASE_URL", buildConfigString(authApiBaseUrl))
         buildConfigField("String", "ANALYSIS_API_BASE_URL", buildConfigString(analysisApiBaseUrl))
         buildConfigField("boolean", "ANALYSIS_API_MOCK_RESULTS", analysisApiMockResults.toString())
 

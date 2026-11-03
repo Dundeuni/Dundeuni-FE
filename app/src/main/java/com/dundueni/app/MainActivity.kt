@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
             .getBoolean(ONBOARDING_COMPLETED, false)
         onboardingPage = savedInstanceState?.getInt(STATE_ONBOARDING_PAGE, 1) ?: 1
         val authStore = AuthSessionRuntime.store(applicationContext)
+        authStore.read()?.onboardingCompleted?.let { showingOnboarding = !it }
         lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
         authStore.read()?.takeIf { !it.isValid() }?.let {
             AuthSessionRuntime.onExpired(it)
@@ -175,6 +176,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun completeOnboarding() {
+        // TODO(BE_CONTRACT): onboarding completion API is outside PB-09; retain locally for this session.
+        val authStore = AuthSessionRuntime.store(applicationContext)
+        authStore.read()?.takeIf { it.onboardingCompleted == false && it.isValid() }?.let {
+            runCatching { authStore.save(it.copy(onboardingCompleted = true)) }.onFailure {
+                showMessage("설정을 저장하지 못했습니다. 다시 시도해 주세요.")
+                return
+            }
+        }
         getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
             .edit()
             .putBoolean(ONBOARDING_COMPLETED, true)

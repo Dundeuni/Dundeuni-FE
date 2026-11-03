@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.withResumed
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.auth.AuthDependencies
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 class EmailVerificationActivity : ComponentActivity() {
@@ -22,10 +23,16 @@ class EmailVerificationActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val demo = BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_DEMO, false)
+        val flowId = intent.getStringExtra(SignUpFlowMemory.EXTRA_FLOW_ID)
+        if (!demo && !SignUpFlowMemory.contains(flowId)) {
+            startActivity(Intent(this, SignUpTermsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+            finish()
+            return
+        }
         val gateway = if (demo) {
             Class.forName("com.dundueni.app.feature.auth.PreviewEmailVerificationGateway")
                 .getDeclaredConstructor().newInstance() as EmailVerificationGateway
-        } else UnconnectedEmailVerificationGateway
+        } else AuthDependencies.emailGateway()
         val viewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == EmailVerificationViewModel::class.java)
@@ -37,7 +44,10 @@ class EmailVerificationActivity : ComponentActivity() {
             DundueniFETheme {
                 DisposableEffect(viewModel) {
                     val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshTimer()
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            viewModel.refreshTimer()
+                            if (!demo && viewModel.uiState.value.verified && !viewModel.uiState.value.navigationPending && SignUpFlowMemory.authorization(flowId) == null) viewModel.invalidateSignUpGrant()
+                        }
                     }
                     lifecycle.addObserver(observer)
                     onDispose { lifecycle.removeObserver(observer) }
@@ -47,7 +57,15 @@ class EmailVerificationActivity : ComponentActivity() {
                     if (state.navigationPending) lifecycle.withResumed {
                         // 회전·백그라운드 복귀 후 현재 Activity에서 한 번만 이동한다.
                         if (viewModel.uiState.value.navigationPending) {
+                            if (!demo) {
+                                val grant = viewModel.signUpGrant
+                                if (grant == null || !SignUpFlowMemory.verify(flowId, viewModel.uiState.value.email, grant)) {
+                                    viewModel.invalidateSignUpGrant()
+                                    return@withResumed
+                                }
+                            }
                             startActivity(Intent(this@EmailVerificationActivity, SignUpCredentialsActivity::class.java).apply {
+                                putExtra(SignUpFlowMemory.EXTRA_FLOW_ID, flowId)
                                 putExtra(SignUpCredentialsActivity.EXTRA_EMAIL, viewModel.uiState.value.email)
                                 putExtra(EXTRA_DEMO, demo)
                                 putExtra("marketing_agreed", intent.getBooleanExtra("marketing_agreed", false))
@@ -57,16 +75,14 @@ class EmailVerificationActivity : ComponentActivity() {
                         }
                     }
                 }
-                EmailVerificationScreen(state, viewModel::changeEmail, viewModel::changeCode,
+                EmailVerificationScreen(state, { value ->
+                    if (value != viewModel.uiState.value.email) SignUpFlowMemory.clearVerification(flowId)
+                    viewModel.changeEmail(value)
+                }, viewModel::changeCode,
                     viewModel::sendCode, { viewModel.checkCode {} }, ::finish, demo)
             }
         }
     }
 
     companion object { const val EXTRA_DEMO = "auth_ui_demo" }
-}
-
-private object UnconnectedEmailVerificationGateway : EmailVerificationGateway {
-    override suspend fun sendCode(email: String) = SendCodeOutcome.Unavailable
-    override suspend fun verifyCode(challengeId: String, code: String) = VerifyCodeOutcome.Unavailable
 }

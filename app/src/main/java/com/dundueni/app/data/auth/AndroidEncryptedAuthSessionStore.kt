@@ -29,7 +29,11 @@ class AndroidEncryptedAuthSessionStore(context: Context) : AuthSessionStore {
             val json = JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
             val source = AuthSessionSource.valueOf(json.getString("source"))
             val token = json.getString("accessToken")
-            AuthSession(token, source).takeIf { it.expiresAtEpochSeconds() != null }
+            require(source != AuthSessionSource.MOCK || BuildConfig.DEBUG)
+            AuthSession(token, source,
+                if (json.has("serverExpiresAt")) json.getLong("serverExpiresAt") else null,
+                if (json.has("onboardingCompleted")) json.getBoolean("onboardingCompleted") else null,
+            ).takeIf { it.expiresAtEpochSeconds() != null }
         }.getOrElse {
             preferences.edit().remove(SESSION_KEY).commit()
             null
@@ -43,6 +47,8 @@ class AndroidEncryptedAuthSessionStore(context: Context) : AuthSessionStore {
         val plaintext = JSONObject()
             .put("accessToken", session.accessToken)
             .put("source", session.source.name)
+            .put("serverExpiresAt", session.serverExpiresAtEpochSeconds)
+            .put("onboardingCompleted", session.onboardingCompleted)
             .toString()
             .toByteArray(Charsets.UTF_8)
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -55,7 +61,7 @@ class AndroidEncryptedAuthSessionStore(context: Context) : AuthSessionStore {
 
     @Synchronized
     override fun clear() {
-        preferences.edit().remove(SESSION_KEY).commit()
+        check(preferences.edit().remove(SESSION_KEY).commit()) { "Unable to clear auth session" }
     }
 
     private fun getOrCreateKey(): SecretKey {

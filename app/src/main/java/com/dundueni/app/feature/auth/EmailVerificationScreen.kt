@@ -110,7 +110,7 @@ fun EmailVerificationScreen(
                     Text("이메일 주소", fontSize = 12.sp, color = TermsColors.Ink)
                     Spacer(Modifier.height(10.dp))
                     val largeText = LocalDensity.current.fontScale > 1.3f
-                    val sendEnabled = !state.active && !state.busy && !state.verified
+                    val sendEnabled = !state.active && state.canSendCode
                     val emailField: @Composable (Modifier) -> Unit = { modifier ->
                         VerificationField(state.email, "이메일 입력", "이메일 주소", onEmailChange,
                             modifier, !state.verified && !state.busy, state.emailError,
@@ -137,6 +137,8 @@ fun EmailVerificationScreen(
                         }
                     }
                     state.emailError?.let { VerificationMessage(it, true) }
+                    if (state.resendRemainingSeconds > 0) VerificationMessage("재발송까지 ${state.resendRemainingSeconds}초", false)
+                    if (state.verifyRetryRemainingSeconds > 0) VerificationMessage("다시 확인까지 ${state.verifyRetryRemainingSeconds}초", false)
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("인증번호 6자리", fontSize = 12.sp, color = TermsColors.Ink)
@@ -154,7 +156,7 @@ fun EmailVerificationScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                         Box(Modifier.weight(1f)) { state.codeError?.let { VerificationMessage(it, true) } }
                         if ((state.hasSentCode || passwordReset) && !state.verified) {
-                            Row(Modifier.heightIn(min = 48.dp).clickable(enabled = state.hasSentCode && !state.busy, role = Role.Button, onClick = onSendCode),
+                            Row(Modifier.heightIn(min = 48.dp).clickable(enabled = state.hasSentCode && state.canSendCode, role = Role.Button, onClick = onSendCode),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("새 번호 발송", fontSize = 12.sp, color = if (state.hasSentCode) TermsColors.Ink else TermsColors.Muted)
                                 TermsIcon(R.drawable.auth_resend, 12, 12)

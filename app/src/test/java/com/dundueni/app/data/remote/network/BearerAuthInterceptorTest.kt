@@ -89,6 +89,30 @@ class BearerAuthInterceptorTest {
         assertNull(sessions.read())
     }
 
+    @Test fun late401CannotClearNewlySavedSession() = runTest {
+        val original = session(AuthSessionSource.BACKEND)
+        val replacement = session(AuthSessionSource.BACKEND, System.currentTimeMillis() / 1000 + 1200)
+        sessions.save(original)
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                sessions.save(replacement)
+                return MockResponse().setResponseCode(401)
+            }
+        }
+        api.protectedCall().errorBody()?.close()
+        assertEquals(replacement, sessions.read())
+        assertEquals(0, invalidations)
+    }
+
+    @Test fun nestedAuth401InSuccessfulPayloadDoesNotLogout() = runTest {
+        val current = session(AuthSessionSource.BACKEND)
+        sessions.save(current)
+        server.enqueue(MockResponse().setBody("""{"isSuccess":true,"code":"ANALYSIS200","result":{"code":"AUTH401"}}"""))
+        api.protectedCall().body()?.close()
+        assertEquals(current, sessions.read())
+        assertEquals(0, invalidations)
+    }
+
     private fun session(
         source: AuthSessionSource,
         exp: Long = System.currentTimeMillis() / 1_000L + 600L,

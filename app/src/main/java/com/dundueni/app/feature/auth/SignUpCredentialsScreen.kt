@@ -62,7 +62,7 @@ fun SignUpCredentialsScreen(
             bottomBar = {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)
                     .padding(top = if (keyboardVisible) 8.dp else 16.dp, bottom = if (keyboardVisible) 8.dp else 40.dp)) {
-                    CredentialsButton(if (state.submitting) "가입 처리 중" else "회원가입 완료하기", state.canSubmit, submit, compact = keyboardVisible)
+                    CredentialsButton(if (state.submitting) "가입 처리 중" else if (state.savingSession) "로그인 정보 저장 재시도" else "회원가입 완료하기", state.canSubmit, submit, compact = keyboardVisible)
                     if (demo && !keyboardVisible) Text("UI 테스트 · 실제 계정 생성 없음", Modifier.padding(top = 8.dp), color = TermsColors.Muted, fontSize = 11.sp)
                 }
             },
@@ -109,9 +109,9 @@ fun SignUpCredentialsScreen(
                         enabled, font, state.passwordVisible, onTogglePassword)
                     Spacer(Modifier.height(6.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ValidationChip("8~20자 이내", state.lengthSatisfied, filled = true)
+                        ValidationChip("8~${state.policy.passwordMax}자 이내", state.lengthSatisfied, filled = true)
                         ValidationChip("특수문자 포함", state.specialSatisfied, filled = true)
-                        ValidationChip("영문/숫자 조합", state.combinationSatisfied, filled = true)
+                        if (state.policy.requiresCombination) ValidationChip("영문/숫자 조합", state.combinationSatisfied, filled = true)
                     }
                     state.passwordError?.let { CredentialsMessage(it, true) }
                     Spacer(Modifier.height(12.dp))
@@ -123,11 +123,11 @@ fun SignUpCredentialsScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         RequiredLabel("닉네임 설정")
                         Spacer(Modifier.weight(1f))
-                        Text("${state.nicknameLength} / 10자", fontSize = 12.sp, color = if (state.nicknameLength > 10) Danger else TermsColors.Link)
+                        Text("${state.nicknameLength} / ${state.policy.nicknameMax}자", fontSize = 12.sp, color = if (state.nicknameLength > state.policy.nicknameMax) Danger else TermsColors.Link)
                     }
                     Spacer(Modifier.height(12.dp))
                     CredentialsField(state.nickname, "닉네임 입력", "닉네임 설정", onNicknameChange, state.nicknameError,
-                        enabled, font, null, valid = state.nickname.isNotBlank() && state.nicknameLength <= 10 && state.nicknameError == null,
+                        enabled, font, null, valid = state.nickname.isNotBlank() && state.nicknameLength <= state.policy.nicknameMax && state.nicknameError == null,
                         onDone = submit)
                     state.nicknameError?.let { CredentialsMessage(it, true) }
                     state.message?.let { CredentialsMessage(it, true) }

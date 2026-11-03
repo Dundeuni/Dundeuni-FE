@@ -5,8 +5,17 @@ import com.google.gson.JsonParser
 
 enum class AuthSessionSource { BACKEND, MOCK }
 
-data class AuthSession(val accessToken: String, val source: AuthSessionSource) {
-    fun expiresAtEpochSeconds(): Long? = JwtAccessToken.expiresAtEpochSeconds(accessToken)
+data class AuthSession(
+    val accessToken: String,
+    val source: AuthSessionSource,
+    val serverExpiresAtEpochSeconds: Long? = null,
+    val onboardingCompleted: Boolean? = null,
+) {
+    fun expiresAtEpochSeconds(): Long? = JwtAccessToken.expiresAtEpochSeconds(accessToken)?.let {
+        minOf(it, serverExpiresAtEpochSeconds ?: it)
+    }
+
+    override fun toString() = "AuthSession(source=$source, accessToken=[REDACTED])"
 
     fun isValid(nowEpochSeconds: Long = System.currentTimeMillis() / 1_000L): Boolean =
         expiresAtEpochSeconds()?.let { it > nowEpochSeconds } == true
