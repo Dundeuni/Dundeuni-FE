@@ -2,6 +2,7 @@ package com.dundueni.app.data.remote.network
 
 import com.dundueni.app.data.auth.AuthSessionStore
 import com.dundueni.app.data.remote.api.AnalysisApiService
+import com.dundueni.app.data.remote.api.AuthApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -34,6 +35,14 @@ class RetrofitClient(
 
     val analysisApiService: AnalysisApiService by lazy {
         retrofit.create(AnalysisApiService::class.java)
+    }
+
+    // Public authentication calls neither attach a session nor invalidate it on login failure.
+    // Disable implicit replay of one-use verification/signup requests and cross-origin redirects.
+    val authApiService: AuthApiService by lazy {
+        retrofit.newBuilder().client(okHttpClient.newBuilder()
+            .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build())
+            .build().create(AuthApiService::class.java)
     }
 }
 

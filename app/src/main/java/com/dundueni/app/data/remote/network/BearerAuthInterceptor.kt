@@ -4,6 +4,7 @@ import com.dundueni.app.data.auth.AuthSessionSource
 import com.dundueni.app.data.auth.AuthSessionStore
 import okhttp3.Interceptor
 import okhttp3.Response
+import com.google.gson.JsonParser
 
 class BearerAuthInterceptor(
     private val sessionStore: AuthSessionStore,
@@ -20,7 +21,7 @@ class BearerAuthInterceptor(
             if (session?.source == AuthSessionSource.BACKEND && session.isValid(nowEpochSeconds())) {
                 attachedToken = session.accessToken
                 request.header("Authorization", "Bearer ${session.accessToken}")
-            } else if (session?.source == AuthSessionSource.BACKEND && session.expiresAtEpochSeconds()?.let { it <= nowEpochSeconds() } == true) {
+            } else if (session?.source == AuthSessionSource.BACKEND) {
                 invalidate(session.accessToken)
             }
         }
@@ -33,10 +34,11 @@ class BearerAuthInterceptor(
 
     private fun Response.isAuth401(): Boolean = runCatching {
         val bodyText = peekBody(MAX_ERROR_BODY_BYTES).string()
-        AUTH401_PATTERN.containsMatchIn(bodyText)
+        JsonParser.parseString(bodyText).asJsonObject.get("code")?.asString == "AUTH401"
     }.getOrDefault(false)
 
     private fun invalidate(token: String) {
+        if (sessionStore.read()?.accessToken != token) return
         onUnauthorized(token)
         if (sessionStore.read()?.accessToken == token) sessionStore.clear()
     }
@@ -44,6 +46,5 @@ class BearerAuthInterceptor(
     companion object {
         const val REQUIRES_AUTH_HEADER = "X-Dundeuni-Auth-Required"
         private const val MAX_ERROR_BODY_BYTES = 64L * 1024L
-        private val AUTH401_PATTERN = Regex("\\\"code\\\"\\s*:\\s*\\\"AUTH401\\\"")
     }
 }

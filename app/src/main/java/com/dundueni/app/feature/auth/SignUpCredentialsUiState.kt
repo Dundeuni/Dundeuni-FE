@@ -13,16 +13,18 @@ data class SignUpCredentialsUiState(
     val completed: Boolean = false,
     val message: String? = null,
     val serverNicknameError: String? = null,
+    val policy: AuthInputPolicy = AuthInputPolicy.PREVIEW_RESET,
+    val savingSession: Boolean = false,
 ) {
-    val lengthSatisfied get() = password.length in 8..20
-    val combinationSatisfied get() = password.any { it in 'a'..'z' || it in 'A'..'Z' } && password.any { it in '0'..'9' }
+    val lengthSatisfied get() = password.length in 8..policy.passwordMax
+    val combinationSatisfied get() = !policy.requiresCombination || (password.any { it in 'a'..'z' || it in 'A'..'Z' } && password.any { it in '0'..'9' })
     val specialSatisfied get() = password.any { !it.isLetterOrDigit() && !it.isWhitespace() }
     val passwordsMatch get() = password.isNotEmpty() && password == confirmation
     val nicknameLength get() = nickname.codePointCount(0, nickname.length)
     val passwordError: String? get() = when {
         !passwordTouched -> null
         password.isEmpty() -> "비밀번호를 입력해 주세요."
-        !lengthSatisfied -> "비밀번호는 8~20자로 입력해 주세요."
+        !lengthSatisfied -> "비밀번호는 8~${policy.passwordMax}자로 입력해 주세요."
         !combinationSatisfied -> "영문과 숫자를 함께 입력해 주세요."
         else -> null
     }
@@ -35,10 +37,10 @@ data class SignUpCredentialsUiState(
     val nicknameError: String? get() = serverNicknameError ?: when {
         !nicknameTouched -> null
         nickname.isBlank() -> "닉네임을 입력해 주세요."
-        nicknameLength > 10 -> "글자 제한수를 초과하였습니다."
+        nicknameLength > policy.nicknameMax -> "글자 제한수를 초과하였습니다."
         else -> null
     }
-    val canSubmit get() = lengthSatisfied && combinationSatisfied && passwordsMatch && nickname.isNotBlank() && nicknameLength <= 10 && nicknameError == null && !submitting && !completed
+    val canSubmit get() = (savingSession || (lengthSatisfied && combinationSatisfied && passwordsMatch && nickname.isNotBlank() && nicknameLength <= policy.nicknameMax && nicknameError == null)) && !submitting && !completed
 }
 
 sealed interface SignUpOutcome {
@@ -46,6 +48,8 @@ sealed interface SignUpOutcome {
     data object Unavailable : SignUpOutcome
     data object NicknameTaken : SignUpOutcome
     data object Failed : SignUpOutcome
+    data class Authenticated(val session: com.dundueni.app.data.auth.AuthSession) : SignUpOutcome
+    data class Rejected(val reason: AuthFailure) : SignUpOutcome
 }
 
 fun interface SignUpSubmitter {

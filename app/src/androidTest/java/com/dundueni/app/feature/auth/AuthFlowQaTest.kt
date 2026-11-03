@@ -25,9 +25,13 @@ class AuthFlowQaTest {
     private val compose = createAndroidComposeRule<MainActivity>()
     private val authIsolation = object : ExternalResource() {
         private var previous: AuthSession? = null
+        private lateinit var onboarding: AuthQaOnboardingState
         private val store get() = AuthSessionRuntime.store(InstrumentationRegistry.getInstrumentation().targetContext)
-        override fun before() { previous = store.read(); store.clear() }
-        override fun after() { store.clear(); previous?.takeIf { it.isValid() }?.let(store::save) }
+        override fun before() {
+            onboarding = AuthQaOnboardingState(InstrumentationRegistry.getInstrumentation().targetContext).also { it.skip() }
+            previous = store.read(); store.clear()
+        }
+        override fun after() { store.clear(); previous?.takeIf { it.isValid() }?.let(store::save); onboarding.restore() }
     }
     @get:Rule val rules = RuleChain.outerRule(authIsolation).around(compose)
 

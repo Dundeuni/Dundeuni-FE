@@ -26,8 +26,12 @@ class AuthSessionQaTest {
     private val context get() = instrumentation.targetContext
     private val store get() = AuthSessionRuntime.store(context)
     private var previous: AuthSession? = null
+    private lateinit var onboarding: AuthQaOnboardingState
 
-    @Before fun prepare() { previous = store.read(); store.clear() }
+    @Before fun prepare() {
+        onboarding = AuthQaOnboardingState(context).also { it.skip() }
+        previous = store.read(); store.clear()
+    }
     @After fun cleanUp() {
         instrumentation.runOnMainSync {
             Stage.entries.filter { it != Stage.DESTROYED }.flatMap {
@@ -36,6 +40,7 @@ class AuthSessionQaTest {
         }
         store.clear()
         previous?.takeIf { it.isValid() }?.let(store::save)
+        onboarding.restore()
     }
 
     private fun waitFor(text: String) = compose.waitUntil(10_000) {

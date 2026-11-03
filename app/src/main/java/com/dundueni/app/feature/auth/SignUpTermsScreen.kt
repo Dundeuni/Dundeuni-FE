@@ -14,6 +14,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -40,6 +41,10 @@ fun SignUpTermsScreen(
     onShowTerm: (SignUpTerm) -> Unit,
     onBack: () -> Unit,
     onNext: () -> Unit,
+    documents: List<SignUpTermsDocument>? = null,
+    ready: Boolean = true,
+    message: String? = null,
+    onRetry: (() -> Unit)? = null,
 ) {
     CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(
         fontFamily = FontFamily(Font(R.font.pretendard_medium)), letterSpacing = 0.sp,
@@ -48,7 +53,7 @@ fun SignUpTermsScreen(
             modifier = Modifier.fillMaxSize().safeDrawingPadding(),
             containerColor = TermsColors.Background,
             topBar = { TermsHeader(onBack) },
-            bottomBar = { TermsFooter(state.canContinue, onNext) },
+            bottomBar = { TermsFooter(ready && state.canContinue, onNext) },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                 Column(
@@ -105,19 +110,21 @@ fun SignUpTermsScreen(
                         SelectionMark(state.allSelected, 24)
                         Column(Modifier.weight(1f).padding(start = 16.dp)) {
                             Text("약관 전체 동의하기", color = TermsColors.Ink, fontSize = 16.sp, lineHeight = 24.sp)
-                            Text("필수 3종 및 선택 약관 일괄 동의", color = TermsColors.Body, fontSize = 12.sp, lineHeight = 16.sp)
+                            Text(if (documents == null) "필수 3종 및 선택 약관 일괄 동의" else "필수 약관 일괄 동의", color = TermsColors.Body, fontSize = 12.sp, lineHeight = 16.sp)
                         }
                         Text(if (state.allSelected) "선택 해제" else "모두 선택",
                             Modifier.background(Color.White, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
                             color = TermsColors.Body, fontSize = 12.sp)
                     }
                     Spacer(Modifier.height(12.dp))
-                    SignUpTerm.entries.forEachIndexed { index, term ->
+                    message?.let { Text(it, Modifier.padding(vertical = 8.dp), color = TermsColors.Body) }
+                    if (onRetry != null) TextButton(onClick = onRetry) { Text("약관 다시 불러오기") }
+                    (documents?.map { it.type } ?: SignUpTerm.entries).forEachIndexed { index, term ->
                         if (index > 0) Spacer(Modifier.height(8.dp))
-                        TermsRow(term, state.selected(term), { onTermChange(term, it) }, { onShowTerm(term) })
+                        TermsRow(term, state.selected(term), { onTermChange(term, it) }, { onShowTerm(term) }, documents?.find { it.type == term }?.title ?: term.title)
                     }
                     Spacer(Modifier.height(24.dp))
-                    Row(
+                    if (documents == null) Row(
                         Modifier.fillMaxWidth().background(Color(0xFFE9EEFB), RoundedCornerShape(16.dp)).padding(16.dp),
                         verticalAlignment = Alignment.Top,
                     ) {
@@ -147,14 +154,14 @@ internal fun TermsHeader(onBack: () -> Unit, backLabel: String = "로그인으�
 }
 
 @Composable
-private fun TermsRow(term: SignUpTerm, selected: Boolean, onChange: (Boolean) -> Unit, onDetails: () -> Unit) {
+private fun TermsRow(term: SignUpTerm, selected: Boolean, onChange: (Boolean) -> Unit, onDetails: () -> Unit, title: String = term.title) {
     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).background(Color.White, RoundedCornerShape(12.dp)), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).heightIn(min = 60.dp).toggleable(selected, role = Role.Checkbox, onValueChange = onChange)
             .semantics { contentDescription = term.title }.padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
             SelectionMark(selected, 20)
             Text(if (term.required) "[필수]" else "[선택]", Modifier.padding(start = 12.dp, end = 4.dp), color = TermsColors.Link, fontSize = 12.sp)
-            Text(term.title, Modifier.weight(1f), color = TermsColors.Ink, fontSize = 14.sp, lineHeight = 20.sp)
+            Text(title, Modifier.weight(1f), color = TermsColors.Ink, fontSize = 14.sp, lineHeight = 20.sp)
         }
         Box(Modifier.size(48.dp).clickable(role = Role.Button, onClick = onDetails)
             .semantics { contentDescription = "${term.title} 전문 보기" }, contentAlignment = Alignment.Center) {

@@ -12,11 +12,24 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.dundueni.app.ui.theme.DundueniFETheme
+import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.auth.AuthDependencies
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 
 class SignUpTermsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val demo = BuildConfig.DEBUG && intent.getBooleanExtra(EmailVerificationActivity.EXTRA_DEMO, false)
+        if (!demo) {
+            showHttpTerms()
+            return
+        }
         setContent {
             DundueniFETheme {
                 var state by rememberSaveable(stateSaver = termsStateSaver) { mutableStateOf(TermsUiState()) }
@@ -44,6 +57,35 @@ class SignUpTermsActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun showHttpTerms() {
+        val model = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return SignUpTermsViewModel(AuthDependencies.termsGateway()) as T
+            }
+        })[SignUpTermsViewModel::class.java]
+        setContent { DundueniFETheme {
+            val loaded by model.uiState.collectAsStateWithLifecycle()
+            var detail by remember { mutableStateOf<SignUpTermsDocument?>(null) }
+            SignUpTermsScreen(
+                state = loaded.selection, onTermChange = model::select, onAllChange = model::selectAll,
+                onShowTerm = { type -> detail = loaded.terms.find { it.type == type } }, onBack = ::finish,
+                onNext = {
+                    model.beginFlow()?.let { id -> startActivity(Intent(this, EmailVerificationActivity::class.java)
+                        .putExtra(SignUpFlowMemory.EXTRA_FLOW_ID, id)) }
+                },
+                documents = loaded.terms, ready = loaded.ready && !loaded.loading,
+                message = if (loaded.loading) "약관을 불러오고 있습니다." else loaded.message,
+                onRetry = if (!loaded.loading) model::load else null,
+            )
+            detail?.let { document -> AlertDialog(
+                onDismissRequest = { detail = null }, title = { Text(document.title) },
+                text = { Text(document.content, Modifier.verticalScroll(rememberScrollState())) },
+                confirmButton = { TextButton(onClick = { detail = null }) { Text("확인") } },
+            ) }
+        } }
     }
 }
 

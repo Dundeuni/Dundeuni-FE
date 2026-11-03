@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [28])
 class BasicInspectionQuotaTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 

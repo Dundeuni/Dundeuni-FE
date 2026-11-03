@@ -109,7 +109,6 @@ class AnalysisViewModelTest {
             AnalysisHttpException(503, "INTERNAL", "private details") to AnalysisUiState.Error(AnalysisErrorKind.HTTP, 503),
             AnalysisProtocolException("private JSON") to AnalysisUiState.Error(AnalysisErrorKind.RESPONSE),
             AnalysisApiConfigurationException("private URL") to AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION),
-            AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, "id", null) to AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS),
             AnalysisFailedException("INTERNAL", "private details") to AnalysisUiState.Error(AnalysisErrorKind.SERVER),
         )
         for ((failure, expected) in failures) {
@@ -118,6 +117,69 @@ class AnalysisViewModelTest {
             runCurrent()
             assertEquals(expected, vm.uiState.value)
             assertFalse(vm.uiState.value.toString().contains("private"))
+        }
+    }
+
+    @Test fun queuedAndAnalyzingPreservePendingAndIgnoreRetry() = runTest {
+        for (status in listOf(AnalysisExecutionStatus.QUEUED, AnalysisExecutionStatus.ANALYZING)) {
+            var calls = 0
+            var preparations = 0
+            val vm = viewModel {
+                calls++
+                throw AnalysisNotCompletedException(status, "id-1", "private details")
+            }
+            val states = mutableListOf<AnalysisUiState>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.toList(states) }
+            vm.analyze(part)
+            runCurrent()
+            val pending = AnalysisUiState.Pending("id-1", status)
+            assertEquals(listOf(AnalysisUiState.Idle, AnalysisUiState.Loading, pending), states)
+            val attemptId = vm.attemptId
+            vm.analyze(part)
+            vm.analyzePrepared { preparations++; part }
+            runCurrent()
+            assertEquals(1, calls)
+            assertEquals(0, preparations)
+            assertEquals(attemptId, vm.attemptId)
+            assertEquals(pending, vm.uiState.value)
+            assertFalse(vm.uiState.value.toString().contains("private"))
+        }
+    }
+
+    @Test fun pendingWithoutValidAnalysisIdProducesResponseError() = runTest {
+        for (status in listOf(AnalysisExecutionStatus.QUEUED, AnalysisExecutionStatus.ANALYZING)) {
+            for (id in listOf(null, "", " \t\n")) {
+                val vm = viewModel { throw AnalysisNotCompletedException(status, id, null) }
+                vm.analyze(part)
+                runCurrent()
+                assertEquals(AnalysisUiState.Error(AnalysisErrorKind.RESPONSE), vm.uiState.value)
+            }
+        }
+    }
+
+    @Test fun httpErrorsUseSafeStatusSpecificMessagesAndFallback() = runTest {
+        val messages = mapOf(
+            400 to "잘못된 분석 요청입니다.",
+            409 to "분석 요청이 충돌했습니다.",
+            410 to "분석 세션이 만료되었습니다.",
+            413 to "이미지 크기가 너무 큽니다.",
+            415 to "지원하지 않는 이미지 형식입니다.",
+            429 to "분석 이용량을 초과했습니다.",
+            503 to "현재 분석 서버를 이용할 수 없습니다.",
+            401 to AnalysisErrorKind.HTTP.message,
+            500 to AnalysisErrorKind.HTTP.message,
+        )
+        for ((status, message) in messages) {
+            val vm = viewModel { throw AnalysisHttpException(status, "INTERNAL", "private details") }
+            vm.analyze(part)
+            runCurrent()
+            val error = vm.uiState.value as AnalysisUiState.Error
+            assertEquals(AnalysisUiState.Error(AnalysisErrorKind.HTTP, status), error)
+            assertEquals(message, error.message)
+            assertFalse(error.message.contains("private"))
+        }
+        for (kind in AnalysisErrorKind.entries.filter { it != AnalysisErrorKind.HTTP }) {
+            assertEquals(kind.message, AnalysisUiState.Error(kind).message)
         }
     }
 

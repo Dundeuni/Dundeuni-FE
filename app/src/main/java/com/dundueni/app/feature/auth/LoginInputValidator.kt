@@ -3,6 +3,7 @@ package com.dundueni.app.feature.auth
 object LoginInputValidator {
     fun emailError(email: String): String? = when {
         email.isBlank() -> "이메일을 입력해 주세요."
+        email.trim().length > 254 -> "이메일은 254자 이하로 입력해 주세요."
         !EMAIL_PATTERN.matches(email.trim()) -> "이메일 형식을 확인해 주세요."
         else -> null
     }

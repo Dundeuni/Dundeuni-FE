@@ -58,6 +58,7 @@ class LoginViewModel(
                 LoginOutcome.ConnectionError
             }
             when (outcome) {
+                is LoginOutcome.Rejected -> state.update { it.copy(submitting = false, message = outcome.reason.message) }
                 is LoginOutcome.Success -> {
                     try {
                         saveSession(outcome.session)

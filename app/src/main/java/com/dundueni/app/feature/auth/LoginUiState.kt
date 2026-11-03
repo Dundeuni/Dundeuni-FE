@@ -19,6 +19,7 @@ sealed interface LoginOutcome {
     data object InvalidCredentials : LoginOutcome
     data object Unavailable : LoginOutcome
     data object ConnectionError : LoginOutcome
+    data class Rejected(val reason: AuthFailure) : LoginOutcome
 }
 
 /** 인증 API 담당자가 연결할 제출 계약. 비밀번호를 저장하거나 로그에 남기지 않는다. */

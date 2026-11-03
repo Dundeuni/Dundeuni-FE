@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.repository.AnalysisExecutionStatus
 
 /**
  * 검사 화면이 무엇을 보여 줄지 결정하는 현재 상태를 표현한다.
@@ -11,12 +12,27 @@ import com.dundueni.app.data.model.AnalysisResult
 sealed interface AnalysisUiState {
     data object Idle : AnalysisUiState
     data object Loading : AnalysisUiState
+    data class Pending(val analysisId: String, val status: AnalysisExecutionStatus) : AnalysisUiState
     data class Success(val result: AnalysisResult) : AnalysisUiState
     // Preserve a safe category, never the exception or raw server message.
     data class Error(
         val kind: AnalysisErrorKind = AnalysisErrorKind.UNKNOWN,
         val httpStatus: Int? = null,
-    ) : AnalysisUiState
+    ) : AnalysisUiState {
+        val message: String
+            get() = if (kind == AnalysisErrorKind.HTTP) {
+                when (httpStatus) {
+                    400 -> "잘못된 분석 요청입니다."
+                    409 -> "분석 요청이 충돌했습니다."
+                    410 -> "분석 세션이 만료되었습니다."
+                    413 -> "이미지 크기가 너무 큽니다."
+                    415 -> "지원하지 않는 이미지 형식입니다."
+                    429 -> "분석 이용량을 초과했습니다."
+                    503 -> "현재 분석 서버를 이용할 수 없습니다."
+                    else -> kind.message
+                }
+            } else kind.message
+    }
 }
 
 enum class AnalysisErrorKind(val message: String) {

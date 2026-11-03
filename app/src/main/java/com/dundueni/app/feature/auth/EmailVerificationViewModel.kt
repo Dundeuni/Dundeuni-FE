@@ -20,8 +20,12 @@ class EmailVerificationViewModel(
     val uiState = state.asStateFlow()
     internal var resetGrant: String? = null
         private set
+    internal var signUpGrant: VerifyCodeOutcome.VerifiedForSignUp? = null
+        private set
     private var challengeId: String? = null
     private var expiresAt = 0L
+    private var resendAt = 0L
+    private var verifyRetryAt = 0L
     private var operation: Job? = null
     private var timer: Job? = null
     private var revision = 0
@@ -32,8 +36,11 @@ class EmailVerificationViewModel(
         operation?.cancel()
         timer?.cancel()
         resetGrant = null
+        signUpGrant = null
         challengeId = null
         expiresAt = 0
+        resendAt = 0
+        verifyRetryAt = 0
         state.value = EmailVerificationUiState(email = value)
     }
 
@@ -46,7 +53,8 @@ class EmailVerificationViewModel(
     }
 
     fun sendCode() {
-        if (state.value.busy || state.value.verified) return
+        refreshTimer()
+        if (!state.value.canSendCode) return
         val input = state.value.email.trim()
         val error = LoginInputValidator.emailError(input)
         if (error != null) {
@@ -61,20 +69,23 @@ class EmailVerificationViewModel(
                 if (generation != revision) return@launch
                 when (response) {
                     is SendCodeOutcome.Sent -> {
-                        require(response.validForSeconds in 1..86400 && response.challengeId.isNotBlank())
+                        require(response.validForSeconds > 0 && response.challengeId.isNotBlank())
                         challengeId = response.challengeId
-                        expiresAt = now() + response.validForSeconds * 1000L
+                        signUpGrant = null
+                        expiresAt = response.expiresAtElapsedMillis ?: (now() + response.validForSeconds * 1000L)
+                        resendAt = response.resendAtElapsedMillis ?: (now() + response.resendAfterSeconds * 1000L)
+                        verifyRetryAt = 0
                         state.value = EmailVerificationUiState(email = input, hasSentCode = true, remainingSeconds = response.validForSeconds)
-                        timer?.cancel()
-                        timer = viewModelScope.launch {
-                            while (state.value.active && !state.value.verified) {
-                                delay(1000)
-                                refreshTimer()
-                            }
-                        }
+                        refreshTimer()
+                        startTimer()
                     }
                     SendCodeOutcome.Unavailable -> state.update { it.copy(busy = false, notice = "이메일 인증 연결을 준비 중입니다.") }
-                    is SendCodeOutcome.Failed -> state.update { it.copy(busy = false, notice = response.message) }
+                    is SendCodeOutcome.Failed -> {
+                        response.retryAfterSeconds?.let { resendAt = now() + it * 1000L }
+                        state.update { it.copy(busy = false, notice = response.message) }
+                        refreshTimer()
+                        startTimer()
+                    }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
@@ -84,10 +95,30 @@ class EmailVerificationViewModel(
     }
 
     fun refreshTimer() {
+        if (signUpGrant?.let { it.expiresAtElapsedMillis <= now() } == true) invalidateSignUpGrant()
+        state.update { it.copy(resendRemainingSeconds = secondsUntil(resendAt), verifyRetryRemainingSeconds = secondsUntil(verifyRetryAt)) }
         if (!state.value.hasSentCode || state.value.verified) return
         val remaining = ceil((expiresAt - now()).coerceAtLeast(0) / 1000.0).toInt()
         state.update { it.copy(remainingSeconds = remaining,
             codeError = if (remaining == 0) "인증 시간이 만료되었습니다. 새 번호를 받아 주세요." else it.codeError) }
+    }
+
+    private fun secondsUntil(deadline: Long) = ceil((deadline - now()).coerceAtLeast(0) / 1000.0).toInt()
+
+    private fun startTimer() {
+        timer?.cancel()
+        timer = viewModelScope.launch {
+            while ((state.value.active && !state.value.verified) || signUpGrant != null || state.value.resendRemainingSeconds > 0 || state.value.verifyRetryRemainingSeconds > 0) {
+                delay(1000)
+                refreshTimer()
+            }
+        }
+    }
+
+    fun invalidateSignUpGrant() {
+        signUpGrant = null
+        challengeId = null
+        state.update { it.copy(verified = false, navigationPending = false, hasSentCode = false, code = "", notice = AuthFailure.VERIFICATION_EXPIRED.message) }
     }
 
     fun checkCode(onVerified: (String) -> Unit) {
@@ -107,11 +138,19 @@ class EmailVerificationViewModel(
                 val response = gateway.verifyCode(challenge, code)
                 if (generation != revision) return@launch
                 refreshTimer()
-                if (!state.value.active) {
-                    state.update { it.copy(busy = false) }
-                    return@launch
-                }
                 when (response) {
+                    is VerifyCodeOutcome.VerifiedForSignUp -> {
+                        require(response.token.isNotBlank() && response.expiresAtElapsedMillis > now())
+                        signUpGrant = response
+                        state.update { it.copy(busy = false, verified = true, navigationPending = true, code = "", codeError = null, notice = "이메일 인증을 완료했습니다.") }
+                        startTimer()
+                        onVerified(state.value.email)
+                    }
+                    is VerifyCodeOutcome.Failed -> {
+                        response.retryAfterSeconds?.let { verifyRetryAt = now() + it * 1000L }
+                        state.update { it.copy(busy = false, notice = response.reason.message) }
+                        refreshTimer()
+                    }
                     VerifyCodeOutcome.Verified, is VerifyCodeOutcome.VerifiedForReset -> {
                         resetGrant = (response as? VerifyCodeOutcome.VerifiedForReset)?.grant?.also { require(it.isNotBlank()) }
                         timer?.cancel()

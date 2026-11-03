@@ -89,6 +89,7 @@ class PasswordResetViewModel(private val gateway: PasswordResetGateway) : ViewMo
 }
 
 internal object UnconnectedPasswordResetGateway : PasswordResetGateway {
+    // TODO(BE_CONTRACT): reset-purpose send/verify/change endpoints and grants are not specified.
     override suspend fun sendCode(email: String) = SendCodeOutcome.Unavailable
     override suspend fun verifyCode(challengeId: String, code: String) = VerifyCodeOutcome.Unavailable
     override suspend fun resetPassword(grant: String, password: String) = PasswordResetOutcome.Unavailable
