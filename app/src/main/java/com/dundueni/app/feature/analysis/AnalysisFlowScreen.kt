@@ -49,6 +49,7 @@ fun AnalysisFlowScreen(
             AnalysisUiState.Idle -> Text("검사 준비 중")
             AnalysisUiState.Loading -> Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
+            is AnalysisUiState.Pending -> Text("분석 요청이 접수되었으며 서버에서 처리 중입니다.")
             is AnalysisUiState.Error -> Unit
         }
         if (state !is AnalysisUiState.Error) {
@@ -65,7 +66,7 @@ fun AnalysisFlowScreen(
             val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
             InspectionErrorDialog(
                 message = buildString {
-                    append(state.kind.message)
+                    append(state.message)
                     state.httpStatus?.let { append("\nHTTP 상태: $it") }
                     if (canRetry) append("\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
                 },

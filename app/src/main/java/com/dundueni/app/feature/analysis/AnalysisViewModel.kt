@@ -46,7 +46,7 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
     @MainThread
     fun analyzePrepared(prepare: suspend () -> MultipartBody.Part) {
         // 빠른 재클릭으로 같은 이미지를 중복 준비하거나 분석 요청이 겹치는 것을 막는다.
-        if (requestJob?.isActive == true) return
+        if (requestJob?.isActive == true || mutableUiState.value is AnalysisUiState.Pending) return
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
@@ -71,16 +71,20 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
                 }
                 mutableUiState.value = if (!inputPrepared) {
                     AnalysisUiState.Error(AnalysisErrorKind.INPUT)
-                } else exception.toUiError()
+                } else exception.toUiState()
             }
         }
     }
 
-    private fun Exception.toUiError(): AnalysisUiState.Error = when (this) {
+    private fun Exception.toUiState(): AnalysisUiState = when (this) {
         is AnalysisApiConfigurationException -> AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION)
         is AnalysisHttpException -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus)
         is AnalysisProtocolException -> AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
-        is AnalysisNotCompletedException -> AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS)
+        is AnalysisNotCompletedException -> {
+            val id = analysisId
+            if (id.isNullOrBlank()) AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
+            else AnalysisUiState.Pending(id, status)
+        }
         is AnalysisFailedException -> AnalysisUiState.Error(AnalysisErrorKind.SERVER)
         // SocketTimeoutException and OkHttp call timeouts both extend InterruptedIOException.
         is InterruptedIOException -> AnalysisUiState.Error(AnalysisErrorKind.TIMEOUT)
