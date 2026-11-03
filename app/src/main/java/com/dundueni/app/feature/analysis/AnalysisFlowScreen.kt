@@ -5,53 +5,82 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultRoute
+import com.dundueni.app.ui.component.InspectionErrorDialog
+import com.dundueni.app.ui.component.InspectionLoadingDialog
 
 /**
  * 전달받은 검사 상태에 맞춰 준비·로딩·결과·실패 안내를 보여 주는 화면이다.
  * 직접 이미지를 읽거나 API를 호출하지 않고 결과와 동작을 외부에서 받는다.
  * 재시도 버튼은 Activity의 입력 준비 흐름을 다시 시작하도록 요청한다.
  * 닫기 버튼도 전달받은 동작을 실행하며 화면 종료와 자원 정리는 Activity가 맡는다.
- * Fake 결과는 PB-05에 전달하고, 최종 판정 계약이 없는 실제 결과는 서버 정보만 표시한다.
+ * Fake 결과는 샘플 판정을 포함해 PB-05에 전달하고, 실제 결과는 판정 미확정 상태로 같은 화면에 전달한다.
  */
 @Composable
 fun AnalysisFlowScreen(
     state: AnalysisUiState,
     onRetry: () -> Unit,
     onClose: () -> Unit,
+    onHome: () -> Unit,
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
+    historyType: HistoryType = HistoryType.IMAGE,
 ) {
-    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)
+    // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
+    var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
+    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.copy(historyType = historyType)
     if (presented != null) {
-        AnalysisResultRoute(presented, onReturn = onClose, isDemo = isDemo)
+        AnalysisResultRoute(presented, onReturn = onClose, onHome = onHome, isDemo = isDemo)
         return
     }
     Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
         if (isDemo) Text("Mock 검사 — 실제 이미지 분석 결과가 아닙니다.")
         when (state) {
             AnalysisUiState.Idle -> Text("검사 준비 중")
-            AnalysisUiState.Loading -> {
-                CircularProgressIndicator()
-                Text("분석 중")
-            }
+            AnalysisUiState.Loading -> Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
-            AnalysisUiState.Error -> {
-                Text("검사에 실패했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요.")
-                Button(onClick = onRetry) { Text("다시 시도") }
+            is AnalysisUiState.Error -> Unit
+        }
+        if (state !is AnalysisUiState.Error) {
+            Button(onClick = onClose) {
+                Text(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기")
             }
         }
-        Button(onClick = onClose) { Text("닫기") }
+    }
+    when (state) {
+        AnalysisUiState.Loading -> if (!loadingPopupDismissed) {
+            InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+        }
+        is AnalysisUiState.Error -> {
+            val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
+            InspectionErrorDialog(
+                message = buildString {
+                    append(state.kind.message)
+                    state.httpStatus?.let { append("\nHTTP 상태: $it") }
+                    if (canRetry) append("\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
+                },
+                onRetry = {
+                    loadingPopupDismissed = false
+                    onRetry()
+                },
+                onCancelInspection = onClose,
+                showRetry = canRetry,
+            )
+        }
+        else -> Unit
     }
 }
 
-/** aiRiskLevel is an unconfirmed provider string, never an overall safety verdict. */
 @Composable
 fun AnalysisResultContent(result: AnalysisResult) {
     Text("최종 위험 판정 미확정")

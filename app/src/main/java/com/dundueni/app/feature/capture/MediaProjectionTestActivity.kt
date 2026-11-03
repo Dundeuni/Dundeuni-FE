@@ -29,6 +29,9 @@ class MediaProjectionTestActivity : ComponentActivity() {
         const val PERMISSION_APPROVED = 2
         const val PERMISSION_CANCELLED = 3
         const val CHECK_REQUEST = 4
+        const val PERMISSION_LAUNCH_FAILED = 5
+        const val CAPTURE_SERVICE_START_FAILED = 6
+        private const val STATE_FAILURE = "permission_failure"
         private const val STATE_COMPLETED = "permission_completed"
         private const val STATE_STARTED = "service_started"
         private const val STATE_REQUESTED = "permission_requested"
@@ -37,6 +40,7 @@ class MediaProjectionTestActivity : ComponentActivity() {
     private var receiver: ResultReceiver? = null
     private var completed = false
     private var serviceStarted = false
+    private var failureCode = 0
     private var permissionRequested = false
     private val handler = Handler(Looper.getMainLooper())
     private val ownerTimeout = Runnable { finish() }
@@ -57,6 +61,7 @@ class MediaProjectionTestActivity : ComponentActivity() {
                         serviceStarted = true
                     } catch (error: Exception) {
                         Log.e("ProjectionPermission", "캡처 서비스 시작 실패", error)
+                        failureCode = CAPTURE_SERVICE_START_FAILED
                     }
                     finish()
                 }
@@ -72,6 +77,7 @@ class MediaProjectionTestActivity : ComponentActivity() {
         receiver = resultReceiver
         completed = savedInstanceState?.getBoolean(STATE_COMPLETED) ?: false
         serviceStarted = savedInstanceState?.getBoolean(STATE_STARTED) ?: false
+        failureCode = savedInstanceState?.getInt(STATE_FAILURE) ?: 0
         permissionRequested = savedInstanceState?.getBoolean(STATE_REQUESTED) ?: false
         if (receiver == null || completed) {
             finish()
@@ -92,6 +98,7 @@ class MediaProjectionTestActivity : ComponentActivity() {
                 captureLauncher.launch(captureIntent)
             } catch (error: Exception) {
                 Log.e("ProjectionPermission", "화면 공유 승인 화면 실행 실패", error)
+                failureCode = PERMISSION_LAUNCH_FAILED
                 completed = true
                 finish()
             }
@@ -114,6 +121,7 @@ class MediaProjectionTestActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_COMPLETED, completed)
         outState.putBoolean(STATE_STARTED, serviceStarted)
+        outState.putInt(STATE_FAILURE, failureCode)
         outState.putBoolean(STATE_REQUESTED, permissionRequested)
         super.onSaveInstanceState(outState)
     }
@@ -123,7 +131,12 @@ class MediaProjectionTestActivity : ComponentActivity() {
         super.onDestroy()
         // Do not arm capture while this Activity is still alive, or on configuration change.
         if (!isChangingConfigurations) {
-            receiver?.send(if (serviceStarted) PERMISSION_APPROVED else PERMISSION_CANCELLED, null)
+            val resultCode = when {
+                failureCode != 0 -> failureCode
+                serviceStarted -> PERMISSION_APPROVED
+                else -> PERMISSION_CANCELLED
+            }
+            receiver?.send(resultCode, null)
         }
     }
 }

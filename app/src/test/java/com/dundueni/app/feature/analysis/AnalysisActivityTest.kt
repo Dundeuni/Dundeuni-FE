@@ -8,10 +8,13 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
+import com.dundueni.app.BuildConfig
 import java.io.ByteArrayInputStream
 import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Rule
+import org.junit.Before
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -24,6 +27,12 @@ import org.robolectric.annotation.Config
 class AnalysisActivityTest {
     @get:Rule val compose = createEmptyComposeRule()
     private val context = RuntimeEnvironment.getApplication()
+
+    @Before fun useOnlyFakeTransportInActivityTests() {
+        // Never upload test images to a developer's configured REAL server.
+        assumeTrue("Activity smoke tests require a FAKE build",
+            BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true))
+    }
 
     private fun assertMockResult() {
         compose.waitUntil(10_000) {

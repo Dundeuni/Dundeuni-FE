@@ -14,7 +14,7 @@ class AnalysisResultPresentationMapperTest {
     )
 
     @Test fun demoStatesPreserveDataWithoutDerivingFraudOrAiLevelsFromScores() {
-        for (level in RiskLevel.entries) {
+        for (level in listOf(RiskLevel.SAFE, RiskLevel.CAUTION, RiskLevel.DANGER)) {
             val mapped = checkNotNull(result.copy(aiRiskLevel = "MOCK_${level.name}").toPb05Result(true))
             assertEquals(level, mapped.riskLevel)
             assertEquals(result.analysisId, mapped.id)
@@ -27,10 +27,19 @@ class AnalysisResultPresentationMapperTest {
         }
     }
 
-    @Test fun realProviderValuesNeverBecomeAnOverallVerdictEvenWhenTheyResembleDemoValues() {
+    @Test fun realProviderValuesUseSharedLayoutWithoutBecomingAnOverallVerdict() {
         for (risk in listOf("SAFE", "CAUTION", "DANGER", "LOW", "MOCK_SAFE", "MOCK_DANGER", null)) {
-            assertNull(result.copy(aiRiskLevel = risk).toPb05Result(false))
+            val mapped = checkNotNull(result.copy(aiRiskLevel = risk).toPb05Result(false))
+            assertEquals(RiskLevel.UNKNOWN, mapped.riskLevel)
+            assertEquals(risk?.trim()?.take(60), mapped.aiRiskLabel)
+            assertNull(mapped.fraudLevel)
+            assertNull(mapped.fraudScore)
         }
+    }
+
+    @Test fun realAiLikelihoodOnlyMapsKnownLikelihoodValues() {
+        assertEquals(AiLikelihood.HIGH, result.copy(aiRiskLevel = "HIGH").toPb05Result(false)?.aiLikelihood)
+        assertEquals(AiLikelihood.UNKNOWN, result.copy(aiRiskLevel = "SERVER_RISK").toPb05Result(false)?.aiLikelihood)
     }
 
     @Test fun unknownOrIncompleteDemoDataIsNotMapped() {

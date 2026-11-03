@@ -1,14 +1,15 @@
 package com.dundueni.app.feature.analysisresult
 
 import java.util.Locale
+import com.dundueni.app.feature.history.HistoryType
 
 /** The overall verdict comes from the analysis service; the UI never derives it from scores. */
 enum class RiskLevel(val label: String) {
-    SAFE("안전"), CAUTION("주의"), DANGER("위험");
+    SAFE("안전"), CAUTION("주의"), DANGER("위험"), UNKNOWN("판정 미확정");
 
     companion object {
         fun fromWireValue(value: String): RiskLevel =
-            entries.firstOrNull { it.name == value.trim().uppercase(Locale.ROOT) }
+            entries.firstOrNull { it != UNKNOWN && it.name == value.trim().uppercase(Locale.ROOT) }
                 ?: throw IllegalArgumentException("지원하지 않는 위험 단계입니다: $value")
     }
 }
@@ -32,11 +33,13 @@ data class AnalysisResult(
     val fraudLevel: RiskLevel? = null,
     val fraudScore: Double? = null,
     val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
+    val aiRiskLabel: String? = null,
     val aiScore: Double? = null,
     val evidence: List<RiskEvidence> = emptyList(),
     val sourceText: String? = null,
     val sourceUrl: String? = null,
     val targetLabel: String = "수신된 문자 메시지 및 첨부 링크",
+    val historyType: HistoryType = HistoryType.UNKNOWN,
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }
@@ -47,5 +50,5 @@ data class AnalysisResult(
 }
 
 enum class ResultAction {
-    RETURN, PROFILE, CALL_FAMILY, SHARE, REPORT, PREVIEW_DOMAIN, ASK_FAMILY, SAVE_HISTORY
+    RETURN, HOME, PROFILE, CALL_FAMILY, SHARE, REPORT, PREVIEW_DOMAIN, ASK_FAMILY, SAVE_HISTORY
 }

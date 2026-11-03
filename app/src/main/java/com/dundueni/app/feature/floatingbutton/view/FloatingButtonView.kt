@@ -40,7 +40,7 @@ object FloatingButtonView {
 
     fun setMenuOpen(button: ImageButton, isOpen: Boolean) {
         button.setImageResource(
-            if (isOpen) R.drawable.ic_floating_close else R.drawable.dundeuni_mascot_default
+            if (isOpen) R.drawable.ic_floating_menu_close else R.drawable.dundeuni_mascot_default
         )
         button.contentDescription = if (isOpen) "메뉴 닫기" else "메뉴 열기"
     }

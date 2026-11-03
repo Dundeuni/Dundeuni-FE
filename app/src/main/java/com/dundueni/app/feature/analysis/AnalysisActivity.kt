@@ -5,18 +5,34 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dundueni.app.data.auth.AuthSessionRuntime
+import com.dundueni.app.feature.auth.LoginActivity
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.data.model.ImageInput
+import com.dundueni.app.feature.home.returnToHome
+import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.launch
 
 /** 기존 Activity 전환 방식으로 연결하는 내부 검사 화면입니다. */
 /**
@@ -27,11 +43,35 @@ import java.io.File
  * 재시도 시 같은 입력을 다시 준비하며, 실제 종료 시 캡처 캐시를 정리한다.
  */
 class AnalysisActivity : ComponentActivity() {
+    private val overlayOwner = "image-analysis:${UUID.randomUUID()}"
     private lateinit var viewModel: AnalysisViewModel
     private var captureFile: File? = null
+    private var redirectingToLogin = false
+
+    override fun onStart() {
+        super.onStart()
+        if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
+            FloatingButtonManager.suspendForActivity(overlayOwner)
+        }
+    }
+
+    override fun onStop() {
+        if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
+            FloatingButtonManager.resumeForActivity(overlayOwner)
+        }
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val initialUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AuthSessionRuntime.unauthorizedRevision.collect { revision ->
+                    if (revision > initialUnauthorizedRevision) redirectToLogin()
+                }
+            }
+        }
         captureFile = intent.getStringExtra(EXTRA_CAPTURE_FILENAME)?.let { name ->
             // 내부 캐시 하위의 파일명만 허용합니다. 외부 경로는 받지 않습니다.
             if (name == File(name).name) File(captureDirectory(this), name) else null
@@ -41,24 +81,44 @@ class AnalysisActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == AnalysisViewModel::class.java)
                 @Suppress("UNCHECKED_CAST")
-                return AnalysisViewModel(AnalysisFlowDependencies.createRepository()) as T
+                return AnalysisViewModel(AnalysisFlowDependencies.createRepository(applicationContext)) as T
             }
         })[AnalysisViewModel::class.java]
 
         // 회전 시 진행 중 요청/결과는 ViewModel에서 유지합니다. 프로세스 재생성 시에는 재시도합니다.
-        if (viewModel.uiState.value == AnalysisUiState.Idle) startAnalysis()
+        if (viewModel.uiState.value == AnalysisUiState.Idle) {
+            if (showLimitIfExhausted(this)) { finish(); return }
+            startAnalysis()
+        }
         setContent {
             DundueniFETheme {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
+                val success = state as? AnalysisUiState.Success
+                // Fake transport reuses its server analysis ID; each completed request uses its own local attempt ID.
+                val resultId = if (success != null) viewModel.attemptId else null
+                LaunchedEffect(resultId) {
+                    if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
+                    if (BasicInspectionQuota(this@AnalysisActivity).recordCompleted(resultId)) {
+                        allowedResultId = resultId
+                    } else {
+                        showLimitIfExhausted(this@AnalysisActivity)
+                        finish()
+                    }
+                }
                 Box(Modifier.safeDrawingPadding()) {
-                    AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish)
+                    if (resultId == null || allowedResultId == resultId) {
+                        AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome,
+                            historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE)
+                    }
                 }
             }
         }
     }
 
     private fun startAnalysis() {
+        if (showLimitIfExhausted(this)) { finish(); return }
         val processor = AnalysisInputProcessor(applicationContext.contentResolver, applicationContext.cacheDir)
         val file = captureFile
         val uri = intent.data
@@ -69,6 +129,17 @@ class AnalysisActivity : ComponentActivity() {
         }
     }
 
+    private fun redirectToLogin() {
+        if (redirectingToLogin || isFinishing) return
+        redirectingToLogin = true
+        FloatingButtonManager.stop(this)
+        stopService(Intent(this, com.dundueni.app.feature.capture.MediaProjectionService::class.java))
+        startActivity(Intent(this, LoginActivity::class.java).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
+        ))
+        finishAffinity()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // 회전 중에는 파일을 유지하고, 사용자가 검사 화면을 끝낼 때 삭제한다.
@@ -77,18 +148,21 @@ class AnalysisActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_CAPTURE_FILENAME = "analysis_capture_filename"
+        private const val EXTRA_SUSPEND_FLOATING_BUTTON = "suspend_floating_button"
         fun captureDirectory(context: Context): File = File(context.cacheDir, "analysis_captures").apply { mkdirs() }
 
-        fun forPhoto(context: Context, uri: Uri): Intent = Intent(context, AnalysisActivity::class.java).apply {
+        fun forPhoto(context: Context, uri: Uri, suspendFloatingButton: Boolean = false): Intent = Intent(context, AnalysisActivity::class.java).apply {
             data = uri
             clipData = ClipData.newRawUri("analysis image", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            putExtra(EXTRA_SUSPEND_FLOATING_BUTTON, suspendFloatingButton)
         }
 
         fun forCapture(context: Context, file: File): Intent = Intent(context, AnalysisActivity::class.java).apply {
             require(file.parentFile?.canonicalFile == captureDirectory(context).canonicalFile)
             putExtra(EXTRA_CAPTURE_FILENAME, file.name)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(EXTRA_SUSPEND_FLOATING_BUTTON, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
         }
     }
 }

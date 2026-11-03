@@ -4,6 +4,13 @@ import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.data.repository.AnalysisResultRepository
+import com.dundueni.app.data.remote.api.AnalysisHttpException
+import com.dundueni.app.data.remote.api.AnalysisProtocolException
+import com.dundueni.app.data.repository.AnalysisFailedException
+import com.dundueni.app.data.repository.AnalysisNotCompletedException
+import java.io.IOException
+import java.io.InterruptedIOException
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -26,6 +33,8 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
     private val mutableUiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = mutableUiState.asStateFlow()
     private var requestJob: Job? = null
+    var attemptId: String = UUID.randomUUID().toString()
+        private set
 
     /** UI 메인 스레드에서 호출합니다. 진행 중 재요청은 무시하며 완료 후 재시도할 수 있습니다. */
     @MainThread
@@ -38,11 +47,15 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
     fun analyzePrepared(prepare: suspend () -> MultipartBody.Part) {
         // 빠른 재클릭으로 같은 이미지를 중복 준비하거나 분석 요청이 겹치는 것을 막는다.
         if (requestJob?.isActive == true) return
+        attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
+            var inputPrepared = false
             try {
                 // 먼저 이미지를 준비한 뒤 분석을 요청하며, 어느 단계의 실패든 아래에서 처리한다.
-                val result = checkNotNull(repository.analyzeResult(prepare()))
+                val image = prepare()
+                inputPrepared = true
+                val result = checkNotNull(repository.analyzeResult(image))
                 ensureActive()
                 // 서버 값은 보존하고, 최종 판정 표시 여부는 화면 매핑에서 결정합니다.
                 mutableUiState.value = AnalysisUiState.Success(result)
@@ -56,8 +69,22 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
                     mutableUiState.value = AnalysisUiState.Idle
                     ensureActive()
                 }
-                mutableUiState.value = AnalysisUiState.Error
+                mutableUiState.value = if (!inputPrepared) {
+                    AnalysisUiState.Error(AnalysisErrorKind.INPUT)
+                } else exception.toUiError()
             }
         }
+    }
+
+    private fun Exception.toUiError(): AnalysisUiState.Error = when (this) {
+        is AnalysisApiConfigurationException -> AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION)
+        is AnalysisHttpException -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus)
+        is AnalysisProtocolException -> AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
+        is AnalysisNotCompletedException -> AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS)
+        is AnalysisFailedException -> AnalysisUiState.Error(AnalysisErrorKind.SERVER)
+        // SocketTimeoutException and OkHttp call timeouts both extend InterruptedIOException.
+        is InterruptedIOException -> AnalysisUiState.Error(AnalysisErrorKind.TIMEOUT)
+        is IOException -> AnalysisUiState.Error(AnalysisErrorKind.CONNECTION)
+        else -> AnalysisUiState.Error()
     }
 }

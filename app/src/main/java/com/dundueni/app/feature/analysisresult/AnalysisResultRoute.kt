@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -15,13 +16,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
+import com.dundueni.app.feature.history.HistoryStore
 
 @Composable
-fun AnalysisResultRoute(result: AnalysisResult, onReturn: () -> Unit, isDemo: Boolean = false) {
+fun AnalysisResultRoute(
+    result: AnalysisResult,
+    onReturn: () -> Unit,
+    onHome: () -> Unit,
+    isDemo: Boolean = false,
+) {
+    BackHandler(onBack = onReturn)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE) }
+    val historyStore = remember(context) { HistoryStore(context) }
     var saved by rememberSaveable(result.id) { mutableStateOf(hasSavedResult(preferences.getString("results", "[]"), result.id)) }
     var saving by remember { mutableStateOf(false) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
@@ -52,6 +60,7 @@ fun AnalysisResultRoute(result: AnalysisResult, onReturn: () -> Unit, isDemo: Bo
     AnalysisResultScreen(result, historySaved = saved, isDemo = isDemo, onAction = { action ->
         when (action) {
             ResultAction.RETURN -> onReturn()
+            ResultAction.HOME -> onHome()
             ResultAction.PROFILE -> Toast.makeText(context, "계정 메뉴를 사용할 수 없어요.", Toast.LENGTH_SHORT).show()
             ResultAction.CALL_FAMILY -> open(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
             ResultAction.SHARE, ResultAction.ASK_FAMILY -> share()
@@ -62,24 +71,10 @@ fun AnalysisResultRoute(result: AnalysisResult, onReturn: () -> Unit, isDemo: Bo
                     Toast.makeText(context, "샘플 결과는 실제 검사 기록에 보관하지 않아요.", Toast.LENGTH_SHORT).show()
                 } else if (!saved && !saving) {
                     saving = true
-                    scope.launch {
+                    scope.launch(Dispatchers.Main.immediate) {
                         val success = withContext(Dispatchers.IO) {
                             runCatching {
-                                val previous = JSONArray(preferences.getString("results", "[]"))
-                                val updated = JSONArray()
-                                updated.put(JSONObject().apply {
-                                    put("id", result.id)
-                                    put("riskLevel", result.riskLevel.name)
-                                    put("savedAt", System.currentTimeMillis())
-                                    result.fraudScore?.let { put("fraudScore", it) }
-                                    result.aiScore?.let { put("aiScore", it) }
-                                })
-                                for (index in 0 until previous.length()) {
-                                    val item = previous.getJSONObject(index)
-                                    if (item.optString("id") != result.id && updated.length() < 50) updated.put(item)
-                                }
-                                // No original message, URL, evidence, or personally identifying text is persisted.
-                                preferences.edit().putString("results", updated.toString()).commit()
+                                historyStore.save(result)
                             }.getOrDefault(false)
                         }
                         saved = success
@@ -115,4 +110,3 @@ private fun hasSavedResult(json: String?, id: String): Boolean = runCatching {
     val results = JSONArray(json ?: "[]")
     (0 until results.length()).any { results.getJSONObject(it).optString("id") == id }
 }.getOrDefault(false)
-

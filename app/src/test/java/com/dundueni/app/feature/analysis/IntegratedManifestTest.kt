@@ -22,8 +22,7 @@ class IntegratedManifestTest {
             "feature.photopicker.PhotoPickerActivity" to true,
             "feature.capture.MediaProjectionTestActivity" to false,
             "feature.analysisresult.AnalysisResultActivity" to false,
-            "feature.textinput.TextInputActivity" to false,
-            "feature.phoneinput.PhoneInputActivity" to false,
+            "feature.analysisresult.AnalysisResultPreviewActivity" to false,
         )) {
             val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
             assertEquals(name, exported, info.exported)
@@ -35,9 +34,32 @@ class IntegratedManifestTest {
             val info = pm.getServiceInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
             assertFalse(info.exported)
         }
-        val permissions = (pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions ?: emptyArray()).toSet()
+        val permissions = pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+            .requestedPermissions.orEmpty().toSet()
         for (permission in listOf("INTERNET", "SYSTEM_ALERT_WINDOW", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PROJECTION", "FOREGROUND_SERVICE_SPECIAL_USE")) {
             assertTrue(permission, "android.permission.$permission" in permissions)
+        }
+    }
+
+    @Test fun floatingScanActivitiesUseHiddenTemporaryTasks() {
+        val mainAffinity = pm.getActivityInfo(
+            ComponentName(context.packageName, "${context.packageName}.MainActivity"), 0,
+        ).taskAffinity
+        assertNotNull(mainAffinity)
+        for (name in listOf(
+            "feature.photopicker.PhotoPickerActivity",
+            "feature.analysis.AnalysisActivity",
+            "feature.textinput.TextInputActivity",
+        )) {
+            val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
+            assertTrue("$name should launch outside the home task", info.taskAffinity.isNullOrEmpty())
+        }
+        for (name in listOf(
+            "feature.url.UrlInputActivity",
+            "feature.phone.PhoneInputActivity",
+        )) {
+            val info = pm.getActivityInfo(ComponentName(context.packageName, "${context.packageName}.$name"), 0)
+            assertEquals("$name should share the main task", mainAffinity, info.taskAffinity)
         }
     }
 }
