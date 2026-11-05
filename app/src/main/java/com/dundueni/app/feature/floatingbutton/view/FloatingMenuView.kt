@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -20,7 +21,9 @@ object FloatingMenuView {
         onScreenScanClick: () -> Unit,
         onImageScanClick: () -> Unit,
         onTextScanClick: () -> Unit,
-        onPhoneScanClick: () -> Unit
+        onPhoneScanClick: () -> Unit,
+        fontScale: Float = 1f,
+        hapticsEnabled: Boolean = true,
     ): View {
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
@@ -38,11 +41,14 @@ object FloatingMenuView {
                 gravity = Gravity.CENTER_VERTICAL
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { onClick() }
+                setOnClickListener {
+                    if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onClick()
+                }
             }
             val pill = TextView(context).apply {
                 text = label
-                textSize = 18f
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f * fontScale.coerceIn(.6f, 1.6f))
                 setTextColor(Color.rgb(18, 28, 44))
                 gravity = Gravity.CENTER
                 includeFontPadding = false
@@ -94,7 +100,7 @@ object FloatingMenuView {
         addItem("AI 화면 검사", R.drawable.menu_icon_screen, firstTop, 0, onScreenScanClick)
         addItem("이미지 검사", R.drawable.menu_icon_image, firstTop + 58, 28, onImageScanClick)
         addItem("텍스트 검사", R.drawable.menu_icon_text, firstTop + 116, 30, onTextScanClick)
-        addItem("전화번호 검사", android.R.drawable.ic_menu_call, firstTop + 174, 0, onPhoneScanClick)
+        addItem("전화번호 검사", R.drawable.menu_icon_phone, firstTop + 174, 0, onPhoneScanClick)
 
         return container
     }

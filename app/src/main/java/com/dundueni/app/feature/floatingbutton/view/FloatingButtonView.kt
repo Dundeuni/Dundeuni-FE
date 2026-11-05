@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.floatingbutton.view
 
 import android.content.Context
+import android.view.HapticFeedbackConstants
 import android.widget.ImageButton
 import android.widget.ImageView
 import com.dundueni.app.R
@@ -14,7 +15,11 @@ import com.dundueni.app.R
  */
 object FloatingButtonView {
 
-    fun create(context: Context, onClick: () -> Unit): ImageButton {
+    fun create(
+        context: Context,
+        hapticsEnabled: () -> Boolean = { true },
+        onClick: () -> Unit,
+    ): ImageButton {
 
         return ImageButton(context).apply {
 
@@ -33,6 +38,7 @@ object FloatingButtonView {
 
             // 클릭 동작
             setOnClickListener {
+                if (hapticsEnabled()) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 onClick()
             }
         }

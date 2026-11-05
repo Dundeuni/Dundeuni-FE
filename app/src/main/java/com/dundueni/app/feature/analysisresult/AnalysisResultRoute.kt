@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AlertDialog
@@ -12,6 +13,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,12 +29,23 @@ fun AnalysisResultRoute(
 ) {
     BackHandler(onBack = onReturn)
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val appSettings = remember(context) { context.getSharedPreferences("dundueni_settings", Context.MODE_PRIVATE) }
+    var riskHapticPlayed by rememberSaveable(result.id) { mutableStateOf(false) }
     val preferences = remember(context) { context.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE) }
     val historyStore = remember(context) { HistoryStore(context) }
     var saved by rememberSaveable(result.id) { mutableStateOf(hasSavedResult(preferences.getString("results", "[]"), result.id)) }
     var saving by remember { mutableStateOf(false) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(result.id, isDemo) {
+        val isWarning = result.riskLevel == RiskLevel.CAUTION || result.riskLevel == RiskLevel.DANGER
+        if (!isDemo && isWarning && !riskHapticPlayed && appSettings.getBoolean("haptics", true)) {
+            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            riskHapticPlayed = true
+        }
+    }
 
     fun open(intent: Intent) {
         try {

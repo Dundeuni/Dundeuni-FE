@@ -70,7 +70,7 @@ fun PaymentScreen(remaining: Int, onClose: () -> Unit) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = {
         Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).statusBarsPadding().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onClose) { Text("←", color = Color(0xFF171D2A)) }
-            Text("요금제 안내 및 구독 멤버십", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+            Text("멤버십 구독", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             TextButton(onClick = onClose) { Text("✕", color = Color(0xFF171D2A)) }
         }
     }) { padding ->

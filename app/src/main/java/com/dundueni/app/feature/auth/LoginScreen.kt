@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,6 +57,7 @@ fun LoginScreen(
     onResetPassword: () -> Unit,
     onKakaoLogin: () -> Unit,
     onGoogleLogin: () -> Unit,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val focus = LocalFocusManager.current
@@ -138,6 +140,15 @@ fun LoginScreen(
             Box(Modifier.align(Alignment.BottomCenter).widthIn(max = 480.dp).fillMaxWidth()
                 .background(LoginColors.Background).padding(horizontal = 20.dp, vertical = 8.dp)) {
                 LoginSubmitButton(state, submit, compact = true)
+            }
+        }
+        if (onBack != null) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 4.dp)
+                    .semantics { contentDescription = "뒤로 가기" },
+            ) {
+                Text("←", color = LoginColors.Ink, fontSize = 24.sp)
             }
         }
     }

@@ -1,8 +1,19 @@
 package com.dundueni.app.ui.theme
 
+import android.content.SharedPreferences
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.dundueni.app.feature.floatingbutton.FloatingButtonPreferences
 
 // 든든이 앱의 기본 라이트 컬러 테마 설정
 
@@ -37,12 +48,34 @@ private val LightColorScheme = lightColorScheme(
 fun DundueniFETheme(
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = LightColorScheme,
-        typography = Typography,
-        shapes = DundueniShapes,
-        content = content
-    )
+    val context = LocalContext.current
+    val preferences = remember(context) {
+        context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, android.content.Context.MODE_PRIVATE)
+    }
+    var appTextScale by remember(context) {
+        mutableFloatStateOf(FloatingButtonPreferences.appTextScale(context))
+    }
+    DisposableEffect(preferences) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == FloatingButtonPreferences.KEY_FONT_SIZE || key == FloatingButtonPreferences.KEY_FONT_SCALE) {
+                appTextScale = FloatingButtonPreferences.appTextScale(context)
+            }
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    val density = LocalDensity.current
+    CompositionLocalProvider(
+        LocalDensity provides Density(density.density, density.fontScale * appTextScale),
+    ) {
+        MaterialTheme(
+            colorScheme = LightColorScheme,
+            typography = Typography,
+            shapes = DundueniShapes,
+            content = content,
+        )
+    }
 }
 
 

@@ -18,9 +18,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.feature.floatingbutton.FloatingButtonPreferences
+import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.history.HistoryStore
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeBottomNavigation
@@ -36,14 +39,38 @@ private val Pale = Color(0xFFEAF0FF)
 @Composable
 fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("dundueni_settings", Context.MODE_PRIVATE) }
-    var buttonSize by remember { mutableStateOf(prefs.getString("button_size", "보통") ?: "보통") }
-    var edgeSnap by remember { mutableStateOf(prefs.getBoolean("edge_snap", true)) }
-    var opacity by remember { mutableFloatStateOf(prefs.getFloat("button_opacity", .85f)) }
-    var fontScale by remember { mutableFloatStateOf(prefs.getFloat("font_scale", 1f)) }
-    var haptics by remember { mutableStateOf(prefs.getBoolean("haptics", true)) }
-    var localBackup by remember { mutableStateOf(prefs.getBoolean("local_backup", true)) }
-    var retention by remember { mutableStateOf(prefs.getString("retention", "90일 보관") ?: "90일 보관") }
+    DisposableEffect(Unit) {
+        FloatingButtonManager.suspendForActivity("settings")
+        onDispose { FloatingButtonManager.resumeForActivity("settings") }
+    }
+    val prefs = remember { context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE) }
+    val initialButtonSize = remember { prefs.getString(FloatingButtonPreferences.KEY_SIZE, "보통") ?: "보통" }
+    val initialEdgeSnap = remember { prefs.getBoolean("edge_snap", true) }
+    val initialOpacity = remember { prefs.getFloat(FloatingButtonPreferences.KEY_OPACITY, .85f) }
+    val initialFontSize = remember {
+        prefs.getString(FloatingButtonPreferences.KEY_FONT_SIZE, null) ?: when {
+            prefs.getFloat(FloatingButtonPreferences.KEY_FONT_SCALE, 1f) < .93f -> "작게"
+            prefs.getFloat(FloatingButtonPreferences.KEY_FONT_SCALE, 1f) > 1.08f -> "크게"
+            else -> "보통"
+        }
+    }
+    val initialHaptics = remember { prefs.getBoolean(FloatingButtonPreferences.KEY_HAPTICS, true) }
+    val initialLocalBackup = remember { prefs.getBoolean("local_backup", true) }
+    val initialRetention = remember { prefs.getString("retention", "90일 보관") ?: "90일 보관" }
+    var buttonSize by remember { mutableStateOf(initialButtonSize) }
+    var appliedButtonSize by remember { mutableStateOf(initialButtonSize) }
+    var edgeSnap by remember { mutableStateOf(initialEdgeSnap) }
+    var appliedEdgeSnap by remember { mutableStateOf(initialEdgeSnap) }
+    var opacity by remember { mutableFloatStateOf(initialOpacity) }
+    var appliedOpacity by remember { mutableFloatStateOf(initialOpacity) }
+    var fontSize by remember { mutableStateOf(initialFontSize) }
+    var appliedFontSize by remember { mutableStateOf(initialFontSize) }
+    var haptics by remember { mutableStateOf(initialHaptics) }
+    var appliedHaptics by remember { mutableStateOf(initialHaptics) }
+    var localBackup by remember { mutableStateOf(initialLocalBackup) }
+    var appliedLocalBackup by remember { mutableStateOf(initialLocalBackup) }
+    var retention by remember { mutableStateOf(initialRetention) }
+    var appliedRetention by remember { mutableStateOf(initialRetention) }
     var showClear by remember { mutableStateOf(false) }
     var showRetention by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -55,20 +82,47 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
             }.filter { it.first.isNotBlank() && it.second.isNotBlank() }
         }.getOrDefault(listOf("딸내미 (안심 보호자)" to "010-8291-****")))
     }
+    var appliedFamily by remember { mutableStateOf(family) }
     var familyDialog by remember { mutableStateOf(false) }
     var editingFamily by remember { mutableIntStateOf(-1) }
     var familyName by remember { mutableStateOf("") }
     var familyPhone by remember { mutableStateOf("") }
     BackHandler { onNavigationSelected(HomeDestination.HOME) }
 
-    fun save(key: String, value: Any) {
-        prefs.edit().apply {
-            when (value) {
-                is Boolean -> putBoolean(key, value)
-                is Float -> putFloat(key, value)
-                is String -> putString(key, value)
-            }
-        }.apply()
+    val hasPendingChanges = buttonSize != appliedButtonSize ||
+        edgeSnap != appliedEdgeSnap ||
+        opacity != appliedOpacity ||
+        fontSize != appliedFontSize ||
+        haptics != appliedHaptics ||
+        localBackup != appliedLocalBackup ||
+        retention != appliedRetention ||
+        family != appliedFamily
+
+    fun applySettings() {
+        val editor = prefs.edit()
+            .putString(FloatingButtonPreferences.KEY_SIZE, buttonSize)
+            .putBoolean("edge_snap", edgeSnap)
+            .putFloat(FloatingButtonPreferences.KEY_OPACITY, opacity)
+            .putString(FloatingButtonPreferences.KEY_FONT_SIZE, fontSize)
+            .putBoolean(FloatingButtonPreferences.KEY_HAPTICS, haptics)
+            .putBoolean("local_backup", localBackup)
+            .putString("retention", retention)
+        if (family != appliedFamily) {
+            val familyJson = JSONArray().apply {
+                family.forEach { (name, phone) -> put(JSONObject().put("name", name).put("phone", phone)) }
+            }.toString()
+            editor.putString("family_contacts", familyJson)
+        }
+        editor.apply()
+        appliedButtonSize = buttonSize
+        appliedEdgeSnap = edgeSnap
+        appliedOpacity = opacity
+        appliedFontSize = fontSize
+        appliedHaptics = haptics
+        appliedLocalBackup = localBackup
+        appliedRetention = retention
+        appliedFamily = family
+        onNavigationSelected(HomeDestination.HOME)
     }
     Scaffold(
         containerColor = Bg,
@@ -86,33 +140,41 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 SettingsSection("플로팅 버튼 설정") {
                     Column(Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) { Text("버튼 크기 조절", Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold); Text("$buttonSize (기본 권장)", color = Blue, fontSize = 12.sp) }
+                            Row(verticalAlignment = Alignment.CenterVertically) { Text("크기 조절", Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold); Text("$buttonSize (기본 권장)", color = Blue, fontSize = 12.sp) }
                             Spacer(Modifier.height(10.dp))
                             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Pale).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 listOf("작게", "보통", "크게").forEach { size ->
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (buttonSize == size) Color.White else Color.Transparent).clickable { buttonSize = size; save("button_size", size) }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (buttonSize == size) Color.White else Color.Transparent).clickable { buttonSize = size }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
                                 }
                             }
                         }
-                        SettingToggle("화면 가장자리 자석 고정", "손가락을 떼면 가장 가까운 화면 모서리에\n　착 달라붙어요", edgeSnap) { edgeSnap = it; save("edge_snap", it) }
+                        Box(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                            Text("화면 가장자리 자석 고정", Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                            Switch(edgeSnap, { edgeSnap = it }, Modifier.align(Alignment.CenterEnd), colors = SwitchDefaults.colors(checkedTrackColor = Blue))
+                        }
                         Column {
                             Row { Text("버튼 대기 투명도", Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold); Text("${(opacity * 100).toInt()}%", color = Blue, fontWeight = FontWeight.Bold) }
-                            Slider(opacity, { opacity = it; save("button_opacity", it) }, valueRange = .25f..1f, colors = SliderDefaults.colors(thumbColor = Blue, activeTrackColor = Blue))
+                            Slider(opacity, { opacity = it }, valueRange = .25f..1f, colors = SliderDefaults.colors(thumbColor = Blue, activeTrackColor = Blue))
                         }
                     }
                 }
                 SettingsSection("접근성 및 편의") {
                     Column(Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Column {
-                            Row { Text("글자 크기 미세 조정", Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold); Text("기본 표준 (${(fontScale * 100).toInt()}%)", color = Muted, fontSize = 12.sp) }
-                            Slider(fontScale, { fontScale = it; save("font_scale", it) }, valueRange = .85f..1.2f, colors = SliderDefaults.colors(thumbColor = Blue, activeTrackColor = Blue))
+                            Text("글자 크기", color = Ink, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(10.dp))
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Pale).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("작게", "보통", "크게").forEach { size ->
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (fontSize == size) Color.White else Color.Transparent).clickable { fontSize = size }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
+                                }
+                            }
                         }
-                        SettingToggle("촉각 햅틱 경고 진동", "옵션 저장 UI · 검사 경고 진동 연동 준비 중", haptics) { haptics = it; save("haptics", it) }
+                        SettingToggle("촉각 햅틱 경고 진동", "버튼 조작과 주의·위험 검사 결과에 진동을 적용합니다", haptics) { haptics = it }
                     }
                 }
                 SettingsSection("개인정보 및 데이터 보안") {
                     Column(Modifier.background(Color.White, RoundedCornerShape(16.dp))) {
-                        SettingToggle("검사 기록 기기 내 안전 보관", "기록은 기기에 저장됩니다 · 보관 정책 토글 연동 준비 중", localBackup, badge = "온디바이스") { localBackup = it; save("local_backup", it) }
+                        SettingToggle("검사 기록 기기 내 안전 보관", "기록은 기기에 저장됩니다 · 보관 정책 토글 연동 준비 중", localBackup, badge = "온디바이스") { localBackup = it }
                         SettingAction("분석 캡처 이미지 즉시 영구 파기 원칙", "분석 종료 시 임시 캡처 파일 정리", "✓") { dialog = "캡처 이미지 파기 정책" to "화면 캡처는 분석을 위해 앱 캐시에 임시 파일로 전달되며, 분석 화면이 종료될 때 삭제됩니다. 검사 기록에는 캡처 이미지가 저장되지 않습니다." }
                         SettingAction("검사 기록 보관 주기", "보관주기 선택 UI · 자동 삭제 연동 준비 중", retention) { showRetention = true }
                         Row(Modifier.fillMaxWidth().background(Color(0xFFFFF8F7)).clickable { showClear = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -150,6 +212,20 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                     }
                 }
                 Text("© 든든이 · 개인정보보호 규정을 준수합니다", Modifier.fillMaxWidth(), color = Muted, fontSize = 11.sp)
+                if (hasPendingChanges) {
+                    Text("변경한 설정은 적용 버튼을 눌러야 저장됩니다.", color = Muted, fontSize = 12.sp)
+                }
+                Button(
+                    onClick = ::applySettings,
+                    enabled = hasPendingChanges,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Blue,
+                        disabledContainerColor = Color(0xFFDCE3F0),
+                        disabledContentColor = Muted,
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                ) { Text("적용", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
             }
         }
     }
@@ -174,10 +250,9 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 listOf("30일 보관", "90일 보관", "1년 보관", "직접 삭제").forEach { value ->
                     Row(Modifier.fillMaxWidth().clickable {
                         retention = value
-                        save("retention", value)
                         showRetention = false
                     }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(retention == value, { retention = value; save("retention", value); showRetention = false })
+                        RadioButton(retention == value, { retention = value; showRetention = false })
                         Text(value)
                     }
                 }
@@ -205,20 +280,14 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                     val row = familyName to familyPhone
                     if (editingFamily >= 0) updated[editingFamily] = row else updated.add(row)
                     family = updated
-                    prefs.edit().putString("family_contacts", JSONArray().apply {
-                        updated.forEach { (name, phone) -> put(JSONObject().put("name", name).put("phone", phone)) }
-                    }.toString()).apply()
                 }
                 familyDialog = false
-            }) { Text("저장") }
+            }) { Text("완료") }
         },
         dismissButton = {
             if (editingFamily >= 0) TextButton(onClick = {
                 val updated = family.filterIndexed { i, _ -> i != editingFamily }
                 family = updated
-                prefs.edit().putString("family_contacts", JSONArray().apply {
-                    updated.forEach { (name, phone) -> put(JSONObject().put("name", name).put("phone", phone)) }
-                }.toString()).apply()
                 familyDialog = false
             }) { Text("삭제", color = Color.Red) }
             else TextButton(onClick = { familyDialog = false }) { Text("취소") }

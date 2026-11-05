@@ -11,6 +11,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.ServiceConnection
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
@@ -92,6 +93,20 @@ class FloatingButtonService : Service() {
     private val analysisHandoffScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val errorMessageTimeout = Runnable { dismissErrorMessage() }
     private val scanTimeout = Runnable { finishScreenScan("화면 검사를 시작하지 못했습니다.") }
+    private val settingsPreferences by lazy {
+        getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, MODE_PRIVATE)
+    }
+    private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key != null && key in setOf(
+                FloatingButtonPreferences.KEY_SIZE,
+                FloatingButtonPreferences.KEY_OPACITY,
+                FloatingButtonPreferences.KEY_HAPTICS,
+            )
+        ) {
+            captureHandler.post { applyFloatingButtonPreferences() }
+        }
+    }
+    private var settingsListenerRegistered = false
 
     companion object {
         private const val CHANNEL_ID = "floating_button_channel"
@@ -124,6 +139,8 @@ class FloatingButtonService : Service() {
         // 4. WindowManager 가져오기
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         activeInstance = this
+        settingsPreferences.registerOnSharedPreferenceChangeListener(settingsListener)
+        settingsListenerRegistered = true
 
     }
 
@@ -132,14 +149,18 @@ class FloatingButtonService : Service() {
 
         if (floatingButton != null || overlaySuspensions.isNotEmpty()) return
         // View는 클릭만 전달하고, 메뉴 전환과 검사 중 입력 제한은 서비스가 결정한다.
-        floatingButton = FloatingButtonView.create(this) {
+        floatingButton = FloatingButtonView.create(
+            context = this,
+            hapticsEnabled = { FloatingButtonPreferences.read(this).hapticsEnabled },
+        ) {
             if (!scanInProgress) {
                 if (isMenuOpen) hideFloatingMenu() else showFloatingMenu()
             }
         }
 
-        val buttonSize = (72 * resources.displayMetrics.density).toInt()
-        floatingButton?.alpha = 1.0f
+        val preferences = FloatingButtonPreferences.read(this)
+        val buttonSize = (preferences.sizeDp * resources.displayMetrics.density).toInt()
+        floatingButton?.alpha = preferences.opacity
 
         // 앱 밖에 표시할 창으로 설정하고, 키보드 입력 포커스는 가져오지 않는다.
         val params = WindowManager.LayoutParams(
@@ -165,6 +186,32 @@ class FloatingButtonService : Service() {
         isFloatingButtonVisible = true
     }
 
+    private fun applyFloatingButtonPreferences() {
+        if (destroyed || !::windowManager.isInitialized) return
+        val button = floatingButton ?: return
+        val params = button.layoutParams as? WindowManager.LayoutParams ?: return
+        val preferences = FloatingButtonPreferences.read(this)
+        button.alpha = preferences.opacity
+
+        val size = (preferences.sizeDp * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+        if (params.width == size && params.height == size) return
+
+        val maxX = (resources.displayMetrics.widthPixels - size).coerceAtLeast(0)
+        val maxY = ((resources.displayMetrics.heightPixels - size) / 2).coerceAtLeast(0)
+        floatingButtonX = params.x.coerceIn(0, maxX)
+        floatingButtonY = params.y.coerceIn(-maxY, maxY)
+        params.width = size
+        params.height = size
+        params.x = floatingButtonX
+        params.y = floatingButtonY
+        try {
+            windowManager.updateViewLayout(button, params)
+            installDragHandling(button, params, size)
+        } catch (error: Exception) {
+            Log.w("FloatingButtonService", "플로팅 버튼 설정 반영 실패", error)
+        }
+    }
+
     private fun installDragHandling(button: ImageButton, params: WindowManager.LayoutParams, buttonSize: Int) {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         val maxX = (resources.displayMetrics.widthPixels - buttonSize).coerceAtLeast(0)
@@ -174,6 +221,7 @@ class FloatingButtonService : Service() {
         var startX = params.x
         var startY = params.y
         var dragging = false
+        var positionLocked = false
 
         button.setOnTouchListener { view, event ->
             when (event.actionMasked) {
@@ -185,6 +233,7 @@ class FloatingButtonService : Service() {
                     startX = params.x
                     startY = params.y
                     dragging = false
+                    positionLocked = settingsPreferences.getBoolean("edge_snap", true)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = event.rawX - downX
@@ -192,7 +241,7 @@ class FloatingButtonService : Service() {
                     if (!dragging && (abs(deltaX) > touchSlop || abs(deltaY) > touchSlop)) {
                         dragging = true
                     }
-                    if (dragging && !isMenuOpen) {
+                    if (dragging && !isMenuOpen && !positionLocked) {
                         // END gravity reverses the horizontal window offset direction.
                         params.x = (startX - deltaX.toInt()).coerceIn(0, maxX)
                         params.y = (startY + deltaY.toInt()).coerceIn(-maxY, maxY)
@@ -209,17 +258,17 @@ class FloatingButtonService : Service() {
                     if (isMenuOpen) {
                         if (!dragging) view.performClick()
                     } else if (dragging) {
-                        val screenWidth = resources.displayMetrics.widthPixels
-                        val screenCenterX = screenWidth - params.x - buttonSize / 2f
-                        val centerLine = screenWidth / 2f
-                        val crossingThreshold = buttonSize / 2f
-                        val startWasLeft = startX > maxX / 2
-                        val snapToLeft = when {
-                            screenCenterX < centerLine - crossingThreshold -> true
-                            screenCenterX > centerLine + crossingThreshold -> false
-                            else -> startWasLeft
-                        }
-                        if (getSharedPreferences("dundueni_settings", MODE_PRIVATE).getBoolean("edge_snap", true)) {
+                        if (!positionLocked) {
+                            val screenWidth = resources.displayMetrics.widthPixels
+                            val screenCenterX = screenWidth - params.x - buttonSize / 2f
+                            val centerLine = screenWidth / 2f
+                            val crossingThreshold = buttonSize / 2f
+                            val startWasLeft = startX > maxX / 2
+                            val snapToLeft = when {
+                                screenCenterX < centerLine - crossingThreshold -> true
+                                screenCenterX > centerLine + crossingThreshold -> false
+                                else -> startWasLeft
+                            }
                             animateButtonToEdge(view, params, if (snapToLeft) maxX else 0)
                         }
                     } else {
@@ -290,7 +339,8 @@ class FloatingButtonService : Service() {
         val density = resources.displayMetrics.density
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
-        val buttonSize = (72 * density).toInt()
+        val preferences = FloatingButtonPreferences.read(this)
+        val buttonSize = (preferences.sizeDp * density).toInt()
         val menuWidth = minOf((300 * density).toInt(), screenWidth).coerceAtLeast(1)
         val menuHeight = minOf((280 * density).toInt(), screenHeight).coerceAtLeast(1)
         val gap = (8 * density).toInt()
@@ -343,7 +393,9 @@ class FloatingButtonService : Service() {
                         }
                     )
                 }
-            }
+            },
+            fontScale = preferences.menuTextScale,
+            hapticsEnabled = preferences.hapticsEnabled,
         ).also { floatingMenu = it }
 
         val params = WindowManager.LayoutParams(
@@ -651,7 +703,7 @@ class FloatingButtonService : Service() {
         val view = TextView(this).apply {
             text = message
             setTextColor(Color.WHITE)
-            textSize = 14f
+            textSize = 14f * FloatingButtonPreferences.read(this@FloatingButtonService).menuTextScale
             gravity = Gravity.CENTER
             setPadding((20 * density).toInt(), (14 * density).toInt(), (20 * density).toInt(), (14 * density).toInt())
             background = GradientDrawable().apply {
@@ -778,6 +830,10 @@ class FloatingButtonService : Service() {
     override fun onDestroy() {
 
         destroyed = true
+        if (settingsListenerRegistered) {
+            settingsPreferences.unregisterOnSharedPreferenceChangeListener(settingsListener)
+            settingsListenerRegistered = false
+        }
         if (activeInstance === this) activeInstance = null
         isFloatingButtonVisible = false
         edgeSnapAnimator?.cancel()

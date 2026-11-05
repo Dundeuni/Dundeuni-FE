@@ -34,5 +34,6 @@ fun LoginRoute(
         onLogin = viewModel::login,
         onSignUp = onSignUp, onResetPassword = onResetPassword,
         onKakaoLogin = onKakaoLogin, onGoogleLogin = onGoogleLogin,
+        onBack = onBack,
     )
 }
