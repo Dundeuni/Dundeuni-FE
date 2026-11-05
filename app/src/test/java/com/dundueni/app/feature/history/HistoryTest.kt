@@ -83,4 +83,31 @@ class HistoryTest {
         assertTrue(store.delete("old"))
         assertEquals("new", store.read().single().id)
     }
+    @Test fun aiBadgeRequiresExplicitClassificationRatherThanAScoreThreshold() {
+        val unspecified = HistoryRecord("score-only", RiskLevel.CAUTION, 100, HistoryType.IMAGE, aiScore = 99.0)
+        assertEquals("주의", unspecified.statusLabel)
+        val classified = unspecified.copy(id = "classified", aiLikelihood = com.dundueni.app.feature.analysisresult.AiLikelihood.HIGH)
+        assertEquals("AI 생성 의심", classified.statusLabel)
+        assertEquals(listOf("classified"), filterHistory(listOf(unspecified, classified), null, "AI 생성 의심").map { it.id })
+    }
+
+    @Test fun readsOptionalAiClassificationAndKeepsUnknownClassificationHonest() {
+        preferences.edit().putString("results", """[{"id":"explicit","riskLevel":"CAUTION","savedAt":200,"type":"IMAGE","aiLikelihood":"HIGH"},{"id":"unknown","riskLevel":"SAFE","savedAt":100,"aiLikelihood":"INVALID"}]""").commit()
+        val records = store.read()
+        assertEquals("AI 생성 의심", records[0].statusLabel)
+        assertEquals(com.dundueni.app.feature.analysisresult.AiLikelihood.UNKNOWN, records[1].aiLikelihood)
+    }
+    @Test fun savingUnclassifiedPhoneAndExplicitAiMetadataIsBackwardCompatible() {
+        val result = com.dundueni.app.feature.analysisresult.AnalysisResult(
+            "phone-unknown", RiskLevel.UNKNOWN, "summary", historyType = HistoryType.PHONE,
+        )
+        assertTrue(store.save(result, 100))
+        assertEquals(HistoryType.PHONE, store.read().single().type)
+        assertEquals(RiskLevel.UNKNOWN, store.read().single().riskLevel)
+        val image = result.copy(id = "image-high", historyType = HistoryType.IMAGE,
+            aiLikelihood = com.dundueni.app.feature.analysisresult.AiLikelihood.HIGH)
+        assertTrue(store.save(image, 200))
+        assertEquals("AI 생성 의심", store.read().first().statusLabel)
+        assertEquals(2, store.read().size)
+    }
 }

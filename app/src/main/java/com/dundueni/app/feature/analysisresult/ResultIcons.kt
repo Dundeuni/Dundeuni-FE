@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-internal enum class ResultIcon { SHIELD, WARNING, BACK, CLOSE, PROFILE, MESSAGE, CHECK, LINK, PHONE, SHARE, SAVE, SEARCH, FAMILY, CLOCK, AI, TIP }
+internal enum class ResultIcon { SHIELD, WARNING, BACK, CLOSE, PROFILE, MESSAGE, CHECK, LINK, PHONE, SHARE, SAVE, SEARCH, FAMILY, CLOCK, AI, TIP, SHIELD_HEART, SHIELD_OUTLINE, ALERT, FORWARD, FLAG, HISTORY, CHECKLIST }
 
 /** Small vector icons drawn locally: no new icon-library dependency. */
 @Composable
@@ -28,6 +28,49 @@ internal fun ResultGlyph(kind: ResultIcon, color: Color, size: Dp = 20.dp) {
                 ResultIcon.SHIELD -> {
                     drawPath(Path().apply { moveTo(12f, 2f); lineTo(21f, 6f); lineTo(20f, 14f); quadraticTo(18f, 20f, 12f, 23f); quadraticTo(6f, 20f, 4f, 14f); lineTo(3f, 6f); close() }, color)
                     check(Color.White)
+                }
+                ResultIcon.SHIELD_HEART, ResultIcon.SHIELD_OUTLINE -> {
+                    val shield = Path().apply {
+                        moveTo(12f, 2f); lineTo(21f, 6f); lineTo(20f, 14f)
+                        quadraticTo(18f, 20f, 12f, 23f); quadraticTo(6f, 20f, 4f, 14f)
+                        lineTo(3f, 6f); close()
+                    }
+                    if (kind == ResultIcon.SHIELD_OUTLINE) drawPath(shield, color, style = stroke)
+                    else {
+                        drawPath(shield, color)
+                        drawPath(Path().apply {
+                            moveTo(12f, 16f); cubicTo(9f, 14f, 6.5f, 11f, 8.5f, 9f)
+                            quadraticTo(10.5f, 7.5f, 12f, 10f)
+                            quadraticTo(13.5f, 7.5f, 15.5f, 9f)
+                            cubicTo(17.5f, 11f, 15f, 14f, 12f, 16f); close()
+                        }, Color.White)
+                    }
+                }
+                ResultIcon.ALERT -> {
+                    drawPath(Path().apply {
+                        moveTo(8f, 2f); lineTo(16f, 2f); lineTo(22f, 8f); lineTo(22f, 16f)
+                        lineTo(16f, 22f); lineTo(8f, 22f); lineTo(2f, 16f); lineTo(2f, 8f); close()
+                    }, color)
+                    line(12f, 6f, 12f, 13f, if (color == Color.White) Color(0xFFBA1A1A) else Color.White)
+                    drawCircle(if (color == Color.White) Color(0xFFBA1A1A) else Color.White, 1f, Offset(12f, 17f))
+                }
+                ResultIcon.FORWARD -> { line(4f, 12f, 20f, 12f); line(20f, 12f, 14f, 6f); line(20f, 12f, 14f, 18f) }
+                ResultIcon.FLAG -> {
+                    line(5f, 3f, 5f, 22f)
+                    drawPath(Path().apply {
+                        moveTo(5f, 4f); quadraticTo(9f, 1f, 13f, 4f); quadraticTo(17f, 7f, 21f, 4f)
+                        lineTo(21f, 14f); quadraticTo(17f, 17f, 13f, 14f); quadraticTo(9f, 11f, 5f, 14f)
+                    }, color, style = stroke)
+                }
+                ResultIcon.HISTORY -> {
+                    drawArc(color, -145f, 290f, false, Offset(3f, 3f), androidx.compose.ui.geometry.Size(18f, 18f), style = stroke)
+                    line(2f, 3f, 2f, 9f); line(2f, 9f, 8f, 9f)
+                    line(12f, 7f, 12f, 12f); line(12f, 12f, 16f, 14f)
+                }
+                ResultIcon.CHECKLIST -> {
+                    drawRoundRect(color, Offset(3f, 3f), androidx.compose.ui.geometry.Size(18f, 18f), androidx.compose.ui.geometry.CornerRadius(2f), style = stroke)
+                    line(7f, 8f, 9f, 10f); line(9f, 10f, 13f, 6f)
+                    line(7f, 14f, 17f, 14f); line(7f, 18f, 14f, 18f)
                 }
                 ResultIcon.WARNING -> {
                     drawPath(Path().apply { moveTo(12f, 2f); lineTo(23f, 22f); lineTo(1f, 22f); close() }, color)

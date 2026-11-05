@@ -1,5 +1,8 @@
 package com.dundueni.app.feature.history
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +29,12 @@ fun HistoryRoute(
     var revision by remember { mutableIntStateOf(0) }
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) revision++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(revision) {
         loading = true
         val loaded = withContext(Dispatchers.IO) { runCatching { store.read() } }

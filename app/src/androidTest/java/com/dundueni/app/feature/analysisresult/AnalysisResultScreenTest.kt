@@ -1,6 +1,9 @@
 package com.dundueni.app.feature.analysisresult
 
 import android.graphics.Bitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -35,9 +38,9 @@ class AnalysisResultScreenTest {
         compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.CAUTION), onAction = { dispatched = it }) } }
         compose.onNodeWithText("조금 더 확인해보세요").assertIsDisplayed()
         screenshot("pb05-caution")
-        compose.onNodeWithText("분석 점수 64%").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("분석 점수 28%").assertIsDisplayed()
-        compose.onNodeWithText("링크 열지 않고 도메인만 미리보기").performScrollTo().performClick()
+        compose.onNodeWithText("위험 점수 64%").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("변조 점수 28%").assertIsDisplayed()
+        compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").performScrollTo().performClick()
         assertEquals(ResultAction.PREVIEW_DOMAIN, dispatched)
     }
 
@@ -57,7 +60,7 @@ class AnalysisResultScreenTest {
             AnalysisResultScreen(AnalysisResult("empty", RiskLevel.CAUTION, "추가 확인 필요"), onAction = {})
         } }
         compose.onNodeWithText("세부 근거가 제공되지 않았어요. 요약과 대응 행동을 확인해주세요.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("링크 열지 않고 도메인만 미리보기").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").performScrollTo().assertIsNotEnabled()
     }
 
     @Test fun unknownVerdictInJsonIsRejected() {
@@ -67,12 +70,37 @@ class AnalysisResultScreenTest {
         assertEquals(RiskLevel.DANGER, AnalysisResultJsonAdapter.decode(valid).riskLevel)
     }
 
+    @Test fun unclassifiedResultKeepsServerLabelAndHomeAction() {
+        var dispatched: ResultAction? = null
+        compose.setContent { DundueniFETheme {
+            AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.UNKNOWN).copy(aiRiskLabel = "SAFE", aiScore = 87.0), onAction = { dispatched = it })
+        } }
+        compose.onNodeWithText("최종 위험 판정 미확정").assertIsDisplayed()
+        compose.onNodeWithText("SAFE").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("현재는 안전해 보여요").assertDoesNotExist()
+        compose.onNodeWithText("지금은 절대 돈을 보내지 마세요!").assertDoesNotExist()
+        screenshot("pb05-unclassified")
+        compose.onNodeWithText("든든이 홈으로").performScrollTo().performClick()
+        assertEquals(ResultAction.HOME, dispatched)
+    }
+    @Test fun devHttpErrorPopupKeepsItsMessageAndRetryActionOnDevice() {
+        var retries = 0
+        compose.setContent { DundueniFETheme {
+            com.dundueni.app.feature.analysis.AnalysisFlowScreen(
+                com.dundueni.app.feature.analysis.AnalysisUiState.Error(com.dundueni.app.feature.analysis.AnalysisErrorKind.HTTP, 503),
+                onRetry = { retries++ }, onClose = {}, onHome = {}, isDemo = false,
+            )
+        } }
+        compose.onNodeWithText("HTTP 상태: 503", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("다시 시도").performScrollTo().performClick()
+        assertEquals(1, retries)
+    }
     private fun screenshot(name: String) {
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         val target = File(instrumentation.targetContext.getExternalFilesDir(null), "$name.png")
         FileOutputStream(target).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
+
     }
 }

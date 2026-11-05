@@ -55,3 +55,16 @@ PB-05가 사용하는 `analysis_result_history` SharedPreferences의 `results`�
 물리 키보드 연결 시 화면 키보드 표시(show_ime_with_hard_keyboard=1)를 켰습니다.
 일반 입력 대신 Gboard의 필기 툴바/스타일러스 연습 창이 표시되는 문제는 에뮬레이터의 자동 필기(stylus_handwriting_enabled=0)를 꺼 해결했습니다.
 이 설정은 현재 에뮬레이터에 적용되며 APK가 다른 기기의 키보드 언어를 강제로 변경하지 않습니다.
+
+## 최신 디자인 dev 통합
+
+- 날짜별 흰색 그룹 카드, 상태 아이콘·배지, 검색/삭제 도구, 독립 분석 점수 막대와 상세 목록 복귀 버튼을 적용했습니다.
+- 쉬운 모드는 Easy History 상단, 개인정보 안내, 상태별 별도 카드와 원형 화살표, 기본 모드 전환 버튼을 사용합니다.
+- 기본 화면의 하단은 dev의 HomeBottomNavigation을 유지합니다. 쉬운 모드의 홈/설정과 상단 프로필도 기존 HomeDestination 콜백으로 연결합니다.
+- dev의 initialRecordId/onCloseDetail을 유지해 홈의 최근 검사에서 해당 기록 상세로 직접 진입하고 홈으로 돌아올 수 있습니다.
+- PHONE 및 UNKNOWN 유형과 판정 미확정을 유지합니다. 쉬운 필터에 전화번호 및 기타 검사도 표시해 기존 기록이 누락되지 않게 합니다.
+- aiLikelihood는 선택적 메타데이터로 저장·복원하며 명시적인 HIGH 분류에만 AI 생성 의심 배지를 사용합니다. 점수로 등급을 새로 계산하지 않습니다.
+- 저장소 키와 최근 50건 보관, 중복 ID 갱신, 삭제 확인창과 원문·링크·근거 미보관 정책을 유지합니다.
+- HistoryRoute가 다시 활성화되면 목록을 갱신합니다. 샘플 목록과 쉬운 모드는 기존 debug 소스의 Preview에서 확인할 수 있습니다.
+- 통합 검증: Debug APK 빌드 및 Release Kotlin 컴파일 성공. 실제 에뮬레이터의 결과/뒤로 가기/홈 복귀/기록 상세/필터/삭제 확인/큰 글씨/HTTP 오류 및 재시도 테스트 15개 통과.
+- JVM 검증에는 기존 AnalysisFlowScreenTest.errorsShowDistinctMessagesAndSafeHttpStatus의 HTTP 문구 표시 실패가 남습니다. 해당 오류 팝업 소스와 테스트 메서드는 원본을 유지했으며, 동일한 HTTP 503 표시와 재시도는 실제 에뮬레이터 테스트에서 통과했습니다. 전체 테스트 통과를 의미하지 않습니다.

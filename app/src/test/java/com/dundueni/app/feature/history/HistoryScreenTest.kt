@@ -98,4 +98,47 @@ class HistoryScreenTest {
         compose.onNodeWithContentDescription("홈으로 돌아가기").performClick()
         assertEquals(1, homes)
     }
+    @Test fun easyTextAndLinkFilterCombinesTypesAndBasicModeResetsFilter() {
+        val records = listOf(
+            record.copy(id = "screen", type = HistoryType.SCREEN),
+            record.copy(id = "link", type = HistoryType.LINK, riskLevel = RiskLevel.CAUTION),
+            record.copy(id = "text", riskLevel = RiskLevel.SAFE),
+        )
+        compose.setContent { DundueniFETheme { HistoryScreen(records, {}, {}, {}, initialEasyMode = true) } }
+        compose.onNodeWithText("Easy History").assertIsDisplayed()
+        compose.onNodeWithText("문자·링크").performClick()
+        compose.onNodeWithTag("easy-record-screen").assertDoesNotExist()
+        compose.onNodeWithTag("easy-record-link").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("easy-record-text").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("기본 모드로 전환").performClick()
+        compose.onNodeWithText("든든이").assertIsDisplayed()
+        compose.onNodeWithText("전체 3").assertIsSelected()
+        compose.onNodeWithTag("record-screen").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun easyClearButtonRequestsDeletionWithoutRemovingRecordsItself() {
+        var requested = 0
+        compose.setContent { DundueniFETheme { HistoryScreen(listOf(record), {}, {}, { requested++ }, initialEasyMode = true) } }
+        compose.onNodeWithTag("history-list").performScrollToNode(hasText("전체 기록 모두 지우기"))
+        compose.onNodeWithText("전체 기록 모두 지우기").performClick()
+        compose.runOnIdle { assertEquals(1, requested) }
+        compose.onNodeWithTag("easy-record-test").performScrollTo().assertIsDisplayed()
+    }
+    @Test fun phoneAndUnclassifiedHistoryKeepTheirTypeAndNavigation() {
+        var destination: com.dundueni.app.feature.home.HomeDestination? = null
+        val phone = record.copy(id = "phone", type = HistoryType.PHONE, riskLevel = RiskLevel.UNKNOWN)
+        compose.setContent { DundueniFETheme {
+            HistoryScreen(listOf(phone), {}, {}, {}, initialEasyMode = true, onNavigationSelected = { destination = it })
+        } }
+        compose.onNodeWithText("전화번호").performScrollTo().performClick()
+        compose.onNodeWithTag("easy-record-phone").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("안전 확인").assertDoesNotExist()
+        compose.onNodeWithTag("easy-record-phone").performClick()
+        compose.onNodeWithText("최종 위험 단계: 판정 미확정").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("검사 기록 목록으로 돌아가기").performClick()
+        compose.onNodeWithContentDescription("기록 설정").performClick()
+        assertEquals(com.dundueni.app.feature.home.HomeDestination.SETTINGS, destination)
+        compose.onNodeWithContentDescription("내 기록 정보").performClick()
+        assertEquals(com.dundueni.app.feature.home.HomeDestination.MY_SHELTER, destination)
+    }
 }

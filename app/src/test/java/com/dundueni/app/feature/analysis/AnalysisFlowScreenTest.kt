@@ -32,9 +32,9 @@ class AnalysisFlowScreenTest {
         }
         compose.onNodeWithText("잠시만 기다려 주세요").assertDoesNotExist()
         compose.onNodeWithText("조금 더 확인해보세요").assertIsDisplayed()
-        compose.onNodeWithText("분석 점수 41.2%").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("변조 점수 41.2%").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("분석 근거 1").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("링크 열지 않고 도메인만 미리보기").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").performScrollTo().assertIsNotEnabled()
     }
 
     @Test fun dismissingLoadingPopupKeepsRequestVisibleAndResultArrives() {

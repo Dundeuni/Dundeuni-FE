@@ -21,7 +21,7 @@ object AnalysisResultSamples {
             sourceUrl = "https://bit.ly/example-preview",
             evidence = listOf(
                 RiskEvidence("단축 링크(bit.ly 등)로 실제 연결 주소가 숨겨져 있어요", "클릭 시 피싱 사이트나 악성 앱 설치 페이지로 우회될 수 있습니다."),
-                RiskEvidence("최근 등록된 지 3일 미만인 신규 도메인이에요", "생성된 지 얼마 안 된 도메인은 임시 피싱 페이지로 자주 활용됩니다."),
+                RiskEvidence("만든 지 3일이 안 된 인터넷 주소예요", "만든 지 얼마 안 된 주소는 가짜 사이트에 쓰이기도 해요. 주소를 한 번 더 확인해주세요."),
                 RiskEvidence("공식 고객센터 문의 양식이 아니에요", "공공기관 및 금융사는 개인 번호나 비공식 메신저로 링크를 보내지 않습니다."),
             ),
         )

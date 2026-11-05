@@ -1,5 +1,6 @@
 package com.dundueni.app.feature.history
 
+import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import java.time.Instant
 import java.time.LocalDate
@@ -18,8 +19,10 @@ data class HistoryRecord(
     val aiScore: Double? = null,
     // Display-only sample information. Original content is never written by the history store.
     val preview: String? = null,
+    val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
 ) {
     val title: String get() = "${type.label} 검사"
+    val statusLabel: String get() = if (type == HistoryType.IMAGE && aiLikelihood == AiLikelihood.HIGH) "AI 생성 의심" else riskLevel.label
     fun date(zone: ZoneId = ZoneId.systemDefault()): LocalDate =
         Instant.ofEpochMilli(savedAt).atZone(zone).toLocalDate()
 }
@@ -28,6 +31,6 @@ internal fun filterHistory(records: List<HistoryRecord>, type: HistoryType?, que
     val keyword = query.trim()
     return records.filter {
         (type == null || it.type == type) &&
-            (keyword.isEmpty() || "${it.title} ${it.riskLevel.label} ${it.preview.orEmpty()}".contains(keyword, ignoreCase = true))
+            (keyword.isEmpty() || "${it.title} ${it.riskLevel.label} ${it.preview.orEmpty()} ${it.statusLabel}".contains(keyword, ignoreCase = true))
     }.sortedByDescending { it.savedAt }
 }

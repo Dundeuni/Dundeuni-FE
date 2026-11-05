@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.history
 
 import android.content.Context
+import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import org.json.JSONArray
@@ -24,6 +25,7 @@ class HistoryStore(context: Context) {
                     type = HistoryType.entries.firstOrNull { it.name == item.optString("type") } ?: HistoryType.UNKNOWN,
                     fraudScore = item.score("fraudScore"),
                     aiScore = item.score("aiScore"),
+                    aiLikelihood = AiLikelihood.entries.firstOrNull { it.name == item.optString("aiLikelihood") } ?: AiLikelihood.UNKNOWN,
                 )
             }.getOrNull()
         }.sortedByDescending { it.savedAt }
@@ -36,6 +38,7 @@ class HistoryStore(context: Context) {
             put("riskLevel", result.riskLevel.name)
             put("savedAt", savedAt)
             put("type", result.historyType.name)
+            if (result.aiLikelihood != AiLikelihood.UNKNOWN) put("aiLikelihood", result.aiLikelihood.name)
             result.fraudScore?.let { put("fraudScore", it) }
             result.aiScore?.let { put("aiScore", it) }
         })

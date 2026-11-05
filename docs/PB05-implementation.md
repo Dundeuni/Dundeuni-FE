@@ -68,3 +68,11 @@ startActivity(AnalysisResultActivity.createIntent(context, resultJson))
 - 원본 PB-05의 모델/도메인 단위 테스트 7개는 독립 JVM 실행에서 통과했습니다.
 - 이 통합 프로젝트의 compileDebugKotlin/compileReleaseKotlin 통과. 원본 프로젝트에서 발생한 AAPT2 오류를 피하기 위해 리소스 처리 작업을 제외하고 Kotlin만 검증했습니다. 전체 APK 빌드 성공을 의미하지 않습니다.
 - 실제 AI 연동, 기기 렌더링, 전화/공유 앱 연결, Android UI 테스트 실행은 별도 검증이 필요합니다.
+
+## 최신 디자인 dev 통합
+
+- dev의 AnalysisResult/Route/Activity/실제 응답 매퍼를 기준으로 안전·주의·위험 결과의 최신 카드, 배지, 지표와 근거·대응 버튼 디자인을 반영했습니다.
+- 버튼과 안내창의 도메인 표현을 인터넷 주소로 바꾸고, 샘플 근거는 만든 지 3일이 안 된 인터넷 주소예요로 안내합니다. 링크에 접속하지 않고 호스트만 보여주는 기능은 동일합니다.
+- dev의 UNKNOWN 판정, 서버 AI 단계 표시, 시스템 뒤로 가기, 든든이 홈으로 이동, 입력 유형을 보존하는 HistoryStore.save 호출을 유지합니다.
+- 실제 응답에서 사기 위험 판정이 없으면 안전·주의·위험을 만들어내지 않고 판정 미확정 화면으로 표시합니다.
+- 기존 검사 흐름, HTTP 상태/재시도, API 모델과 실제 데이터 매퍼는 이번 디자인 통합에서 바꾸지 않았습니다.

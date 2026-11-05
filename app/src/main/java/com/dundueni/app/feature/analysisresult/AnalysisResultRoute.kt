@@ -99,8 +99,8 @@ fun AnalysisResultRoute(
         val host = remember(result.sourceUrl) { domainForPreview(result.sourceUrl) }
         AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("도메인만 미리보기") },
-            text = { Text(if (host == null) "올바른 웹 주소를 확인할 수 없어요." else "$host\n\n링크에 접속하지 않고 주소의 도메인만 표시했어요. 단축 링크의 최종 목적지나 사이트의 안전성을 확인한 결과는 아니에요.") },
+            title = { Text("인터넷 주소 보기") },
+            text = { Text(if (host == null) "인터넷 주소를 확인할 수 없어요." else "$host\n\n사이트를 열지 않고 주소만 보여드려요. 안전한 사이트인지 확인한 결과는 아니에요.\n\n짧게 줄인 주소가 실제로 연결되는 곳은 확인하지 않았어요.") },
             confirmButton = { TextButton(onClick = { dialog = null }) { Text("확인") } },
         )
     }
