@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.dundueni.app.data.repository.AnalysisResultRepository
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
+import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.repository.AnalysisFailedException
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import java.io.IOException
@@ -13,6 +14,8 @@ import java.io.InterruptedIOException
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +32,10 @@ import okhttp3.MultipartBody
  * 요청은 ViewModel 수명에 묶여 화면이 회전해도 유지되고, ViewModel 종료 시 취소된다.
  * 화면 구성과 파일 삭제는 Activity에 맡겨 검사 처리와 분리한다.
  */
-class AnalysisViewModel(private val repository: AnalysisResultRepository) : ViewModel() {
+class AnalysisViewModel(
+    private val repository: AnalysisResultRepository,
+    private val screenCropApi: (() -> TextAnalysisApiService)? = null,
+) : ViewModel() {
     private val mutableUiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = mutableUiState.asStateFlow()
     private var requestJob: Job? = null
@@ -44,7 +50,10 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
 
     /** 준비 단계도 Loading/Error에 포함합니다. 블로킹 변환은 전달 함수에서 IO로 전환합니다. */
     @MainThread
-    fun analyzePrepared(prepare: suspend () -> MultipartBody.Part) {
+    fun analyzePrepared(prepare: suspend () -> MultipartBody.Part) = analyzePrepared(false, prepare)
+
+    @MainThread
+    fun analyzePrepared(screenCrop: Boolean, prepare: suspend () -> MultipartBody.Part) {
         // 빠른 재클릭으로 같은 이미지를 중복 준비하거나 분석 요청이 겹치는 것을 막는다.
         if (requestJob?.isActive == true || mutableUiState.value is AnalysisUiState.Pending) return
         attemptId = UUID.randomUUID().toString()
@@ -55,10 +64,35 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
                 // 먼저 이미지를 준비한 뒤 분석을 요청하며, 어느 단계의 실패든 아래에서 처리한다.
                 val image = prepare()
                 inputPrepared = true
-                val result = checkNotNull(repository.analyzeResult(image))
-                ensureActive()
-                // 서버 값은 보존하고, 최종 판정 표시 여부는 화면 매핑에서 결정합니다.
-                mutableUiState.value = AnalysisUiState.Success(result)
+                if (screenCrop) {
+                    val (imageOutcome, textOutcome) = coroutineScope {
+                        val imageRequest = async { attempt { checkNotNull(repository.analyzeResult(image)) } }
+                        val textRequest = async { attempt {
+                            val api = checkNotNull(screenCropApi) { "Screen crop API is unavailable" }.invoke()
+                            api.analyzeScreenCrop(image).toCompletedScreenCrop()
+                        } }
+                        imageRequest.await() to textRequest.await()
+                    }
+                    ensureActive()
+                    val imageResult = imageOutcome.getOrNull()
+                    val textResult = textOutcome.getOrNull()
+                    mutableUiState.value = if (imageResult != null || textResult != null) {
+                        AnalysisUiState.ScreenSuccess(
+                            imageResult,
+                            textResult,
+                            imageOutcome.exceptionOrNull()?.toPartialError(),
+                            textOutcome.exceptionOrNull()?.toPartialError(),
+                        )
+                    } else {
+                        (imageOutcome.exceptionOrNull() ?: textOutcome.exceptionOrNull()
+                            ?: AnalysisProtocolException("No completed analysis result")).toPartialError()
+                    }
+                } else {
+                    val result = checkNotNull(repository.analyzeResult(image))
+                    ensureActive()
+                    // 서버 값은 보존하고, 최종 판정 표시 여부는 화면 매핑에서 결정합니다.
+                    mutableUiState.value = AnalysisUiState.Success(result)
+                }
             // 화면 종료 등에 따른 작업 취소는 검사 실패가 아니므로 Error와 구분한다.
             } catch (cancelled: CancellationException) {
                 mutableUiState.value = AnalysisUiState.Idle
@@ -75,6 +109,21 @@ class AnalysisViewModel(private val repository: AnalysisResultRepository) : View
             }
         }
     }
+
+    private suspend fun <T> attempt(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (exception: Exception) {
+        Result.failure(exception)
+    }
+
+    private fun Throwable.toPartialError(): AnalysisUiState.Error =
+        when (val state = (this as? Exception)?.toUiState()) {
+            is AnalysisUiState.Error -> state
+            is AnalysisUiState.Pending -> AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS)
+            else -> AnalysisUiState.Error()
+        }
 
     private fun Exception.toUiState(): AnalysisUiState = when (this) {
         is AnalysisApiConfigurationException -> AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION)

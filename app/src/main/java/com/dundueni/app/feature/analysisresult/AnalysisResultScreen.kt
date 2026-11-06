@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dundueni.app.ui.theme.Danger
 import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.feature.history.HistoryType
 import java.util.Locale
 
 private val PageBackground = Color(0xFFF7F8FF)
@@ -41,6 +42,9 @@ fun AnalysisResultScreen(
     modifier: Modifier = Modifier,
     historySaved: Boolean = false,
     isDemo: Boolean = false,
+    screenCropDecision: String? = null,
+    imageAnalysisError: String? = null,
+    screenCropError: String? = null,
 ) {
     Scaffold(modifier = modifier, containerColor = PageBackground, topBar = { ResultHeader(onAction) }) { padding ->
         Column(
@@ -49,12 +53,20 @@ fun AnalysisResultScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (result.historyType == HistoryType.SCREEN &&
+                    (screenCropDecision != null || imageAnalysisError != null || screenCropError != null)) {
+                    ResultPanel {
+                        Text("이미지 생성·변조 분석", fontWeight = FontWeight.SemiBold, color = Ink)
+                        imageAnalysisError?.let { Text("분석 결과를 표시할 수 없습니다: $it", color = Muted) }
+                        if (imageAnalysisError == null) Text("분석 완료", color = Muted)
+                    }
+                }
                 if (isDemo) {
                     Surface(color = Color(0xFFFFF2D8), shape = RoundedCornerShape(12.dp)) {
                         Text("디자인 미리보기 · 샘플 데이터", Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFF795700), fontSize = 12.sp)
                     }
                 }
-                when (result.riskLevel) {
+                if (result.historyType != HistoryType.SCREEN || imageAnalysisError == null) when (result.riskLevel) {
                     RiskLevel.SAFE -> {
                         Column(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
@@ -95,9 +107,25 @@ fun AnalysisResultScreen(
                     }
                     RiskLevel.UNKNOWN -> {
                         ResultHero(result)
-                        UnclassifiedNotice()
-                        MetricsRow(result)
-                        EvidencePanel(result)
+                        if (result.historyType == HistoryType.TEXT && result.keyFinding != null) {
+                            result.sourceText?.let { MessageQuote(it) }
+                        } else {
+                            UnclassifiedNotice()
+                            MetricsRow(result)
+                            EvidencePanel(result)
+                        }
+                    }
+                }
+                if (result.historyType == HistoryType.SCREEN &&
+                    (screenCropDecision != null || screenCropError != null)) {
+                    ResultPanel {
+                        Text("화면 문자 피싱 분석", fontWeight = FontWeight.SemiBold, color = Ink)
+                        if (screenCropDecision != null) {
+                            Text(screenCropDecision, color = Ink)
+                            Text("AI 분류 결과이며 사기 확률이나 확정 위험도가 아닙니다.", color = Muted, fontSize = 12.sp)
+                        } else {
+                            Text("분석 결과를 표시할 수 없습니다: ${screenCropError ?: "응답 오류"}", color = Muted)
+                        }
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -135,15 +163,18 @@ private fun ResultHeader(onAction: (ResultAction) -> Unit) {
 @Composable
 private fun ResultHero(result: AnalysisResult) {
     if (result.riskLevel == RiskLevel.UNKNOWN) {
+        val hasTextDecision = result.historyType == HistoryType.TEXT && result.keyFinding != null
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(80.dp).background(SoftBlue, CircleShape), contentAlignment = Alignment.Center) {
                 ResultGlyph(ResultIcon.SEARCH, ProtectiveBlue, 34.dp)
             }
             Surface(color = Color(0xFFE8EEFF), shape = CircleShape) {
-                Text("분석 완료 · 판정 정보 없음", Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = Ink, fontSize = 11.sp)
+                Text(if (hasTextDecision) "분석 완료 · 텍스트 판정" else "분석 완료 · 판정 정보 없음",
+                    Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = Ink, fontSize = 11.sp)
             }
-            Text("결과 정보를 확인해주세요", color = Ink, fontSize = 24.sp, lineHeight = 32.sp,
+            Text(if (hasTextDecision) result.keyFinding!! else "결과 정보를 확인해주세요",
+                color = Ink, fontSize = 24.sp, lineHeight = 32.sp,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Text(result.summary, color = Muted, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
         }

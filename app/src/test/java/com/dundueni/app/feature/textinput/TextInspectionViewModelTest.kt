@@ -1,5 +1,6 @@
 package com.dundueni.app.feature.textinput
 
+import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import com.dundueni.app.feature.history.HistoryType
 import com.google.gson.JsonParser
@@ -16,16 +17,24 @@ import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 @OptIn(ExperimentalCoroutinesApi::class)
 class TextInspectionViewModelTest {
     @Test fun savedInputAndRetryKeepTheTextResultType() = runBlocking {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
+            val application: Application = RuntimeEnvironment.getApplication()
             val savedState = SavedStateHandle()
-            val viewModel = TextInspectionViewModel(savedState)
+            val viewModel = TextInspectionViewModel(application, savedState)
             viewModel.updateInputText("PB-03 and PB-18")
             val restored = TextInspectionViewModel(
+                application,
                 SavedStateHandle(mapOf("inputText" to savedState.get<String>("inputText"))),
             )
             assertEquals("PB-03 and PB-18", restored.inputText.value)

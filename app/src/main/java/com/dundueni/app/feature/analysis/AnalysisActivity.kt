@@ -23,6 +23,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.data.auth.AuthSessionRuntime
+import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.data.model.ImageInput
@@ -81,7 +82,10 @@ class AnalysisActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == AnalysisViewModel::class.java)
                 @Suppress("UNCHECKED_CAST")
-                return AnalysisViewModel(AnalysisFlowDependencies.createRepository(applicationContext)) as T
+                return AnalysisViewModel(
+                    AnalysisFlowDependencies.createRepository(applicationContext),
+                    screenCropApi = { AnalysisFlowDependencies.createTextApiService(applicationContext) },
+                ) as T
             }
         })[AnalysisViewModel::class.java]
 
@@ -95,9 +99,9 @@ class AnalysisActivity : ComponentActivity() {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
-                val success = state as? AnalysisUiState.Success
+                val success = state is AnalysisUiState.Success || state is AnalysisUiState.ScreenSuccess
                 // Fake transport reuses its server analysis ID; each completed request uses its own local attempt ID.
-                val resultId = if (success != null) viewModel.attemptId else null
+                val resultId = if (success) viewModel.attemptId else null
                 LaunchedEffect(resultId) {
                     if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
                     if (BasicInspectionQuota(this@AnalysisActivity).recordCompleted(resultId)) {
@@ -123,7 +127,8 @@ class AnalysisActivity : ComponentActivity() {
         val file = captureFile
         val uri = intent.data
         // 최초 실행과 재시도 모두 입력 준비부터 시작해 준비 실패도 검사 상태에 포함한다.
-        viewModel.analyzePrepared {
+        viewModel.analyzePrepared(screenCrop = file != null &&
+            BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true)) {
             if (file != null) processor.prepareCaptureFile(file)
             else processor.prepare(ImageInput.PhotoPicker(requireNotNull(uri)))
         }

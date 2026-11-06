@@ -68,6 +68,10 @@ android {
     }
 }
 
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty("user.home", rootProject.file(".gradle-codex").absolutePath)
+}
+
 dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)

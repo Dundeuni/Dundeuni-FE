@@ -10,6 +10,8 @@ import retrofit2.Response
 import retrofit2.http.HTTP
 import retrofit2.http.Multipart
 import retrofit2.http.Part
+import retrofit2.http.Body
+import retrofit2.http.POST
 
 /**
  * 분석 서버에 어떤 방식으로 이미지를 보낼지 정의하는 API 계약이다.
@@ -29,3 +31,39 @@ interface AnalysisApiService {
             AnalysisApiContract.IMAGE_TYPE.toRequestBody("text/plain".toMediaType())
     ): Response<ResponseBody>
 }
+
+interface TextAnalysisApiService {
+    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
+    @POST(AnalysisApiContract.PATH)
+    suspend fun analyzeText(@Body request: TextAnalysisRequest): Response<TextAnalysisResponse>
+
+    @Multipart
+    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
+    @HTTP(method = AnalysisApiContract.METHOD, path = AnalysisApiContract.PATH, hasBody = true)
+    suspend fun analyzeScreenCrop(
+        @Part file: MultipartBody.Part,
+        @Part("type") type: RequestBody = "TEXT".toRequestBody("text/plain".toMediaType()),
+        @Part("sourceType") sourceType: RequestBody =
+            "SCREEN_CROP".toRequestBody("text/plain".toMediaType()),
+    ): Response<TextAnalysisResponse>
+}
+
+data class TextAnalysisRequest(val type: String = "TEXT", val text: String)
+
+data class TextAnalysisResponse(
+    val isSuccess: Boolean? = null,
+    val code: String? = null,
+    val result: TextAnalysisResponseResult? = null,
+)
+
+data class TextAnalysisResponseResult(
+    val analysisId: String? = null,
+    val type: String? = null,
+    val status: String? = null,
+    val textResult: TextAnalysisTextResult? = null,
+)
+
+data class TextAnalysisTextResult(
+    val decision: String? = null,
+    val sourceType: String? = null,
+)

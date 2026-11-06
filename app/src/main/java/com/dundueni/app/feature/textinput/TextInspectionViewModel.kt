@@ -1,9 +1,13 @@
 package com.dundueni.app.feature.textinput
 
+import android.app.Application
 import androidx.annotation.MainThread
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.remote.api.TextAnalysisRequest
+import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskEvidence
@@ -28,7 +32,10 @@ sealed interface TextInspectionUiState {
 }
 
 /** Keeps the submitted text and inspection state across Activity recreation. */
-class TextInspectionViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel() {
+class TextInspectionViewModel(
+    application: Application,
+    private val savedStateHandle: SavedStateHandle,
+) : AndroidViewModel(application) {
     private val mutableUiState = MutableStateFlow<TextInspectionUiState>(TextInspectionUiState.Idle)
     val uiState: StateFlow<TextInspectionUiState> = mutableUiState.asStateFlow()
     val inputText: StateFlow<String> = savedStateHandle.getStateFlow(INPUT_TEXT_KEY, "")
@@ -83,7 +90,12 @@ class TextInspectionViewModel(private val savedStateHandle: SavedStateHandle) : 
         mutableUiState.value = TextInspectionUiState.Loading
         requestJob = viewModelScope.launch {
             try {
-                val json = withContext(Dispatchers.Default) { Gson().toJson(createMockResult(text)) }
+                val result = when (BuildConfig.ANALYSIS_API_MODE.trim().uppercase()) {
+                    "FAKE" -> withContext(Dispatchers.Default) { createMockResult(text) }
+                    "REAL" -> inspectWithApi(text)
+                    else -> error("Unknown analysis API mode")
+                }
+                val json = Gson().toJson(result)
                 resultPendingOpen = json
                 mutableUiState.value = TextInspectionUiState.Success(json)
             } catch (cancelled: CancellationException) {
@@ -93,6 +105,36 @@ class TextInspectionViewModel(private val savedStateHandle: SavedStateHandle) : 
                 mutableUiState.value = TextInspectionUiState.Error
             }
         }
+    }
+
+    private suspend fun inspectWithApi(text: String): AnalysisResult {
+        val response = AnalysisFlowDependencies.createTextApiService(getApplication())
+            .analyzeText(TextAnalysisRequest(text = text))
+        if (!response.isSuccessful) error("Text analysis HTTP ${response.code()}")
+        val body = response.body() ?: error("Text analysis response is missing")
+        if (body.isSuccess != true) error("Text analysis was not successful")
+        val result = body.result ?: error("Text analysis result is missing")
+        if (result.status != "COMPLETED" || result.textResult == null) {
+            error("Text analysis is not completed")
+        }
+        if (result.type != null && result.type != "TEXT") error("Unexpected analysis type")
+        val id = result.analysisId?.takeIf { it.isNotBlank() }
+            ?: error("Text analysis ID is missing")
+        val decisionLabel = when (result.textResult.decision) {
+            "normal" -> "일반 텍스트로 판단"
+            "phishing" -> "피싱 의심"
+            "defer" -> "판단 보류"
+            else -> error("Unknown text analysis decision")
+        }
+        return AnalysisResult(
+            id = id,
+            historyType = HistoryType.TEXT,
+            riskLevel = RiskLevel.UNKNOWN,
+            summary = "AI 텍스트 분석 결과: $decisionLabel. 이 판정은 참고 정보입니다.",
+            keyFinding = decisionLabel,
+            sourceText = text,
+            targetLabel = "입력한 텍스트 내용",
+        )
     }
 
     private fun createMockResult(text: String) = AnalysisResult(

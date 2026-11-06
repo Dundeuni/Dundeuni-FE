@@ -14,6 +14,12 @@ sealed interface AnalysisUiState {
     data object Loading : AnalysisUiState
     data class Pending(val analysisId: String, val status: AnalysisExecutionStatus) : AnalysisUiState
     data class Success(val result: AnalysisResult) : AnalysisUiState
+    data class ScreenSuccess(
+        val image: AnalysisResult?,
+        val text: ScreenCropAnalysis?,
+        val imageError: Error?,
+        val textError: Error?,
+    ) : AnalysisUiState
     // Preserve a safe category, never the exception or raw server message.
     data class Error(
         val kind: AnalysisErrorKind = AnalysisErrorKind.UNKNOWN,

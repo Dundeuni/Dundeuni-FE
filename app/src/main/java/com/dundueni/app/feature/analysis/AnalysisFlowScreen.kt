@@ -17,6 +17,8 @@ import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultRoute
+import com.dundueni.app.feature.analysisresult.AnalysisResult as PresentedResult
+import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
 
@@ -38,9 +40,25 @@ fun AnalysisFlowScreen(
 ) {
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
+    val screen = state as? AnalysisUiState.ScreenSuccess
     val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.copy(historyType = historyType)
+        ?: screen?.image?.toPb05Result(isDemo = false)?.copy(historyType = HistoryType.SCREEN)
+        ?: screen?.text?.let { text ->
+            PresentedResult(
+                id = text.analysisId,
+                historyType = HistoryType.SCREEN,
+                riskLevel = RiskLevel.UNKNOWN,
+                summary = "화면 문자 피싱 분석이 완료되었습니다.",
+                targetLabel = "캡처 화면",
+            )
+        }
     if (presented != null) {
-        AnalysisResultRoute(presented, onReturn = onClose, onHome = onHome, isDemo = isDemo)
+        AnalysisResultRoute(
+            presented, onReturn = onClose, onHome = onHome, isDemo = isDemo,
+            screenCropDecision = screen?.text?.label,
+            imageAnalysisError = screen?.imageError?.message,
+            screenCropError = screen?.textError?.message,
+        )
         return
     }
     Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
@@ -49,6 +67,7 @@ fun AnalysisFlowScreen(
             AnalysisUiState.Idle -> Text("검사 준비 중")
             AnalysisUiState.Loading -> Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
+            is AnalysisUiState.ScreenSuccess -> Unit
             is AnalysisUiState.Pending -> Text("분석 요청이 접수되었으며 서버에서 처리 중입니다.")
             is AnalysisUiState.Error -> Unit
         }

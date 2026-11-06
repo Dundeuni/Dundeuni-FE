@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.textinput
 
 import android.os.Bundle
+import com.dundueni.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,7 +26,7 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 
 /**
  * 텍스트 입력 및 검사 화면을 관리하는 Activity.
- * 검사 상태를 표시하고 Mock 결과가 준비되면 결과 화면으로 이동한다.
+ * 검사 상태를 표시하고 결과가 준비되면 결과 화면으로 이동한다.
  */
 class TextInputActivity : ComponentActivity() {
     private val overlayOwner = "text-input:${java.util.UUID.randomUUID()}"
@@ -89,7 +90,9 @@ class TextInputActivity : ComponentActivity() {
                             return@LaunchedEffect
                         }
                         startActivity(AnalysisResultActivity.createIntent(
-                            this@TextInputActivity, success.resultJson, isDemo = true, suspendFloatingButton = true,
+                            this@TextInputActivity, success.resultJson,
+                            isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
+                            suspendFloatingButton = true,
                         ))
                         viewModel.onResultOpened()
                     } catch (_: Exception) {

@@ -26,6 +26,9 @@ fun AnalysisResultRoute(
     onReturn: () -> Unit,
     onHome: () -> Unit,
     isDemo: Boolean = false,
+    screenCropDecision: String? = null,
+    imageAnalysisError: String? = null,
+    screenCropError: String? = null,
 ) {
     BackHandler(onBack = onReturn)
     val context = LocalContext.current
@@ -70,7 +73,11 @@ fun AnalysisResultRoute(
         }, "분석 결과 공유"))
     }
 
-    AnalysisResultScreen(result, historySaved = saved, isDemo = isDemo, onAction = { action ->
+    AnalysisResultScreen(result, historySaved = saved, isDemo = isDemo,
+        screenCropDecision = screenCropDecision,
+        imageAnalysisError = imageAnalysisError,
+        screenCropError = screenCropError,
+        onAction = { action ->
         when (action) {
             ResultAction.RETURN -> onReturn()
             ResultAction.HOME -> onHome()

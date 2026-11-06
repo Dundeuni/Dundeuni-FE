@@ -9,10 +9,17 @@ object AnalysisResultJsonAdapter {
         require(json.length <= 65_536) { "분석 결과가 너무 큽니다." }
         val value = JSONObject(json)
         val evidence = value.optJSONArray("evidence")
+        val historyType = HistoryType.entries.firstOrNull { it.name == value.optionalText("historyType") }
+            ?: HistoryType.UNKNOWN
+        val riskLevel = value.requiredText("riskLevel")
         return AnalysisResult(
             id = value.requiredText("id"),
-            historyType = HistoryType.entries.firstOrNull { it.name == value.optionalText("historyType") } ?: HistoryType.UNKNOWN,
-            riskLevel = RiskLevel.fromWireValue(value.requiredText("riskLevel")),
+            historyType = historyType,
+            riskLevel = if (historyType == HistoryType.TEXT && riskLevel.equals("UNKNOWN", ignoreCase = true)) {
+                RiskLevel.UNKNOWN
+            } else {
+                RiskLevel.fromWireValue(riskLevel)
+            },
             summary = value.requiredText("summary"),
             keyFinding = value.optionalText("keyFinding"),
             fraudLevel = value.optionalText("fraudLevel")?.let(RiskLevel::fromWireValue),
