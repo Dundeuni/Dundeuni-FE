@@ -7,6 +7,7 @@ import com.dundueni.app.data.remote.api.AuthApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 /**
  * 호출 측에서 확정된 BE base URL을 전달하고, 생성한 인스턴스를 재사용합니다.
@@ -26,6 +27,10 @@ class RetrofitClient(
 ) {
     private val okHttpClient = OkHttpClient.Builder().apply {
         addInterceptor(BearerAuthInterceptor(sessionStore ?: EmptyAuthSessionStore, onUnauthorized))
+        connectTimeout(15, TimeUnit.SECONDS)
+        readTimeout(300, TimeUnit.SECONDS)
+        writeTimeout(60, TimeUnit.SECONDS)
+        callTimeout(360, TimeUnit.SECONDS)
     }.build()
 
     private val retrofit = Retrofit.Builder()
