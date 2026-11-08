@@ -114,7 +114,8 @@ class AnalysisActivity : ComponentActivity() {
                 Box(Modifier.safeDrawingPadding()) {
                     if (resultId == null || allowedResultId == resultId) {
                         AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome,
-                            historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE)
+                            historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE,
+                            onRefresh = viewModel::refreshPending)
                     }
                 }
             }

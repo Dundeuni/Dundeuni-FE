@@ -24,11 +24,15 @@ sealed interface AnalysisUiState {
     data class Error(
         val kind: AnalysisErrorKind = AnalysisErrorKind.UNKNOWN,
         val httpStatus: Int? = null,
+        val pendingAnalysisId: String? = null,
     ) : AnalysisUiState {
         val message: String
             get() = if (kind == AnalysisErrorKind.HTTP) {
                 when (httpStatus) {
                     400 -> "잘못된 분석 요청입니다."
+                    401 -> "로그인이 필요합니다."
+                    404 -> "분석 결과를 찾을 수 없거나 만료되었습니다."
+                    500 -> "분석 서버 오류가 발생했습니다."
                     409 -> "분석 요청이 충돌했습니다."
                     410 -> "분석 세션이 만료되었습니다."
                     413 -> "이미지 크기가 너무 큽니다."

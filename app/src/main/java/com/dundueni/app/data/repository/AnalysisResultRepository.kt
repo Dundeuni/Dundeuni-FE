@@ -12,4 +12,7 @@ import okhttp3.MultipartBody
  */
 fun interface AnalysisResultRepository {
     suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult
+
+    suspend fun findResult(analysisId: String): AnalysisResult =
+        throw UnsupportedOperationException("Analysis lookup is unavailable")
 }

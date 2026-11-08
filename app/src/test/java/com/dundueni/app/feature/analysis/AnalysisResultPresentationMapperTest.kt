@@ -42,6 +42,21 @@ class AnalysisResultPresentationMapperTest {
         assertEquals(AiLikelihood.UNKNOWN, result.copy(aiRiskLevel = "SERVER_RISK").toPb05Result(false)?.aiLikelihood)
     }
 
+    @Test fun getSummaryAndNormalizedReasonsReachRealResultWithoutRiskInference() {
+        val mapped = checkNotNull(result.copy(
+            aiRiskLevel = null,
+            aiGenerationScore = null,
+            normalizedRiskLevel = "UNKNOWN",
+            summary = "BE에 저장된 요약",
+            reasons = listOf("BE에 저장된 근거"),
+        ).toPb05Result(false))
+        assertEquals(RiskLevel.UNKNOWN, mapped.riskLevel)
+        assertEquals("BE에 저장된 요약", mapped.summary)
+        assertEquals("BE에 저장된 근거", mapped.evidence.single().description)
+        assertNull(mapped.aiScore)
+        assertNull(mapped.fraudScore)
+    }
+
     @Test fun unknownOrIncompleteDemoDataIsNotMapped() {
         assertNull(result.copy(aiRiskLevel = "UNKNOWN").toPb05Result(true))
         assertNull(result.copy(analysisId = null).toPb05Result(true))

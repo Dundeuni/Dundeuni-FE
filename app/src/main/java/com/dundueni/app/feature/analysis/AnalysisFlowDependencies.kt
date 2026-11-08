@@ -50,25 +50,26 @@ object AnalysisFlowDependencies {
         sessionStore: AuthSessionStore? = null,
         onUnauthorized: (String) -> Unit = {},
     ): AnalysisResultRepository {
-        val service = try {
+        return try {
             when (mode.trim().uppercase()) {
-                FAKE_MODE -> FakeAnalysisApiService()
-                REAL_MODE -> RetrofitClient(validateBaseUrl(baseUrl), sessionStore, onUnauthorized).analysisApiService
+                FAKE_MODE -> AnalysisRepository(FakeAnalysisApiService())
+                REAL_MODE -> RetrofitClient(validateBaseUrl(baseUrl), sessionStore, onUnauthorized).let { client ->
+                    AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)
+                }
                 else -> throw AnalysisApiConfigurationException(
                     "Unknown analysis.api.mode '$mode'. Set it to FAKE or REAL in local.properties."
                 )
             }
         } catch (error: AnalysisApiConfigurationException) {
-            ConfigurationErrorApiService(error)
+            AnalysisRepository(ConfigurationErrorApiService(error))
         } catch (error: IllegalArgumentException) {
-            ConfigurationErrorApiService(
+            AnalysisRepository(ConfigurationErrorApiService(
                 AnalysisApiConfigurationException(
                     "Invalid analysis.api.baseUrl. Use a valid HTTP(S) base URL ending with '/'.",
                     error
                 )
-            )
+            ))
         }
-        return AnalysisRepository(service)
     }
 
     private fun validateBaseUrl(baseUrl: String?): String {

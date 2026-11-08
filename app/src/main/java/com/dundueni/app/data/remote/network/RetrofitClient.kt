@@ -2,6 +2,7 @@ package com.dundueni.app.data.remote.network
 
 import com.dundueni.app.data.auth.AuthSessionStore
 import com.dundueni.app.data.remote.api.AnalysisApiService
+import com.dundueni.app.data.remote.api.AnalysisQueryApiService
 import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.remote.api.AuthApiService
 import com.dundueni.app.data.remote.api.PhoneAnalysisApiService
@@ -42,6 +43,10 @@ class RetrofitClient(
 
     val analysisApiService: AnalysisApiService by lazy {
         retrofit.create(AnalysisApiService::class.java)
+    }
+
+    val analysisQueryApiService: AnalysisQueryApiService by lazy {
+        retrofit.create(AnalysisQueryApiService::class.java)
     }
 
     val textAnalysisApiService: TextAnalysisApiService by lazy {

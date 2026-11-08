@@ -49,7 +49,8 @@ private fun AnalysisResult.toUnclassifiedPb05Result(): PresentedResult {
         historyType = HistoryType.IMAGE,
         id = analysisId?.takeIf { it.isNotBlank() } ?: "image-result-${hashCode()}",
         riskLevel = RiskLevel.UNKNOWN,
-        summary = "분석이 완료되었어요. 아래 AI 정보와 분석 근거를 확인해주세요.",
+        summary = summary?.takeIf { it.isNotBlank() }
+            ?: "분석이 완료되었어요. 제공된 AI 정보와 분석 근거를 확인해주세요.",
         aiLikelihood = likelihood,
         aiRiskLabel = aiRiskLevel?.trim()?.takeIf { it.isNotEmpty() }?.take(60),
         aiScore = aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
