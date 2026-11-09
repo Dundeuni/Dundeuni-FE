@@ -118,7 +118,7 @@ fun EmailVerificationScreen(
                             { focus.clearFocus(); onSendCode() }, fieldFontSize = 12)
                     }
                     val sendButton: @Composable (Modifier) -> Unit = { modifier ->
-                        Box(modifier.heightIn(min = 42.dp).clip(RoundedCornerShape(12.dp))
+                        Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
                             .background(if (sendEnabled) TermsColors.Blue else TermsColors.Disabled)
                             .clickable(enabled = sendEnabled, role = Role.Button) { focus.clearFocus(); onSendCode() }
                             .padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
@@ -178,7 +178,7 @@ private fun VerificationField(
 ) {
     val focus = LocalFocusManager.current
     val shape = RoundedCornerShape(12.dp)
-    BasicTextField(value, onChange, modifier.heightIn(min = if (code) 56.dp else 42.dp).clip(shape)
+    BasicTextField(value, onChange, modifier.heightIn(min = if (code) 56.dp else 52.dp).clip(shape)
         .background(if (errorMessage != null) Color(0xFFFAF0F3) else Color.White)
         .then(if (errorMessage != null) Modifier.border(1.dp, Danger, shape) else Modifier)
         .semantics { contentDescription = label; errorMessage?.let { error(it) } },
@@ -193,7 +193,7 @@ private fun VerificationField(
                     if (value.isEmpty()) Text(placeholder, fontSize = fieldFontSize.sp, color = Color(0xFF999BA2))
                     input()
                 }
-                Box(Modifier.size(44.dp).clickable(enabled = enabled, role = Role.Button) { onChange("") }
+                Box(Modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button) { onChange("") }
                     .semantics { contentDescription = "$label 지우기" }, contentAlignment = Alignment.Center) {
                     TermsIcon(R.drawable.auth_clear, 14, 14)
                 }

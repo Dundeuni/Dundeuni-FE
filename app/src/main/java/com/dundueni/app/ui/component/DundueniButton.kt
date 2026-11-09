@@ -12,8 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniDimens
+import com.dundueni.app.ui.theme.DundueniPillShape
+import com.dundueni.app.ui.theme.DisabledSurface
 
 /**
  * 든든이 앱에서 일반적인 주요 버튼을 통일하기 위해 사용하는 버튼 컴포넌트.
@@ -87,12 +88,13 @@ fun DundueniButton(
         enabled = enabled,
 
         // Shape.kt의 공통 버튼 모서리 사용
-        shape = DundueniDefaultShape,
+        shape = DundueniPillShape,
 
         // Color.kt → Theme.kt에 등록된 공통 색상 사용
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
-            contentColor = contentColor
+            contentColor = contentColor,
+            disabledContainerColor = DisabledSurface,
         )
     ) {
 

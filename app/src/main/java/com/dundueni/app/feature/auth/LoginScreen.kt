@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -157,12 +158,12 @@ fun LoginScreen(
 
 @Composable
 private fun LoginSubmitButton(state: LoginUiState, onSubmit: () -> Unit, compact: Boolean = false) {
-    Box(Modifier.fillMaxWidth().height(if (compact) 48.dp else 27.dp).clip(RoundedCornerShape(24.dp))
+    Box(Modifier.fillMaxWidth().height(if (compact) 48.dp else 56.dp).clip(CircleShape)
         .clickable(enabled = !state.submitting, role = Role.Button, onClick = onSubmit), contentAlignment = Alignment.Center) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 27.dp).background(LoginColors.Blue, RoundedCornerShape(24.dp)),
+        Row(Modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp).background(LoginColors.Blue, CircleShape),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             if (state.submitting) CircularProgressIndicator(Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
-            Text(if (state.submitting) "로그인 중" else "로그인", color = Color.White, fontSize = 11.sp)
+            Text(if (state.submitting) "로그인 중" else "로그인", color = Color.White, fontSize = 16.sp)
             if (!state.submitting) AssetIcon(R.drawable.auth_arrow, 7, 8)
         }
     }
@@ -201,7 +202,7 @@ private fun LoginField(
         val shape = RoundedCornerShape(8.dp)
         BasicTextField(
             value = value, onValueChange = onValueChange, enabled = enabled, singleLine = true,
-            modifier = Modifier.fillMaxWidth().heightIn(min = if (passwordVisible == null) 40.dp else 43.dp).clip(shape)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(shape)
                 .background(if (invalid) LoginColors.ErrorBackground else LoginColors.Background)
                 .then(if (invalid) Modifier.border(1.dp, Danger, shape) else Modifier)
                 .semantics { contentDescription = label; if (invalid) error(errorMessage ?: "이메일 또는 비밀번호가 일치하지 않습니다.") },
@@ -237,13 +238,13 @@ private fun LoginMessage(message: String) {
     Row(Modifier.padding(start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically) {
         AssetIcon(R.drawable.auth_error, 11, 11)
         Spacer(Modifier.width(4.dp))
-        Text(message, color = Danger, fontSize = 10.sp, lineHeight = 20.sp)
+        Text(message, color = Danger, fontSize = 12.sp, lineHeight = 20.sp)
     }
 }
 
 @Composable
 private fun UtilityLink(label: String, color: Color, enabled: Boolean, onClick: () -> Unit) {
-    Box(Modifier.height(24.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.heightIn(min = 48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
         Text(label, color = color, fontSize = 12.sp)
     }
 }
@@ -266,14 +267,14 @@ private fun AssetIcon(@DrawableRes resource: Int, width: Int, height: Int) {
 private val LoginFont = FontFamily(Font(R.font.pretendard_medium))
 
 private object LoginColors {
-    val Background = Color(0xFFF8F9FF)
-    val Blue = Color(0xFF0266FF)
-    val Link = Color(0xFF0050CC)
+    val Background = com.dundueni.app.ui.theme.PageBackground
+    val Blue = com.dundueni.app.ui.theme.ProtectiveBlue
+    val Link = com.dundueni.app.ui.theme.ProtectiveBlue
     val Text = Color(0xFF45474C)
     val Muted = Color(0xFF75777D)
     val Placeholder = Color(0xFF999BA2)
     val Divider = Color(0xFFDDE3EF)
     val ErrorBackground = Color(0xFFFAF0F3)
     val Kakao = Color(0xFFFEE500)
-    val Ink = Color(0xFF161C25)
+    val Ink = com.dundueni.app.ui.theme.BrandInk
 }

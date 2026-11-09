@@ -39,6 +39,10 @@ private val LightColorScheme = lightColorScheme(
 
     background = CanvasSubLayer,
     surface = SurfaceLight,
+    surfaceContainer = SoftBlue,
+    surfaceContainerLow = PageBackground,
+    onSurface = BrandInk,
+    onSurfaceVariant = SecondaryInk,
 
     error = Danger
 )

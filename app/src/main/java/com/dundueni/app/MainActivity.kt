@@ -1,7 +1,6 @@
 package com.dundueni.app
 
 import android.content.Intent
-import android.app.AlertDialog
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,10 +9,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.data.auth.AuthSessionRuntime
@@ -30,6 +35,7 @@ import com.dundueni.app.feature.settings.SettingsScreen
 import com.dundueni.app.feature.onboarding.OnboardingScreen
 import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
+import com.dundueni.app.ui.theme.BrandInk
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -43,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private var floatingButtonEnabled by mutableStateOf(false)
     private var showingSettings by mutableStateOf(false)
     private var showingOnboarding by mutableStateOf(false)
+    private var showingAccountDialog by mutableStateOf(false)
     private var onboardingPage by mutableIntStateOf(1)
     private var pendingOverlayAction: OverlayAction? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -131,6 +138,22 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 )
+                if (showingAccountDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showingAccountDialog = false },
+                        title = { Text("계정") },
+                        text = { Text("로그인된 상태입니다.") },
+                        dismissButton = { TextButton(onClick = { showingAccountDialog = false }) { Text("취소") } },
+                        confirmButton = { TextButton(onClick = {
+                            showingAccountDialog = false
+                            AuthSessionRuntime.store(applicationContext).clear()
+                            redirectToLogin()
+                        }) { Text("로그아웃") } },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = Color.White,
+                        titleContentColor = BrandInk,
+                    )
+                }
             }
         }
     }
@@ -200,15 +223,7 @@ class MainActivity : ComponentActivity() {
             lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
             redirectToLogin()
         } else {
-            AlertDialog.Builder(this)
-                .setTitle("계정")
-                .setMessage("로그인된 상태입니다.")
-                .setNegativeButton("취소", null)
-                .setPositiveButton("로그아웃") { _, _ ->
-                    AuthSessionRuntime.store(applicationContext).clear()
-                    redirectToLogin()
-                }
-                .show()
+            showingAccountDialog = true
         }
     }
 

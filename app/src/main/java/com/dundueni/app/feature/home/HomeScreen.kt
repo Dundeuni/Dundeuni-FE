@@ -65,15 +65,25 @@ import com.dundueni.app.R
 import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.PageBackground
+import com.dundueni.app.ui.theme.SecondaryInk
+import com.dundueni.app.ui.theme.SoftBlue
+import com.dundueni.app.ui.theme.CautionInk
+import com.dundueni.app.ui.theme.Danger
+import com.dundueni.app.ui.theme.SafeInk
+import com.dundueni.app.ui.theme.SoftCaution
+import com.dundueni.app.ui.theme.SoftDanger
+import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
 import org.json.JSONArray
 
-private val HomeBackground = Color(0xFFF7F8FC)
-private val HomeBlue = Color(0xFF0758D5)
-private val HomePaleBlue = Color(0xFFEAF0FF)
-private val HomeInk = Color(0xFF171B24)
-private val HomeMuted = Color(0xFF858B96)
+private val HomeBackground = PageBackground
+private val HomeBlue = ProtectiveBlue
+private val HomePaleBlue = SoftBlue
+private val HomeInk = BrandInk
+private val HomeMuted = SecondaryInk
 private val HomeBorder = Color(0xFFE9ECF2)
 
 @Composable
@@ -327,9 +337,9 @@ private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Uni
         else -> record.aiScore?.let { "AI 생성 $it%" } ?: "분석 완료"
     }
     val badgeColor = when (record.risk.uppercase()) {
-        "DANGER" -> Color(0xFFFFE4E2)
-        "CAUTION" -> Color(0xFFFFF0D9)
-        "SAFE" -> Color(0xFFE2F5EA)
+        "DANGER" -> SoftDanger
+        "CAUTION" -> SoftCaution
+        "SAFE" -> SoftSafe
         else -> Color(0xFFE6E4FF)
     }
     Row(
@@ -337,7 +347,7 @@ private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Uni
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(badgeColor), contentAlignment = Alignment.Center) {
-            HomeGlyph(if (record.aiScore != null) "robot" else "warning", if (record.risk == "DANGER") Color(0xFFCB201C) else HomeBlue, Modifier.size(23.dp))
+            HomeGlyph(if (record.aiScore != null) "robot" else "warning", badgeTextColor(record.risk), Modifier.size(23.dp))
         }
         Spacer(Modifier.width(13.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -350,9 +360,9 @@ private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Uni
 }
 
 private fun badgeTextColor(risk: String) = when (risk.uppercase()) {
-    "DANGER" -> Color(0xFFBB1717)
-    "CAUTION" -> Color(0xFFAA6A00)
-    "SAFE" -> Color(0xFF167344)
+    "DANGER" -> Danger
+    "CAUTION" -> CautionInk
+    "SAFE" -> SafeInk
     else -> Color(0xFF3F35C8)
 }
 

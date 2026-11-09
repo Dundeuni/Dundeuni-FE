@@ -27,14 +27,22 @@ import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.history.HistoryStore
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeBottomNavigation
+import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.PageBackground
+import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.theme.SecondaryInk
+import com.dundueni.app.ui.theme.SoftBlue
+import com.dundueni.app.ui.component.DundueniButton
+import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val Bg = Color(0xFFF7F8FC)
-private val Blue = Color(0xFF0758D5)
-private val Ink = Color(0xFF171B24)
-private val Muted = Color(0xFF777E8B)
-private val Pale = Color(0xFFEAF0FF)
+private val Bg = PageBackground
+private val Blue = ProtectiveBlue
+private val Ink = BrandInk
+private val Muted = SecondaryInk
+private val Pale = SoftBlue
 
 @Composable
 fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
@@ -144,7 +152,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                             Spacer(Modifier.height(10.dp))
                             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Pale).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 listOf("작게", "보통", "크게").forEach { size ->
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (buttonSize == size) Color.White else Color.Transparent).clickable { buttonSize = size }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
+                                    Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(if (buttonSize == size) Color.White else Color.Transparent).clickable { buttonSize = size }, contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
                                 }
                             }
                         }
@@ -165,7 +173,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                             Spacer(Modifier.height(10.dp))
                             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Pale).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 listOf("작게", "보통", "크게").forEach { size ->
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (fontSize == size) Color.White else Color.Transparent).clickable { fontSize = size }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
+                                    Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(if (fontSize == size) Color.White else Color.Transparent).clickable { fontSize = size }, contentAlignment = Alignment.Center) { Text(size, color = Ink, fontSize = 13.sp) }
                                 }
                             }
                         }
@@ -215,17 +223,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 if (hasPendingChanges) {
                     Text("변경한 설정은 적용 버튼을 눌러야 저장됩니다.", color = Muted, fontSize = 12.sp)
                 }
-                Button(
-                    onClick = ::applySettings,
-                    enabled = hasPendingChanges,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Blue,
-                        disabledContainerColor = Color(0xFFDCE3F0),
-                        disabledContentColor = Muted,
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                ) { Text("적용", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                DundueniButton("적용", ::applySettings, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY, hasPendingChanges)
             }
         }
     }
@@ -269,8 +267,10 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
         title = { Text(if (editingFamily < 0) "보호자 등록" else "보호자 정보") },
         text = {
             Column {
-                OutlinedTextField(familyName, { familyName = it }, label = { Text("이름 및 관계") }, singleLine = true)
-                OutlinedTextField(familyPhone, { familyPhone = it }, label = { Text("전화번호") }, singleLine = true)
+                OutlinedTextField(familyName, { familyName = it }, label = { Text("이름 및 관계") }, singleLine = true,
+                    shape = RoundedCornerShape(12.dp), colors = dundueniOutlinedTextFieldColors())
+                OutlinedTextField(familyPhone, { familyPhone = it }, label = { Text("전화번호") }, singleLine = true,
+                    shape = RoundedCornerShape(12.dp), colors = dundueniOutlinedTextFieldColors())
             }
         },
         confirmButton = {
@@ -311,7 +311,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
 }
 
 @Composable private fun EmergencyCard(title: String, subtitle: String, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(9.dp)).background(Pale).clickable(onClick = onClick).padding(10.dp)) { Text(title, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = Muted, fontSize = 9.sp) }
+    Column(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).background(Pale).clickable(onClick = onClick).padding(10.dp)) { Text(title, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = Muted, fontSize = 11.sp) }
 }
 
 private fun dial(context: Context, number: String) {

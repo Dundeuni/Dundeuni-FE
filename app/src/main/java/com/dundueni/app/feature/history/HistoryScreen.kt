@@ -3,6 +3,7 @@ package com.dundueni.app.feature.history
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -28,9 +29,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dundueni.app.R
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
@@ -52,20 +56,30 @@ import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.formatScore
 import com.dundueni.app.feature.home.HomeBottomNavigation
 import com.dundueni.app.feature.home.HomeDestination
+import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.CautionInk
+import com.dundueni.app.ui.theme.Danger
+import com.dundueni.app.ui.theme.PageBackground
+import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.theme.Safe
+import com.dundueni.app.ui.theme.SafeInk
+import com.dundueni.app.ui.theme.SecondaryInk
+import com.dundueni.app.ui.theme.SoftBlue
+import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val Background = Color(0xFFF7F8FD)
-private val Ink = Color(0xFF182232)
-private val Muted = Color(0xFF7C8596)
-private val Blue = Color(0xFF1764FF)
-private val PaleBlue = Color(0xFFEEF3FF)
-private val Red = Color(0xFFEF4D58)
+private val Background = PageBackground
+private val Ink = BrandInk
+private val Muted = SecondaryInk
+private val Blue = ProtectiveBlue
+private val PaleBlue = SoftBlue
+private val Red = Danger
 private val Purple = Color(0xFF7661F4)
-private val Green = Color(0xFF32A576)
+private val Green = Safe
 private val Outline = Color(0xFFEBEEF6)
 
 /** Production records and debug samples use the same UI, but never share their storage. */
@@ -140,13 +154,12 @@ fun HistoryScreen(
                             ResultGlyph(ResultIcon.BACK, Ink, 21.dp)
                         }
                     } else {
-                        Box(Modifier.padding(start = 8.dp).size(if (easy) 36.dp else 26.dp)
-                            .background(if (easy) Color(0xFFE5EDFF) else Ink, CircleShape), contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(if (easy) 28.dp else 26.dp).background(if (easy) Blue else Ink, CircleShape), contentAlignment = Alignment.Center) {
-                                if (easy) HistoryGlyph(HistoryIcon.PROTECT, Color.White, 18.dp)
-                                else ResultGlyph(ResultIcon.SHIELD, Blue, 17.dp)
-                            }
-                        }
+                        Image(
+                            painter = painterResource(R.drawable.dundeuni_mascot_search),
+                            contentDescription = "검사 기록 든든이",
+                            modifier = Modifier.padding(start = 8.dp).size(40.dp),
+                            contentScale = ContentScale.Fit,
+                        )
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(if (selected != null) "검사 기록 상세" else if (easy) "Easy History" else "든든이",
@@ -325,7 +338,8 @@ fun HistoryScreen(
 
 @Composable
 private fun HistoryFilter(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label, fontSize = 11.sp) }, shape = CircleShape,
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label, fontSize = 11.sp) },
+        modifier = Modifier.heightIn(min = 48.dp), shape = CircleShape,
         border = null, colors = FilterChipDefaults.filterChipColors(containerColor = Color(0xFFEDF0FA), labelColor = Muted,
             selectedContainerColor = Ink, selectedLabelColor = Color.White))
 }
@@ -333,6 +347,8 @@ private fun HistoryFilter(label: String, selected: Boolean, onClick: () -> Unit)
 private fun recordColor(record: HistoryRecord): Color = when {
     record.type == HistoryType.IMAGE -> Purple
     record.riskLevel == RiskLevel.DANGER -> Red
+    record.riskLevel == RiskLevel.CAUTION -> CautionInk
+    record.riskLevel == RiskLevel.SAFE -> SafeInk
     else -> Blue
 }
 
@@ -361,6 +377,7 @@ private fun EasyHistoryFilters(selected: String, records: List<HistoryRecord>, o
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (name, label) ->
             FilterChip(selected = selected == name, onClick = { onSelect(name) }, label = { Text(label, fontSize = 14.sp) },
+                modifier = Modifier.heightIn(min = 48.dp),
                 shape = CircleShape, border = null,
                 colors = FilterChipDefaults.filterChipColors(containerColor = Color(0xFFE8EDFA), labelColor = Ink,
                     selectedContainerColor = Ink, selectedLabelColor = Color.White))
@@ -371,7 +388,7 @@ private fun EasyHistoryFilters(selected: String, records: List<HistoryRecord>, o
 @Composable
 private fun EasyHistoryCard(record: HistoryRecord, onClick: () -> Unit) {
     val danger = record.riskLevel == RiskLevel.DANGER
-    val tint = if (danger) Color(0xFFD52D36) else Blue
+    val tint = riskColor(record.riskLevel)
     Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = Color.White,
         modifier = Modifier.fillMaxWidth().testTag("easy-record-${record.id}")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -462,7 +479,8 @@ private fun HistorySearchField(value: TextFieldValue, onValueChange: (TextFieldV
         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); focus.clearFocus() }),
         trailingIcon = { if (value.text.isNotEmpty()) IconButton(onClick = { onValueChange(TextFieldValue()) },
             modifier = Modifier.semantics { contentDescription = "검색어 지우기" }) { ResultGlyph(ResultIcon.CLOSE, Muted, 16.dp) } },
-        modifier = Modifier.fillMaxWidth().testTag("history-search").focusRequester(requester), shape = RoundedCornerShape(12.dp))
+        modifier = Modifier.fillMaxWidth().testTag("history-search").focusRequester(requester),
+        shape = RoundedCornerShape(12.dp), colors = dundueniOutlinedTextFieldColors())
 }
 
 @Composable
@@ -541,7 +559,7 @@ private fun RiskBadge(record: HistoryRecord) {
     }
 }
 
-private fun riskColor(level: RiskLevel): Color = when (level) { RiskLevel.SAFE -> Green; RiskLevel.CAUTION -> Blue; RiskLevel.DANGER -> Red; RiskLevel.UNKNOWN -> Muted }
+private fun riskColor(level: RiskLevel): Color = when (level) { RiskLevel.SAFE -> SafeInk; RiskLevel.CAUTION -> CautionInk; RiskLevel.DANGER -> Red; RiskLevel.UNKNOWN -> Muted }
 private fun timeLabel(time: Long): String = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
 
 @Composable
