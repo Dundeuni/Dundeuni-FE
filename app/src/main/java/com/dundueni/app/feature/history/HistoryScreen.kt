@@ -66,7 +66,7 @@ import com.dundueni.app.ui.theme.SafeInk
 import com.dundueni.app.ui.theme.SecondaryInk
 import com.dundueni.app.ui.theme.SoftBlue
 import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
-import kotlinx.coroutines.launch
+import com.dundueni.app.ui.theme.LocalEasyMode
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -96,9 +96,9 @@ fun HistoryScreen(
     initialRecordId: String? = null,
     onCloseDetail: (() -> Unit)? = null,
     onNavigationSelected: ((HomeDestination) -> Unit)? = null,
-    initialEasyMode: Boolean = false,
+    initialEasyMode: Boolean = LocalEasyMode.current,
 ) {
-    var easy by rememberSaveable { mutableStateOf(initialEasyMode) }
+    val easy = initialEasyMode
     var filterName by rememberSaveable { mutableStateOf("ALL") }
     var query by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -106,14 +106,6 @@ fun HistoryScreen(
     val closeDetail: () -> Unit = { if (onCloseDetail != null) onCloseDetail() else selectedId = null }
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    fun setEasyMode(value: Boolean) {
-        easy = value
-        filterName = "ALL"
-        query = TextFieldValue()
-        searching = false
-        scope.launch { listState.scrollToItem(0) }
-    }
     fun navigate(destination: HomeDestination) {
         when {
             destination == HomeDestination.REPORT -> {
@@ -162,25 +154,12 @@ fun HistoryScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(if (selected != null) "검사 기록 상세" else if (easy) "Easy History" else "든든이",
+                    Text(if (selected != null) "검사 기록 상세" else if (easy) "검사 기록" else "든든이",
                         modifier = if (easy) Modifier.weight(1f) else Modifier, color = Ink, fontSize = 18.sp,
                         fontWeight = if (easy) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (!easy) {
                         if (selected == null) Text("History", Modifier.padding(start = 12.dp), color = Muted, fontSize = 11.sp)
                         Spacer(Modifier.weight(1f))
-                        if (selected == null) TextButton(onClick = { setEasyMode(true) }, shape = CircleShape,
-                            colors = ButtonDefaults.textButtonColors(containerColor = Color(0xFFEAF0FC), contentColor = Ink),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            modifier = Modifier.semantics { contentDescription = "쉬운 모드로 전환" }) {
-                            Text("쉬운 모드", fontSize = 11.sp)
-                        }
-                    } else if (selected == null) {
-                        TextButton(onClick = { setEasyMode(false) }, shape = CircleShape,
-                            colors = ButtonDefaults.textButtonColors(containerColor = Color(0xFFEAF0FC), contentColor = Ink),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                            modifier = Modifier.semantics { contentDescription = "기본 모드로 전환" }) {
-                            Text("기본 모드로", fontSize = 11.sp)
-                        }
                     }
                     IconButton(onClick = { navigate(HomeDestination.MY_SHELTER) }, modifier = Modifier.semantics { contentDescription = "내 기록 정보" }) {
                         Box(Modifier.size(if (easy) 28.dp else 32.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
@@ -190,20 +169,7 @@ fun HistoryScreen(
                 }
             }
         },
-        bottomBar = {
-            if (!easy) {
-                HomeBottomNavigation(HomeDestination.REPORT, ::navigate)
-            } else NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-                NavigationBarItem(selected = false, onClick = { navigate(HomeDestination.HOME) },
-                    icon = { HistoryGlyph(HistoryIcon.HOME, Muted) }, label = { Text("홈", fontSize = 11.sp) })
-                NavigationBarItem(selected = true, onClick = { navigate(HomeDestination.REPORT) },
-                    colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent),
-                    icon = { HistoryGlyph(HistoryIcon.HISTORY, Blue) }, label = { Text("검사 기록", color = Blue, fontSize = 11.sp) })
-                NavigationBarItem(selected = false, onClick = { navigate(HomeDestination.SETTINGS) },
-                    modifier = Modifier.semantics { contentDescription = "기록 설정" },
-                    icon = { HistoryGlyph(HistoryIcon.SETTINGS, Muted) }, label = { Text("쉬운 설정", fontSize = 11.sp) })
-            }
-        },
+        bottomBar = { HomeBottomNavigation(HomeDestination.REPORT, ::navigate) },
     ) { padding ->
         Box(Modifier.padding(padding).imePadding().fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             if (selected != null) {
@@ -321,12 +287,12 @@ fun HistoryScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(when (current) {
-                        "settings" -> "이 기기에 저장된 기록을 관리하고 화면의 글자와 카드 표시 방식을 바꿀 수 있어요."
+                        "settings" -> "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요."
                         "profile" -> "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요."
                         else -> "검사 기록 화면에는 별도의 알림 내역이 없어요. 실제 앱에서는 기기의 앱 알림 설정을 열 수 있어요."
                     }, fontSize = 14.sp, lineHeight = 22.sp)
                     if (current == "settings") {
-                        TextButton(onClick = { setEasyMode(!easy); panel = null }) { Text(if (easy) "기본 모드" else "쉬운 모드") }
+
                         TextButton(onClick = { panel = null; onClear() }, enabled = records.isNotEmpty() && !loading) { Text("전체 기록 지우기", color = Red) }
                     }
                 }
@@ -361,10 +327,10 @@ private fun EasyPrivacyNotice() {
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("안심 개인정보 보호", color = Blue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("안심 개인정보 보호", color = Blue, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     Box(Modifier.size(4.dp).background(Blue, CircleShape))
                 }
-                Text("검사 기록은 이 기기에 보관돼요.\n원문과 링크는 저장하지 않아요.\n필요 없는 기록은 언제든 지울 수 있어요.", color = Ink, fontSize = 14.sp, lineHeight = 22.sp)
+                Text("검사 기록은 이 기기에 보관돼요.\n원문과 링크는 저장하지 않아요.\n필요 없는 기록은 언제든 지울 수 있어요.", color = Ink, fontSize = 18.sp, lineHeight = 22.sp)
             }
         }
     }
@@ -376,7 +342,7 @@ private fun EasyHistoryFilters(selected: String, records: List<HistoryRecord>, o
         if (records.any { it.type == HistoryType.UNKNOWN }) listOf("UNKNOWN" to "기타 검사") else emptyList()
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (name, label) ->
-            FilterChip(selected = selected == name, onClick = { onSelect(name) }, label = { Text(label, fontSize = 14.sp) },
+            FilterChip(selected = selected == name, onClick = { onSelect(name) }, label = { Text(label, fontSize = 18.sp) },
                 modifier = Modifier.heightIn(min = 48.dp),
                 shape = CircleShape, border = null,
                 colors = FilterChipDefaults.filterChipColors(containerColor = Color(0xFFE8EDFA), labelColor = Ink,
@@ -398,17 +364,17 @@ private fun EasyHistoryCard(record: HistoryRecord, onClick: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         ResultGlyph(if (record.riskLevel == RiskLevel.SAFE) ResultIcon.SHIELD else ResultIcon.WARNING, tint, 12.dp)
                         Text(when (record.riskLevel) {
-                            RiskLevel.DANGER -> "위험 발견"
+                            RiskLevel.DANGER -> "위험 가능성"
                             RiskLevel.CAUTION -> "주의 경고"
-                            RiskLevel.SAFE -> "안전 확인"
+                            RiskLevel.SAFE -> "안전으로 분석"
                             RiskLevel.UNKNOWN -> "판정 미확정"
-                        }, color = tint, fontSize = 11.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }, color = tint, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                Text(record.title, Modifier.weight(1f), color = Ink, fontSize = 12.sp, lineHeight = 18.sp,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(timeLabel(record.savedAt), color = Ink, fontSize = 12.sp)
             }
+            Text(record.title, Modifier.fillMaxWidth(), color = Ink, fontSize = 20.sp, lineHeight = 28.sp,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(timeLabel(record.savedAt), color = Muted, fontSize = 16.sp)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(record.preview ?: "${record.riskLevel.label} 판정 · 저장한 분석 지표 확인", color = Ink,
@@ -419,7 +385,7 @@ private fun EasyHistoryCard(record: HistoryRecord, onClick: () -> Unit) {
                         RiskLevel.SAFE -> "안전 판정 기록이에요. 낯선 요청은 한 번 더 확인하세요."
                         RiskLevel.UNKNOWN -> "사기 위험 판정 정보가 없어요. 상세 내용을 확인하세요."
                     }, color = if (danger) tint else if (record.riskLevel == RiskLevel.SAFE) Blue else Muted,
-                        fontSize = 12.sp, lineHeight = 19.sp)
+                        fontSize = 16.sp, lineHeight = 24.sp)
                 }
                 Box(Modifier.size(36.dp).background(Color(0xFFE8EDFA), CircleShape), contentAlignment = Alignment.Center) {
                     Text("›", color = Ink, fontSize = 24.sp)

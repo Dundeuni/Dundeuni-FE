@@ -34,6 +34,7 @@ import com.dundueni.app.feature.payment.PaymentActivity
 import com.dundueni.app.feature.settings.SettingsScreen
 import com.dundueni.app.feature.onboarding.OnboardingScreen
 import com.dundueni.app.feature.payment.showLimitIfExhausted
+import com.dundueni.app.ui.theme.LocalEasyMode
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.ui.theme.BrandInk
 
@@ -94,6 +95,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DundueniFETheme {
+                val easy = LocalEasyMode.current
                 if (showingOnboarding) {
                     OnboardingScreen(
                         page = onboardingPage,
@@ -110,7 +112,11 @@ class MainActivity : ComponentActivity() {
                     SettingsScreen { destination ->
                         when (destination) {
                             HomeDestination.HOME -> showingSettings = false
-                            HomeDestination.REPORT -> startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+                            HomeDestination.REPORT -> {
+                                // Easy tabs return to Home when the history Activity is closed.
+                                if (easy) showingSettings = false
+                                startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+                            }
                             HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
                             HomeDestination.MY_SHELTER -> openAccount()
                             HomeDestination.SETTINGS -> Unit

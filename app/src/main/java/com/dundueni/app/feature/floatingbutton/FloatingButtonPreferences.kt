@@ -16,6 +16,7 @@ data class FloatingButtonPreferences(
         const val KEY_FONT_SCALE = "font_scale"
         const val KEY_FONT_SIZE = "font_size"
         const val KEY_HAPTICS = "haptics"
+        const val KEY_EASY_MODE = "easy_mode"
 
         fun read(context: Context): FloatingButtonPreferences {
             val preferences = context.applicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)

@@ -16,6 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.dundueni.app.ui.theme.LocalEasyMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -132,13 +135,16 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
         appliedFamily = family
         onNavigationSelected(HomeDestination.HOME)
     }
+    val easy = LocalEasyMode.current
+    val density = LocalDensity.current
     Scaffold(
         containerColor = Bg,
         bottomBar = { HomeBottomNavigation(HomeDestination.SETTINGS, onNavigationSelected) },
     ) { padding ->
+        CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * if (easy) 1.2f else 1f)) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             Row(Modifier.fillMaxWidth().height(58.dp).background(Color.White).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("설정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(if (easy) "쉬운설정" else "설정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { onNavigationSelected(HomeDestination.HOME) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
                     Text("홈 화면으로 돌아가기", color = Blue, fontSize = 14.sp)
@@ -156,7 +162,18 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                                 }
                             }
                         }
-                        Box(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                        if (easy) {
+                            Row(
+                                Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("화면 가장자리 자석 고정", Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold)
+                                Switch(edgeSnap, { edgeSnap = it }, Modifier.widthIn(min = 52.dp).heightIn(min = 48.dp),
+                                    colors = SwitchDefaults.colors(checkedTrackColor = Blue))
+                            }
+                        } else Box(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text("화면 가장자리 자석 고정", Modifier.fillMaxWidth(), color = Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                             Switch(edgeSnap, { edgeSnap = it }, Modifier.align(Alignment.CenterEnd), colors = SwitchDefaults.colors(checkedTrackColor = Blue))
                         }
@@ -182,7 +199,28 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 }
                 SettingsSection("개인정보 및 데이터 보안") {
                     Column(Modifier.background(Color.White, RoundedCornerShape(16.dp))) {
-                        SettingToggle("검사 기록 기기 내 안전 보관", "기록은 기기에 저장됩니다 · 보관 정책 토글 연동 준비 중", localBackup, badge = "온디바이스") { localBackup = it }
+                        if (easy) {
+                            Column(
+                                Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("검사 기록 기기 내 안전 보관", Modifier.weight(1f), color = Ink,
+                                        fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                    Switch(localBackup, { localBackup = it }, Modifier.widthIn(min = 52.dp).heightIn(min = 48.dp),
+                                        colors = SwitchDefaults.colors(checkedTrackColor = Blue))
+                                }
+                                Text("온디바이스", Modifier.clip(RoundedCornerShape(5.dp)).background(Pale)
+                                    .padding(horizontal = 7.dp, vertical = 3.dp),
+                                    color = Blue, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                                Text("기록은 기기에 저장됩니다 · 보관 정책 토글 연동 준비 중",
+                                    color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                            }
+                        } else SettingToggle("검사 기록 기기 내 안전 보관", "기록은 기기에 저장됩니다 · 보관 정책 토글 연동 준비 중", localBackup, badge = "온디바이스") { localBackup = it }
                         SettingAction("분석 캡처 이미지 즉시 영구 파기 원칙", "분석 종료 시 임시 캡처 파일 정리", "✓") { dialog = "캡처 이미지 파기 정책" to "화면 캡처는 분석을 위해 앱 캐시에 임시 파일로 전달되며, 분석 화면이 종료될 때 삭제됩니다. 검사 기록에는 캡처 이미지가 저장되지 않습니다." }
                         SettingAction("검사 기록 보관 주기", "보관주기 선택 UI · 자동 삭제 연동 준비 중", retention) { showRetention = true }
                         Row(Modifier.fillMaxWidth().background(Color(0xFFFFF8F7)).clickable { showClear = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -226,6 +264,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 DundueniButton("적용", ::applySettings, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY, hasPendingChanges)
             }
         }
+    }
     }
     if (showClear) AlertDialog(
         onDismissRequest = { showClear = false },

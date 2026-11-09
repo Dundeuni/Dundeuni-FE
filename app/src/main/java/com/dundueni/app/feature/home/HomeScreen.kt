@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,9 +35,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +57,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -77,6 +82,8 @@ import com.dundueni.app.ui.theme.SoftDanger
 import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.theme.LocalEasyMode
+import com.dundueni.app.feature.floatingbutton.FloatingButtonPreferences
 import org.json.JSONArray
 
 private val HomeBackground = PageBackground
@@ -102,6 +109,7 @@ fun HomeScreen(
     onNavigationSelected: (HomeDestination) -> Unit,
 ) {
     val context = LocalContext.current
+    val easy = LocalEasyMode.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var recentRecords by remember(context) { mutableStateOf(loadRecentRecords(context)) }
     var remainingInspections by remember(context) { mutableStateOf(BasicInspectionQuota(context).remaining()) }
@@ -123,11 +131,22 @@ fun HomeScreen(
         Column(
             modifier = Modifier.fillMaxSize().padding(contentPadding),
         ) {
-            HomeHeader(onNotifications)
+            HomeHeader(easy) {
+                context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+                    .edit().putBoolean(FloatingButtonPreferences.KEY_EASY_MODE, !easy).apply()
+            }
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                     .padding(horizontal = 22.dp).padding(top = 14.dp, bottom = 22.dp),
             ) {
+                if (easy) {
+                    EasyHomeContent(
+                        floatingButtonEnabled, onFloatingButtonChange,
+                        onScreenScan, onUrlScan, onImageScan, onTextScan, onPhoneScan,
+                        onViewAllHistory, recentRecords, onRecentHistory,
+                        remainingInspections, onMembership, { onNavigationSelected(HomeDestination.CONSULTATION) },
+                    )
+                } else {
                 FloatingHeroCard(floatingButtonEnabled, onFloatingButtonChange)
                 Spacer(Modifier.height(26.dp))
                 SectionTitle("빠른 검사")
@@ -165,6 +184,7 @@ fun HomeScreen(
                 DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth(), type = DundueniButtonType.SECONDARY)
                 Spacer(Modifier.height(24.dp))
                 SafetyTipCard()
+                }
             }
         }
     }
@@ -173,7 +193,7 @@ fun HomeScreen(
 enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS }
 
 @Composable
-private fun HomeHeader(onNotifications: () -> Unit) {
+private fun HomeHeader(easy: Boolean, onToggleMode: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxWidth().height(66.dp).background(Color.White),
         contentAlignment = Alignment.Center,
@@ -189,7 +209,16 @@ private fun HomeHeader(onNotifications: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(15.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HeaderAction("알림", "notification", onNotifications)
+            TextButton(
+                onClick = onToggleMode,
+                modifier = Modifier.heightIn(min = 48.dp).semantics {
+                    contentDescription = if (easy) "현재 쉬운 모드, 기본 모드로 전환" else "현재 기본 모드, 쉬운 모드로 전환"
+                },
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
+                Text(if (easy) "쉬운 모드 ⇄" else "기본 모드 ⇄", color = HomeBlue,
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -315,7 +344,7 @@ private fun RecentHistoryCard(records: List<HomeRecentRecord>, onRecord: (String
     Surface(shape = RoundedCornerShape(17.dp), color = Color.White, shadowElevation = 1.dp) {
         if (records.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().height(92.dp), contentAlignment = Alignment.Center) {
-                Text("아직 저장된 검사 기록이 없어요", color = HomeMuted, fontSize = 13.sp)
+                Text("아직 저장된 검사 기록이 없어요", color = HomeMuted, fontSize = if (LocalEasyMode.current) 18.sp else 13.sp)
             }
         } else {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -351,10 +380,10 @@ private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Uni
         }
         Spacer(Modifier.width(13.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("저장한 검사 결과", color = HomeInk, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(DateUtils.getRelativeTimeSpanString(record.savedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(), color = Color(0xFF737984), fontSize = 11.sp)
+            Text("저장한 검사 결과", color = HomeInk, fontSize = if (LocalEasyMode.current) 18.sp else 14.sp, fontWeight = FontWeight.Medium)
+            Text(DateUtils.getRelativeTimeSpanString(record.savedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(), color = Color(0xFF737984), fontSize = if (LocalEasyMode.current) 16.sp else 11.sp)
         }
-        Text(badge, color = badgeTextColor(record.risk), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+        Text(badge, color = badgeTextColor(record.risk), fontSize = if (LocalEasyMode.current) 16.sp else 11.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.clip(CircleShape).background(badgeColor).padding(horizontal = 11.dp, vertical = 6.dp))
     }
 }
@@ -386,36 +415,48 @@ fun HomeBottomNavigation(
     selectedDestination: HomeDestination,
     onNavigationSelected: (HomeDestination) -> Unit,
 ) {
-    val items = listOf(
+    val easy = LocalEasyMode.current
+    val items = if (easy) listOf(
+        Triple(HomeDestination.HOME, "protect", "홈"),
+        Triple(HomeDestination.REPORT, "history", "검사기록"),
+        Triple(HomeDestination.SETTINGS, "settings", "쉬운설정"),
+    ) else listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
         Triple(HomeDestination.REPORT, "report", "리포트"),
         Triple(HomeDestination.CONSULTATION, "chat", "맞춤 상담"),
         Triple(HomeDestination.MY_SHELTER, "profile", "My 쉼터"),
         Triple(HomeDestination.SETTINGS, "settings", "설정"),
     )
-    NavigationBar(containerColor = Color.White, tonalElevation = 3.dp, windowInsets = WindowInsets.navigationBars) {
+    LaunchedEffect(easy, selectedDestination) {
+        if (easy && items.none { it.first == selectedDestination }) {
+            onNavigationSelected(HomeDestination.HOME)
+        }
+    }
+    NavigationBar(containerColor = Color.White, tonalElevation = if (easy) 0.dp else 3.dp, windowInsets = WindowInsets.navigationBars) {
         items.forEach { (destination, icon, label) ->
             val selected = destination == selectedDestination
             NavigationBarItem(
                 selected = selected,
                 onClick = { onNavigationSelected(destination) },
-                modifier = Modifier.weight(1f),
-                icon = { HomeGlyph(icon, if (selected) HomeInk else Color(0xFF9BA0A8), Modifier.size(24.dp)) },
+                modifier = Modifier.weight(1f).heightIn(min = if (easy) 72.dp else 0.dp),
+                icon = { HomeGlyph(icon, if (easy) {
+                    if (selected) HomeBlue else HomeMuted
+                } else if (selected) HomeInk else Color(0xFF9BA0A8), Modifier.size(if (easy) 28.dp else 24.dp)) },
                 label = {
                     Text(
                         label,
-                        fontSize = 12.sp,
-                        lineHeight = 14.sp,
+                        fontSize = if (easy) 18.sp else 12.sp,
+                        lineHeight = if (easy) 26.sp else 14.sp,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                         maxLines = 1,
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = HomeInk,
-                    selectedTextColor = HomeInk,
-                    indicatorColor = Color.Transparent,
-                    unselectedIconColor = Color(0xFF9BA0A8),
-                    unselectedTextColor = Color(0xFF9BA0A8),
+                    selectedIconColor = if (easy) HomeBlue else HomeInk,
+                    selectedTextColor = if (easy) HomeBlue else HomeInk,
+                    indicatorColor = if (easy) HomePaleBlue else Color.Transparent,
+                    unselectedIconColor = if (easy) HomeMuted else Color(0xFF9BA0A8),
+                    unselectedTextColor = if (easy) HomeMuted else Color(0xFF9BA0A8),
                 ),
             )
         }
@@ -430,6 +471,22 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
         fun p(x: Float, y: Float) = Offset(x * sx, y * sy)
         val stroke = Stroke(width = 2f * sx, cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (name) {
+            "protect" -> {
+                val shield = Path().apply {
+                    moveTo(12f*sx, 2f*sy); lineTo(20f*sx, 5f*sy); lineTo(19f*sx, 13f*sy)
+                    cubicTo(18f*sx, 18f*sy, 15f*sx, 21f*sy, 12f*sx, 22f*sy)
+                    cubicTo(9f*sx, 21f*sy, 6f*sx, 18f*sy, 5f*sx, 13f*sy)
+                    lineTo(4f*sx, 5f*sy); close()
+                }
+                drawPath(shield, color, style = stroke)
+            }
+            "history" -> {
+                drawArc(color, -140f, 300f, false, p(3f, 3f), Size(18f*sx, 18f*sy), style = stroke)
+                val arrow = Path().apply { moveTo(2f*sx, 3f*sy); lineTo(2f*sx, 9f*sy); lineTo(8f*sx, 9f*sy) }
+                drawPath(arrow, color, style = stroke)
+                drawLine(color, p(12f, 7f), p(12f, 12f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
+                drawLine(color, p(12f, 12f), p(16f, 15f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
+            }
             "home" -> {
                 val path = Path().apply { moveTo(3f*sx, 10f*sy); lineTo(12f*sx, 3f*sy); lineTo(21f*sx, 10f*sy); lineTo(19f*sx, 10f*sy); lineTo(19f*sx, 21f*sy); lineTo(5f*sx, 21f*sy); lineTo(5f*sx, 10f*sy); close() }
                 drawPath(path, color, style = stroke)
@@ -533,6 +590,85 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
                 drawLine(color, p(10f,4f), p(14f,4f), strokeWidth = 2f*sx, cap = StrokeCap.Round)
                 drawCircle(color, 1f*sx, p(12f,18f))
             }
+        }
+    }
+}
+
+@Composable
+private fun EasyHomeContent(
+    enabled: Boolean, onEnabledChange: (Boolean) -> Unit,
+    onScreen: () -> Unit, onUrl: () -> Unit, onImage: () -> Unit,
+    onText: () -> Unit, onPhone: () -> Unit, onHistory: () -> Unit,
+    records: List<HomeRecentRecord>, onRecord: (String) -> Unit,
+    remaining: Int, onMembership: () -> Unit, onEasyConsultation: () -> Unit,
+) {
+    Surface(color = HomePaleBlue, shape = RoundedCornerShape(16.dp)) {
+        Text("쉬운 모드 켜짐 · 큰 글씨와 큰 버튼", Modifier.fillMaxWidth().padding(16.dp),
+            color = HomeBlue, fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
+    }
+    Spacer(Modifier.height(20.dp))
+    Surface(color = Color.White, shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (enabled) "화면 도우미 켜짐" else "화면 도우미 꺼짐", color = HomeBlue, fontSize = 18.sp)
+                    Text("의심되는 화면을\n든든이로 확인하세요", color = HomeInk,
+                        fontSize = 24.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
+                }
+                Image(painterResource(R.drawable.dundeuni_mascot_confident), null, Modifier.size(80.dp))
+            }
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(HomePaleBlue).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("화면 위 도우미 버튼", Modifier.weight(1f), color = HomeInk, fontSize = 18.sp)
+                Switch(checked = enabled, onCheckedChange = onEnabledChange,
+                    modifier = Modifier.semantics { contentDescription = "화면 위 도우미 버튼" },
+                    colors = SwitchDefaults.colors(checkedTrackColor = HomeBlue))
+            }
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+    SectionTitle("간편 빠른 검사")
+    Spacer(Modifier.height(12.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        EasyScanCard("screen", "화면 즉시 검사", "보고 있는 화면 분석", Modifier.weight(1f), onScreen)
+        EasyScanCard("link", "링크(주소) 검사", "문자 속 주소 확인", Modifier.weight(1f), onUrl)
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        EasyScanCard("image", "사진·이미지 검사", "받은 사진 확인", Modifier.weight(1f), onImage)
+        EasyScanCard("text", "문자·글 검사", "의심 문구 붙여넣기", Modifier.weight(1f), onText)
+    }
+    Spacer(Modifier.height(12.dp))
+    EasyScanCard("phone", "전화번호 검사", "모르는 전화번호 확인", Modifier.fillMaxWidth(), onPhone)
+    Spacer(Modifier.height(20.dp))
+    Surface(color = HomePaleBlue, shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("어려우실 땐 혼자 고민하지 마세요", color = HomeInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("믿을 수 있는 사람과 함께 확인하세요.", color = HomeMuted, fontSize = 18.sp, lineHeight = 26.sp)
+            DundueniButton(text = "맞춤 상담", onClick = onEasyConsultation, modifier = Modifier.fillMaxWidth())
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+    SectionTitle("최근 검사 기록")
+    TextButton(onClick = onHistory, modifier = Modifier.heightIn(min = 48.dp)) {
+        Text("전체 기록 보기 ›", fontSize = 18.sp, color = HomeBlue)
+    }
+    RecentHistoryCard(records, onRecord)
+    Spacer(Modifier.height(20.dp))
+    Text("남은 검사 $remaining/${BasicInspectionQuota.LIMIT}회", color = HomeInk, fontSize = 20.sp)
+    Spacer(Modifier.height(12.dp))
+    DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth(), type = DundueniButtonType.SECONDARY)
+}
+
+@Composable
+private fun EasyScanCard(icon: String, title: String, description: String, modifier: Modifier, onClick: () -> Unit) {
+    Surface(onClick = onClick, modifier = modifier, color = Color.White, shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(18.dp).heightIn(min = 140.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(HomePaleBlue), contentAlignment = Alignment.Center) {
+                HomeGlyph(icon, HomeBlue, Modifier.size(28.dp))
+            }
+            Text(title, color = HomeInk, fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
+            Text(description, color = HomeMuted, fontSize = 16.sp, lineHeight = 24.sp)
         }
     }
 }
