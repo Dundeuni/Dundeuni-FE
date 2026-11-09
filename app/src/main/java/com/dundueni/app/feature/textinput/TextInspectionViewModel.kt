@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
+import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskEvidence
@@ -28,6 +29,7 @@ sealed interface TextInspectionUiState {
     data object Idle : TextInspectionUiState
     data object Loading : TextInspectionUiState
     data class Success(val resultJson: String) : TextInspectionUiState
+    data class Pending(val analysisId: String) : TextInspectionUiState
     data object Error : TextInspectionUiState
 }
 
@@ -42,33 +44,48 @@ class TextInspectionViewModel(
     private var requestJob: Job? = null
     private var submittedText: String? = null
     private var resultPendingOpen: String? = null
+    private var pendingAnalysisId: String? = null
     val hasResultPendingOpen: Boolean get() = resultPendingOpen != null
+    val hasPendingLookup: Boolean get() = pendingAnalysisId != null
 
     @MainThread
     fun updateInputText(text: String) {
-        if (mutableUiState.value != TextInspectionUiState.Loading) savedStateHandle[INPUT_TEXT_KEY] = text
+        if (mutableUiState.value != TextInspectionUiState.Loading &&
+            mutableUiState.value !is TextInspectionUiState.Pending) savedStateHandle[INPUT_TEXT_KEY] = text
     }
 
     @MainThread
     fun inspect(text: String) {
-        if (text.isBlank() || requestJob?.isActive == true) return
+        if (text.isBlank() || requestJob?.isActive == true ||
+            mutableUiState.value is TextInspectionUiState.Pending) return
         submittedText = text
         startInspection(text)
     }
 
     @MainThread
     fun retry() {
-        if (mutableUiState.value != TextInspectionUiState.Error) return
+        if (mutableUiState.value !is TextInspectionUiState.Error &&
+            mutableUiState.value !is TextInspectionUiState.Pending) return
         resultPendingOpen?.let {
             mutableUiState.value = TextInspectionUiState.Success(it)
             return
         }
+        pendingAnalysisId?.let { refreshPending(it); return }
         submittedText?.let(::startInspection)
     }
 
     @MainThread
     fun cancelError() {
         if (mutableUiState.value == TextInspectionUiState.Error) {
+            pendingAnalysisId = null
+            mutableUiState.value = TextInspectionUiState.Idle
+        }
+    }
+
+    @MainThread
+    fun cancelPending() {
+        if (mutableUiState.value is TextInspectionUiState.Pending) {
+            pendingAnalysisId = null
             mutableUiState.value = TextInspectionUiState.Idle
         }
     }
@@ -86,6 +103,7 @@ class TextInspectionViewModel(
 
     private fun startInspection(text: String) {
         if (requestJob?.isActive == true) return
+        pendingAnalysisId = null
         resultPendingOpen = null
         mutableUiState.value = TextInspectionUiState.Loading
         requestJob = viewModelScope.launch {
@@ -98,6 +116,9 @@ class TextInspectionViewModel(
                 val json = Gson().toJson(result)
                 resultPendingOpen = json
                 mutableUiState.value = TextInspectionUiState.Success(json)
+            } catch (pending: PendingTextAnalysis) {
+                pendingAnalysisId = pending.analysisId
+                mutableUiState.value = TextInspectionUiState.Pending(pending.analysisId)
             } catch (cancelled: CancellationException) {
                 mutableUiState.value = TextInspectionUiState.Idle
                 throw cancelled
@@ -114,13 +135,45 @@ class TextInspectionViewModel(
         val body = response.body() ?: error("Text analysis response is missing")
         if (body.isSuccess != true) error("Text analysis was not successful")
         val result = body.result ?: error("Text analysis result is missing")
+        val id = result.analysisId?.takeIf { it.isNotBlank() }
+            ?: error("Text analysis ID is missing")
+        if (result.status == "QUEUED" || result.status == "ANALYZING") {
+            throw PendingTextAnalysis(id)
+        }
         if (result.status != "COMPLETED" || result.textResult == null) {
             error("Text analysis is not completed")
         }
         if (result.type != null && result.type != "TEXT") error("Unexpected analysis type")
-        val id = result.analysisId?.takeIf { it.isNotBlank() }
-            ?: error("Text analysis ID is missing")
-        val decisionLabel = when (result.textResult.decision) {
+        return completedTextResult(id, result.textResult.decision, text)
+    }
+
+    private fun refreshPending(id: String) {
+        if (requestJob?.isActive == true) return
+        mutableUiState.value = TextInspectionUiState.Loading
+        requestJob = viewModelScope.launch {
+            try {
+                val detail = AnalysisFlowDependencies.createRepository(getApplication()).findResult(id)
+                if (detail.type != "TEXT" || detail.sourceType !in setOf(null, "TEXT")) {
+                    error("Unexpected text analysis type")
+                }
+                val result = completedTextResult(id, detail.textDecision, submittedText.orEmpty())
+                val json = Gson().toJson(result)
+                pendingAnalysisId = null
+                resultPendingOpen = json
+                mutableUiState.value = TextInspectionUiState.Success(json)
+            } catch (pending: AnalysisNotCompletedException) {
+                mutableUiState.value = TextInspectionUiState.Pending(id)
+            } catch (cancelled: CancellationException) {
+                mutableUiState.value = TextInspectionUiState.Idle
+                throw cancelled
+            } catch (_: Exception) {
+                mutableUiState.value = TextInspectionUiState.Error
+            }
+        }
+    }
+
+    private fun completedTextResult(id: String, decision: String?, text: String): AnalysisResult {
+        val decisionLabel = when (decision) {
             "normal" -> "일반 텍스트로 판단"
             "phishing" -> "피싱 의심"
             "defer" -> "판단 보류"
@@ -136,6 +189,8 @@ class TextInspectionViewModel(
             targetLabel = "입력한 텍스트 내용",
         )
     }
+
+    private class PendingTextAnalysis(val analysisId: String) : Exception()
 
     private fun createMockResult(text: String) = AnalysisResult(
         historyType = HistoryType.TEXT,

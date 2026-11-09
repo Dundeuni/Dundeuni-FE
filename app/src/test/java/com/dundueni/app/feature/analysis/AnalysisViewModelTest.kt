@@ -157,6 +157,66 @@ class AnalysisViewModelTest {
         }
     }
 
+    @Test fun pendingRefreshReusesPostIdWithoutAnotherUpload() = runTest {
+        var posts = 0
+        var gets = 0
+        val repository = object : AnalysisResultRepository {
+            override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult {
+                posts++
+                throw AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, "id-1", null)
+            }
+            override suspend fun findResult(analysisId: String): AnalysisResult {
+                assertEquals("id-1", analysisId)
+                gets++
+                if (gets == 1) throw AnalysisNotCompletedException(AnalysisExecutionStatus.ANALYZING, analysisId, null)
+                return result
+            }
+        }
+        val vm = viewModel(repository)
+        vm.analyze(part)
+        runCurrent()
+        assertEquals(AnalysisUiState.Pending("id-1", AnalysisExecutionStatus.QUEUED), vm.uiState.value)
+        vm.refreshPending()
+        runCurrent()
+        assertEquals(AnalysisUiState.Pending("id-1", AnalysisExecutionStatus.ANALYZING), vm.uiState.value)
+        vm.refreshPending()
+        runCurrent()
+        assertEquals(AnalysisUiState.Success(result), vm.uiState.value)
+        assertEquals(1, posts)
+        assertEquals(2, gets)
+    }
+
+    @Test fun failedLookupRetryStillUsesOriginalId() = runTest {
+        var posts = 0
+        var gets = 0
+        val repository = object : AnalysisResultRepository {
+            override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult {
+                posts++
+                throw AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, "id-1", null)
+            }
+            override suspend fun findResult(analysisId: String): AnalysisResult {
+                assertEquals("id-1", analysisId)
+                gets++
+                if (gets == 1) throw ConnectException("offline")
+                return result
+            }
+        }
+        val vm = viewModel(repository)
+        vm.analyze(part)
+        runCurrent()
+        vm.refreshPending()
+        runCurrent()
+        assertEquals(
+            AnalysisUiState.Error(AnalysisErrorKind.CONNECTION, pendingAnalysisId = "id-1"),
+            vm.uiState.value,
+        )
+        vm.refreshPending()
+        runCurrent()
+        assertEquals(AnalysisUiState.Success(result), vm.uiState.value)
+        assertEquals(1, posts)
+        assertEquals(2, gets)
+    }
+
     @Test fun httpErrorsUseSafeStatusSpecificMessagesAndFallback() = runTest {
         val messages = mapOf(
             400 to "잘못된 분석 요청입니다.",
@@ -166,8 +226,9 @@ class AnalysisViewModelTest {
             415 to "지원하지 않는 이미지 형식입니다.",
             429 to "분석 이용량을 초과했습니다.",
             503 to "현재 분석 서버를 이용할 수 없습니다.",
-            401 to AnalysisErrorKind.HTTP.message,
-            500 to AnalysisErrorKind.HTTP.message,
+            401 to "로그인이 필요합니다.",
+            404 to "분석 결과를 찾을 수 없거나 만료되었습니다.",
+            500 to "분석 서버 오류가 발생했습니다.",
         )
         for ((status, message) in messages) {
             val vm = viewModel { throw AnalysisHttpException(status, "INTERNAL", "private details") }

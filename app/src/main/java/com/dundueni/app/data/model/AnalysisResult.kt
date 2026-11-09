@@ -14,7 +14,12 @@ data class AnalysisResult(
     val completedAt: String?,
     val expiresAt: String?,
     /** The current BE response does not contain actions; kept empty until the contract adds them. */
-    val recommendedActions: List<String> = emptyList()
+    val recommendedActions: List<String> = emptyList(),
+    val summary: String? = null,
+    val normalizedRiskLevel: String? = null,
+    val textDecision: String? = null,
+    val riskScore: Double? = null,
+    val sourceType: String? = null,
 ) {
     /** Compatibility accessor for the existing result screen; value remains the raw BE string. */
     val riskLevel: String? get() = aiRiskLevel

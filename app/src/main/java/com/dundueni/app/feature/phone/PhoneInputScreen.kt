@@ -42,7 +42,8 @@ import com.dundueni.app.ui.component.DundueniButtonType
 fun PhoneInputScreen(
     onInspect: (String) -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isInspecting: Boolean = false,
 ) {
     var phoneInput by rememberSaveable { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
@@ -76,6 +77,7 @@ fun PhoneInputScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(
+                    enabled = !isInspecting,
                     onClick = {
                         clipboardManager.getText()?.text?.let { pasted ->
                             phoneInput = pasted.trim()
@@ -89,6 +91,7 @@ fun PhoneInputScreen(
             OutlinedTextField(
                 value = phoneInput,
                 onValueChange = { phoneInput = it },
+                readOnly = isInspecting,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("전화번호") },
                 placeholder = { Text("010-0000-0000") },
@@ -96,7 +99,7 @@ fun PhoneInputScreen(
                 isError = phoneError != null,
                 trailingIcon = {
                     if (phoneInput.isNotEmpty()) {
-                        IconButton(onClick = { phoneInput = "" }) {
+                        IconButton(onClick = { phoneInput = "" }, enabled = !isInspecting) {
                             Icon(imageVector = Icons.Default.Clear, contentDescription = "전화번호 지우기")
                         }
                     }
@@ -107,7 +110,7 @@ fun PhoneInputScreen(
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        if (isValid) onInspect(phoneInput)
+                        if (isValid && !isInspecting) onInspect(phoneInput)
                     }
                 )
             )
@@ -129,6 +132,7 @@ fun PhoneInputScreen(
                     DundueniButton(
                         text = "지우기",
                         onClick = { phoneInput = "" },
+                        enabled = !isInspecting,
                         type = DundueniButtonType.DANGER,
                         modifier = Modifier.weight(1f)
                     )
@@ -136,7 +140,7 @@ fun PhoneInputScreen(
                 DundueniButton(
                     text = "검사하기",
                     onClick = { onInspect(phoneInput) },
-                    enabled = isValid,
+                    enabled = isValid && !isInspecting,
                     modifier = Modifier.weight(if (phoneInput.isNotEmpty()) 1f else 2f)
                 )
             }

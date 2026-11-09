@@ -37,6 +37,7 @@ fun AnalysisFlowScreen(
     onHome: () -> Unit,
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
     historyType: HistoryType = HistoryType.IMAGE,
+    onRefresh: () -> Unit = {},
 ) {
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
@@ -71,6 +72,9 @@ fun AnalysisFlowScreen(
             is AnalysisUiState.Pending -> Text("분석 요청이 접수되었으며 서버에서 처리 중입니다.")
             is AnalysisUiState.Error -> Unit
         }
+        if (state is AnalysisUiState.Pending) {
+            Button(onClick = onRefresh) { Text("결과 다시 확인") }
+        }
         if (state !is AnalysisUiState.Error) {
             Button(onClick = onClose) {
                 Text(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기")
@@ -87,11 +91,13 @@ fun AnalysisFlowScreen(
                 message = buildString {
                     append(state.message)
                     state.httpStatus?.let { append("\nHTTP 상태: $it") }
-                    if (canRetry) append("\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
+                    if (canRetry) append(if (state.pendingAnalysisId != null)
+                        "\n다시 시도하면 같은 분석 ID로 결과를 조회합니다."
+                    else "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
                 },
                 onRetry = {
                     loadingPopupDismissed = false
-                    onRetry()
+                    if (state.pendingAnalysisId != null) onRefresh() else onRetry()
                 },
                 onCancelInspection = onClose,
                 showRetry = canRetry,

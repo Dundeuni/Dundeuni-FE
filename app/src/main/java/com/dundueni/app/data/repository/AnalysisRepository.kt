@@ -3,10 +3,12 @@ package com.dundueni.app.data.repository
 import com.dundueni.app.data.mapper.toDomain
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.remote.api.AnalysisApiService
+import com.dundueni.app.data.remote.api.AnalysisQueryApiService
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.dto.AnalysisErrorResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
+import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
 import com.google.gson.Gson
 import com.google.gson.JsonParseException
 import java.io.IOException
@@ -17,7 +19,10 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 
 /** Executes image analysis and exposes only completed BE results to the presentation flow. */
-class AnalysisRepository(private val apiService: AnalysisApiService) : AnalysisResultRepository {
+class AnalysisRepository(
+    private val apiService: AnalysisApiService,
+    private val queryApiService: AnalysisQueryApiService? = null,
+) : AnalysisResultRepository {
     suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> =
         apiService.analyzeImage(image)
 
@@ -73,6 +78,38 @@ class AnalysisRepository(private val apiService: AnalysisApiService) : AnalysisR
             }
         }
 
+    override suspend fun findResult(analysisId: String): AnalysisResult = withContext(Dispatchers.IO) {
+        val response = (queryApiService ?: throw AnalysisProtocolException("Analysis lookup is unavailable"))
+            .getAnalysis(analysisId)
+        if (response.code() != HTTP_OK) {
+            val error = response.errorBody()?.use { parseErrorBody(it.string()) }
+            throw AnalysisHttpException(response.code(), error?.code, error?.message)
+        }
+        val envelope: AnalysisDetailResponseDto = response.body()
+            ?: throw AnalysisProtocolException("Analysis detail response body is missing")
+        if (envelope.isSuccess != true || envelope.code != DETAIL_SUCCESS_CODE) {
+            throw AnalysisProtocolException("Analysis detail response is not successful")
+        }
+        val detail = envelope.result
+            ?: throw AnalysisProtocolException("Analysis detail result is missing")
+        if (detail.analysisId != analysisId) {
+            throw AnalysisProtocolException("Analysis detail ID does not match the request")
+        }
+        when (detail.status) {
+            AnalysisExecutionStatus.COMPLETED.wireValue -> {
+                if (detail.result == null) throw AnalysisProtocolException("Normalized result is missing")
+                detail.toDomain()
+            }
+            AnalysisExecutionStatus.QUEUED.wireValue ->
+                throw AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, analysisId, detail.errorCode)
+            AnalysisExecutionStatus.ANALYZING.wireValue ->
+                throw AnalysisNotCompletedException(AnalysisExecutionStatus.ANALYZING, analysisId, detail.errorCode)
+            AnalysisExecutionStatus.FAILED.wireValue ->
+                throw AnalysisFailedException(detail.errorCode, envelope.message)
+            else -> throw AnalysisProtocolException("Unknown analysis detail status: ${detail.status}")
+        }
+    }
+
     private fun parseEnvelope(json: String): AnalysisResponseDto = try {
         Gson().fromJson(json, AnalysisResponseDto::class.java)
             ?: throw AnalysisProtocolException("Analysis response is empty or null")
@@ -92,7 +129,9 @@ class AnalysisRepository(private val apiService: AnalysisApiService) : AnalysisR
 
     private companion object {
         const val HTTP_ACCEPTED = 202
+        const val HTTP_OK = 200
         const val SUCCESS_CODE = "ANALYSIS202"
+        const val DETAIL_SUCCESS_CODE = "ANALYSIS200"
     }
 }
 

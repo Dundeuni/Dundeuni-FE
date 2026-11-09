@@ -48,6 +48,37 @@ class AnalysisViewModel(
         analyzePrepared { image }
     }
 
+    /** Rechecks the ID from POST without uploading the image or creating another analysis. */
+    @MainThread
+    fun refreshPending() {
+        val id = when (val state = mutableUiState.value) {
+            is AnalysisUiState.Pending -> state.analysisId
+            is AnalysisUiState.Error -> state.pendingAnalysisId
+            else -> null
+        } ?: return
+        if (requestJob?.isActive == true) return
+        requestJob = viewModelScope.launch {
+            mutableUiState.value = AnalysisUiState.Loading
+            try {
+                val result = repository.findResult(id)
+                ensureActive()
+                mutableUiState.value = AnalysisUiState.Success(result)
+            } catch (cancelled: CancellationException) {
+                mutableUiState.value = AnalysisUiState.Idle
+                throw cancelled
+            } catch (exception: Exception) {
+                if (!isActive) {
+                    mutableUiState.value = AnalysisUiState.Idle
+                    ensureActive()
+                }
+                mutableUiState.value = when (val next = exception.toUiState()) {
+                    is AnalysisUiState.Error -> next.copy(pendingAnalysisId = id)
+                    else -> next
+                }
+            }
+        }
+    }
+
     /** 준비 단계도 Loading/Error에 포함합니다. 블로킹 변환은 전달 함수에서 IO로 전환합니다. */
     @MainThread
     fun analyzePrepared(prepare: suspend () -> MultipartBody.Part) = analyzePrepared(false, prepare)

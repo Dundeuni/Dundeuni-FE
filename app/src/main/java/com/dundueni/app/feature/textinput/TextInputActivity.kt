@@ -13,6 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
@@ -62,7 +65,7 @@ class TextInputActivity : ComponentActivity() {
                             viewModel.inspect(text)
                         },
                         onClose = ::finish,
-                        isInspecting = state == TextInspectionUiState.Loading,
+                        isInspecting = state == TextInspectionUiState.Loading || state is TextInspectionUiState.Pending,
                     )
                 }
                 when (state) {
@@ -70,13 +73,29 @@ class TextInputActivity : ComponentActivity() {
                         InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
                     }
                     TextInspectionUiState.Error -> InspectionErrorDialog(
-                        message = "텍스트 검사를 완료하지 못했어요. 다시 시도하면 같은 텍스트로 검사합니다.",
+                        message = if (viewModel.hasPendingLookup)
+                            "결과를 조회하지 못했어요. 다시 시도하면 같은 분석 ID로 확인합니다."
+                        else "텍스트 검사를 완료하지 못했어요. 다시 시도하면 같은 텍스트로 검사합니다.",
                         onRetry = {
                             if (!viewModel.hasResultPendingOpen && showLimitIfExhausted(this@TextInputActivity)) return@InspectionErrorDialog
                             loadingPopupDismissed = false
                             viewModel.retry()
                         },
                         onCancelInspection = viewModel::cancelError,
+                    )
+                    is TextInspectionUiState.Pending -> AlertDialog(
+                        onDismissRequest = {},
+                        title = { Text("분석 진행 중") },
+                        text = { Text("요청이 접수되었어요. 잠시 후 결과를 다시 확인해 주세요.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                loadingPopupDismissed = false
+                                viewModel.retry()
+                            }) { Text("결과 다시 확인") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = viewModel::cancelPending) { Text("닫기") }
+                        },
                     )
                     else -> Unit
                 }

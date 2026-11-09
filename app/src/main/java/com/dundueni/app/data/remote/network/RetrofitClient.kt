@@ -2,8 +2,10 @@ package com.dundueni.app.data.remote.network
 
 import com.dundueni.app.data.auth.AuthSessionStore
 import com.dundueni.app.data.remote.api.AnalysisApiService
+import com.dundueni.app.data.remote.api.AnalysisQueryApiService
 import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.remote.api.AuthApiService
+import com.dundueni.app.data.remote.api.PhoneAnalysisApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -43,8 +45,16 @@ class RetrofitClient(
         retrofit.create(AnalysisApiService::class.java)
     }
 
+    val analysisQueryApiService: AnalysisQueryApiService by lazy {
+        retrofit.create(AnalysisQueryApiService::class.java)
+    }
+
     val textAnalysisApiService: TextAnalysisApiService by lazy {
         retrofit.create(TextAnalysisApiService::class.java)
+    }
+
+    val phoneAnalysisApiService: PhoneAnalysisApiService by lazy {
+        retrofit.create(PhoneAnalysisApiService::class.java)
     }
 
     // Public authentication calls neither attach a session nor invalidate it on login failure.
