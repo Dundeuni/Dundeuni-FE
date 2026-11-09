@@ -1,5 +1,6 @@
 package com.dundueni.app.feature.analysisresult
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.painterResource
+import com.dundueni.app.R
+import com.dundueni.app.ui.theme.LocalEasyMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,14 +28,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dundueni.app.ui.theme.Danger
 import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.Caution
+import com.dundueni.app.ui.theme.CautionInk
+import com.dundueni.app.ui.theme.PageBackground as AppPageBackground
+import com.dundueni.app.ui.theme.PrimaryMidnight
+import com.dundueni.app.ui.theme.Safe
+import com.dundueni.app.ui.theme.SafeInk
+import com.dundueni.app.ui.theme.SecondaryInk
+import com.dundueni.app.ui.theme.SoftBlue as AppSoftBlue
+import com.dundueni.app.ui.theme.SoftCaution
+import com.dundueni.app.ui.theme.SoftDanger
+import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.feature.history.HistoryType
 import java.util.Locale
 
-private val PageBackground = Color(0xFFF7F8FF)
-private val SoftBlue = Color(0xFFEEF3FF)
-private val SoftRed = Color(0xFFFFE7E5)
-private val Ink = Color(0xFF202532)
-private val Muted = Color(0xFF646979)
+private val PageBackground = AppPageBackground
+private val SoftBlue = AppSoftBlue
+private val SoftRed = SoftDanger
+private val Ink = BrandInk
+private val Muted = SecondaryInk
 private val CardOutline = Color(0xFFEDF0F8)
 
 /** The host supplies the verdict, evidence and actions; this screen only presents them. */
@@ -66,7 +82,9 @@ fun AnalysisResultScreen(
                         Text("디자인 미리보기 · 샘플 데이터", Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFF795700), fontSize = 12.sp)
                     }
                 }
-                if (result.historyType != HistoryType.SCREEN || imageAnalysisError == null) when (result.riskLevel) {
+                if (result.historyType != HistoryType.SCREEN || imageAnalysisError == null) if (LocalEasyMode.current) {
+                    EasyResultContent(result)
+                } else when (result.riskLevel) {
                     RiskLevel.SAFE -> {
                         Column(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
@@ -146,7 +164,7 @@ private fun ResultHeader(onAction: (ResultAction) -> Unit) {
             Box(Modifier.size(24.dp).background(Color(0xFF111B2B), CircleShape), contentAlignment = Alignment.Center) {
                 ResultGlyph(ResultIcon.SHIELD, ProtectiveBlue, 14.dp)
             }
-            Text("Inspection Result", Modifier.weight(1f).padding(start = 10.dp), color = Ink, fontSize = 18.sp,
+            Text(if (LocalEasyMode.current) "검사 결과" else "Inspection Result", Modifier.weight(1f).padding(start = 10.dp), color = Ink, fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             IconButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.semantics { contentDescription = "결과 화면 닫기" }) {
                 ResultGlyph(ResultIcon.CLOSE, Ink, 18.dp)
@@ -181,31 +199,42 @@ private fun ResultHero(result: AnalysisResult) {
         return
     }
     val safe = result.riskLevel == RiskLevel.SAFE
+    val statusColor = when (result.riskLevel) {
+        RiskLevel.SAFE -> Safe
+        RiskLevel.CAUTION -> Caution
+        RiskLevel.DANGER -> Danger
+        RiskLevel.UNKNOWN -> ProtectiveBlue
+    }
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(92.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(80.dp).background(if (safe) Color(0xFFEFF2FF) else Color(0xFFFFD9D5), CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(80.dp).background(when (result.riskLevel) {
+                RiskLevel.SAFE -> SoftSafe
+                RiskLevel.CAUTION -> SoftCaution
+                else -> SoftRed
+            }, CircleShape), contentAlignment = Alignment.Center) {
                 ResultGlyph(when (result.riskLevel) {
                     RiskLevel.SAFE -> ResultIcon.SHIELD
                     RiskLevel.CAUTION -> ResultIcon.WARNING
                     RiskLevel.DANGER -> ResultIcon.SHIELD_HEART
                     RiskLevel.UNKNOWN -> ResultIcon.SEARCH
-                }, if (safe) ProtectiveBlue else Danger, 36.dp)
+                }, statusColor, 36.dp)
             }
             if (!safe) {
-                Surface(modifier = Modifier.align(Alignment.TopEnd), color = Danger, shape = CircleShape, border = BorderStroke(2.dp, PageBackground)) {
+                Surface(modifier = Modifier.align(Alignment.TopEnd), color = statusColor, shape = CircleShape, border = BorderStroke(2.dp, PageBackground)) {
                     Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ResultGlyph(ResultIcon.ALERT, Color.White, 10.dp)
-                        Text(result.riskLevel.label, color = Color.White, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
+                        ResultGlyph(ResultIcon.ALERT, if (result.riskLevel == RiskLevel.CAUTION) Ink else Color.White, 10.dp)
+                        Text(result.riskLevel.label, color = if (result.riskLevel == RiskLevel.CAUTION) Ink else Color.White,
+                            fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
         if (result.riskLevel != RiskLevel.DANGER) {
             Spacer(Modifier.height(12.dp))
-            Surface(shape = CircleShape, color = if (safe) Color(0xFFE8EEFF) else Color(0xFFFFDAD6)) {
+            Surface(shape = CircleShape, color = if (safe) SoftSafe else SoftCaution) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(6.dp).background(if (safe) ProtectiveBlue else Danger, CircleShape))
-                    Text(if (safe) "보안 정밀 분석 완료" else "주의 단계 경고", fontSize = 11.sp, lineHeight = 15.sp, color = if (safe) Ink else Danger)
+                    Box(Modifier.size(6.dp).background(statusColor, CircleShape))
+                    Text(if (safe) "보안 정밀 분석 완료" else "주의 단계 경고", fontSize = 11.sp, lineHeight = 15.sp, color = if (safe) Ink else CautionInk)
                 }
             }
         }
@@ -238,14 +267,15 @@ private fun TargetRow(label: String) {
 
 @Composable
 private fun SummaryBanner(message: String, urgent: Boolean) {
-    Surface(color = if (urgent) Color(0xFFFFD9D5) else SoftRed, shape = RoundedCornerShape(14.dp)) {
+    val tint = if (urgent) Danger else CautionInk
+    Surface(color = if (urgent) SoftRed else SoftCaution, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (urgent) ResultGlyph(ResultIcon.WARNING, Danger, 23.dp)
-            else Box(Modifier.size(34.dp).background(Color(0xFFFFDAD6), CircleShape), contentAlignment = Alignment.Center) {
-                ResultGlyph(ResultIcon.LINK, Danger, 20.dp)
+            else Box(Modifier.size(34.dp).background(SoftCaution, CircleShape), contentAlignment = Alignment.Center) {
+                ResultGlyph(ResultIcon.LINK, tint, 20.dp)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(if (urgent) "긴급 조치 권고" else "점검 핵심 요약", fontSize = 11.sp, lineHeight = 15.sp, color = Danger)
+                Text(if (urgent) "긴급 조치 권고" else "점검 핵심 요약", fontSize = 11.sp, lineHeight = 15.sp, color = tint)
                 Text(message, fontSize = if (urgent) 16.sp else 14.sp, lineHeight = 21.sp,
                     fontWeight = if (urgent) FontWeight.Bold else FontWeight.Medium, color = if (urgent) Danger else Ink)
             }
@@ -285,7 +315,12 @@ private fun MetricsRow(result: AnalysisResult, nested: Boolean = false) {
         RiskLevel.UNKNOWN -> "판정 미확정"
         null -> "정보 없음"
     }
-    val fraudTint = if (result.fraudLevel == RiskLevel.CAUTION || result.fraudLevel == RiskLevel.DANGER) Danger else ProtectiveBlue
+    val fraudTint = when (result.fraudLevel) {
+        RiskLevel.SAFE -> SafeInk
+        RiskLevel.CAUTION -> CautionInk
+        RiskLevel.DANGER -> Danger
+        else -> ProtectiveBlue
+    }
     val danger = result.riskLevel == RiskLevel.DANGER
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MetricCard(if (danger) "사기 위험" else "사기 위험도", fraudLabel, result.fraudScore, fraudTint,
@@ -416,7 +451,7 @@ private fun ResultActions(result: AnalysisResult, historySaved: Boolean, onActio
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when (result.riskLevel) {
             RiskLevel.SAFE -> {
-                ActionButton("원래 화면으로 돌아가기", ResultIcon.FORWARD, Color.Black, Color.White, trailingIcon = true) { onAction(ResultAction.RETURN) }
+                ActionButton("원래 화면으로 돌아가기", ResultIcon.FORWARD, PrimaryMidnight, Color.White, trailingIcon = true) { onAction(ResultAction.RETURN) }
                 ActionButton(if (historySaved) "검사 결과가 기록에 보관되었어요" else "검사 결과 기록에 보관하기", ResultIcon.SAVE,
                     Color(0xFFE9EEFC), Ink, enabled = !historySaved) { onAction(ResultAction.SAVE_HISTORY) }
             }
@@ -428,7 +463,7 @@ private fun ResultActions(result: AnalysisResult, historySaved: Boolean, onActio
                 ReturnLink(onAction)
             }
             RiskLevel.DANGER -> {
-                ActionButton("가족에게 직접 전화해 확인하기", ResultIcon.PHONE, Color.Black, Color.White) { onAction(ResultAction.CALL_FAMILY) }
+                ActionButton("가족에게 직접 전화해 확인하기", ResultIcon.PHONE, PrimaryMidnight, Color.White) { onAction(ResultAction.CALL_FAMILY) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SecondaryAction("결과 가족에게 공유", ResultIcon.SHARE, ProtectiveBlue, Modifier.weight(1f)) { onAction(ResultAction.SHARE) }
                     SecondaryAction("신고 (112/118)", ResultIcon.PHONE, Danger, Modifier.weight(1f)) { onAction(ResultAction.REPORT) }
@@ -449,14 +484,15 @@ private fun SecondaryAction(text: String, icon: ResultIcon, tint: Color, modifie
         border = BorderStroke(1.dp, CardOutline), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp)) {
         ResultGlyph(icon, tint, 14.dp)
-        Text(text, Modifier.padding(start = 5.dp), fontSize = 11.sp, lineHeight = 16.sp, color = Ink, textAlign = TextAlign.Center)
+        Text(text, Modifier.padding(start = 5.dp), fontSize = if (LocalEasyMode.current) 18.sp else 11.sp,
+            lineHeight = if (LocalEasyMode.current) 26.sp else 16.sp, color = Ink, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
 private fun ReturnLink(onAction: (ResultAction) -> Unit) {
-    TextButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.fillMaxWidth()) {
-        Text("원래 화면으로 돌아가기", color = Muted, fontSize = 12.sp)
+    TextButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.fillMaxWidth().heightIn(min = if (LocalEasyMode.current) 48.dp else 0.dp)) {
+        Text("원래 화면으로 돌아가기", color = Muted, fontSize = if (LocalEasyMode.current) 18.sp else 12.sp)
     }
 }
 
@@ -472,7 +508,7 @@ private fun ActionButton(
             ResultGlyph(icon, if (enabled) iconColor else Muted, 16.dp)
             Spacer(Modifier.width(6.dp))
         }
-        Text(text, fontSize = 13.sp, lineHeight = 18.sp, textAlign = TextAlign.Center)
+        Text(text, fontSize = if (LocalEasyMode.current) 18.sp else 13.sp, lineHeight = if (LocalEasyMode.current) 26.sp else 18.sp, textAlign = TextAlign.Center)
         if (trailingIcon) {
             Spacer(Modifier.width(6.dp))
             ResultGlyph(icon, foreground, 16.dp)
@@ -485,5 +521,99 @@ private fun ResultPanel(color: Color = Color.White, content: @Composable ColumnS
     Surface(color = color, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(),
         border = if (color == Color.White) BorderStroke(1.dp, CardOutline) else null) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    }
+}
+
+/** Same service result, with a larger summary, independent metrics and readable evidence. */
+@Composable
+private fun EasyResultContent(result: AnalysisResult) {
+    val tint = when (result.riskLevel) {
+        RiskLevel.SAFE -> ProtectiveBlue
+        RiskLevel.CAUTION -> CautionInk
+        RiskLevel.DANGER -> Danger
+        RiskLevel.UNKNOWN -> Ink
+    }
+    ResultPanel {
+        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Surface(color = SoftBlue, shape = CircleShape) {
+                Text("분석 결과 · ${result.riskLevel.label}", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = tint, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Image(painterResource(when (result.riskLevel) {
+                RiskLevel.SAFE -> R.drawable.dundeuni_mascot_thumbs_up
+                RiskLevel.CAUTION -> R.drawable.dundeuni_mascot_suspicious
+                RiskLevel.DANGER -> R.drawable.dundeuni_mascot_danger
+                RiskLevel.UNKNOWN -> R.drawable.dundeuni_mascot_search
+            }), null, Modifier.size(112.dp))
+            Text(when (result.riskLevel) {
+                RiskLevel.SAFE -> "지금 보신 내용은\n안전해 보여요"
+                RiskLevel.CAUTION -> "조금 더\n확인해보세요"
+                RiskLevel.DANGER -> "위험할 가능성이\n높아요"
+                RiskLevel.UNKNOWN -> "결과 정보를\n확인해주세요"
+            }, color = tint, fontSize = 28.sp, lineHeight = 38.sp,
+                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(result.summary, color = Ink, fontSize = 20.sp, lineHeight = 30.sp, textAlign = TextAlign.Center)
+            result.keyFinding?.takeIf { it.isNotBlank() && it != result.summary }?.let {
+                Text(it, color = Ink, fontSize = 20.sp, lineHeight = 30.sp, textAlign = TextAlign.Center)
+            }
+            Text("분석 대상: ${result.targetLabel}", color = Muted, fontSize = 16.sp, lineHeight = 24.sp)
+        }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        EasyMetric("사기 위험도", when (result.fraudLevel) {
+            RiskLevel.SAFE -> "낮음"
+            RiskLevel.CAUTION -> "주의"
+            RiskLevel.DANGER -> "높음"
+            RiskLevel.UNKNOWN -> "판정 미확정"
+            null -> "정보 없음"
+        }, result.fraudScore, Modifier.weight(1f))
+        EasyMetric("AI 생성·변조 가능성", result.aiRiskLabel ?: result.aiLikelihood.label,
+            result.aiScore, Modifier.weight(1f))
+    }
+    ResultPanel {
+        Text("분석에서 확인한 내용", color = Ink, fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold)
+        if (result.evidence.isEmpty()) {
+            Text("세부 근거가 제공되지 않았어요. 위의 요약과 아래 안내를 확인해주세요.",
+                color = Muted, fontSize = 18.sp, lineHeight = 28.sp)
+        }
+        result.evidence.forEachIndexed { index, evidence ->
+            Surface(color = SoftBlue, shape = RoundedCornerShape(12.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${index + 1}. ${evidence.title}", color = Ink, fontSize = 20.sp,
+                        lineHeight = 28.sp, fontWeight = FontWeight.SemiBold)
+                    Text(evidence.description, color = Muted, fontSize = 18.sp, lineHeight = 28.sp)
+                }
+            }
+        }
+    }
+    result.sourceText?.takeIf { it.isNotBlank() }?.let {
+        ResultPanel {
+            Text("분석된 내용", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(it, color = Ink, fontSize = 18.sp, lineHeight = 28.sp)
+        }
+    }
+    ResultPanel(color = SoftBlue) {
+        Text("이렇게 확인하세요", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(when (result.riskLevel) {
+            RiskLevel.SAFE -> "낯선 요청은 한 번 더 확인하세요. 비밀번호나 인증번호는 알려주지 마세요."
+            RiskLevel.CAUTION -> "의심스러운 링크는 누르지 말고, 공식 연락처나 믿을 수 있는 사람에게 확인하세요."
+            RiskLevel.DANGER -> "송금을 멈추고, 가족이나 기관의 공식 연락처로 직접 확인하세요."
+            RiskLevel.UNKNOWN -> "판정 정보가 충분하지 않아요. 요청한 사람이나 기관의 공식 연락처로 확인하세요."
+        }, color = Ink, fontSize = 20.sp, lineHeight = 30.sp)
+        Text("분석은 참고 정보이며 확정 판정이 아니에요. 사기 위험과 AI 생성·변조 가능성은 서로 다른 지표예요.",
+            color = Muted, fontSize = 18.sp, lineHeight = 28.sp)
+    }
+}
+
+@Composable
+private fun EasyMetric(title: String, label: String, score: Double?, modifier: Modifier) {
+    Surface(modifier = modifier, color = Color.White, shape = RoundedCornerShape(16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, color = Muted, fontSize = 16.sp, lineHeight = 24.sp)
+            Text(label, color = Ink, fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
+            Text(score?.let { "분석 점수 ${formatScore(it)}%" } ?: "점수 정보 없음",
+                color = Muted, fontSize = 16.sp, lineHeight = 24.sp)
+        }
     }
 }

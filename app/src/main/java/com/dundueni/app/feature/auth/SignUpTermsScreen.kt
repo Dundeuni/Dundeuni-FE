@@ -145,7 +145,7 @@ fun SignUpTermsScreen(
 @Composable
 internal fun TermsHeader(onBack: () -> Unit, backLabel: String = "로그인으로 돌아가기", compact: Boolean = false, title: String = "회원가입") {
     Row(Modifier.fillMaxWidth().height(if (compact) 48.dp else 64.dp).shadow(1.dp).background(TermsColors.Background).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clickable(role = Role.Button, onClick = onBack)
+        Box(Modifier.size(48.dp).clickable(role = Role.Button, onClick = onBack)
             .semantics { contentDescription = backLabel }, contentAlignment = Alignment.Center) {
             TermsIcon(R.drawable.auth_terms_back, 12, 20)
         }
@@ -200,12 +200,12 @@ internal fun TermsIcon(@DrawableRes resource: Int, width: Int, height: Int) {
 }
 
 internal object TermsColors {
-    val Background = Color(0xFFF8F9FF)
-    val LightBlue = Color(0xFFEFF4FF)
-    val Link = Color(0xFF0050CC)
-    val Blue = Color(0xFF0366FF)
-    val Disabled = Color(0xFFDDE3EF)
-    val Ink = Color(0xFF161C25)
-    val Body = Color(0xFF45474C)
-    val Muted = Color(0xFF75777D)
+    val Background = com.dundueni.app.ui.theme.PageBackground
+    val LightBlue = com.dundueni.app.ui.theme.SoftBlue
+    val Link = com.dundueni.app.ui.theme.ProtectiveBlue
+    val Blue = com.dundueni.app.ui.theme.ProtectiveBlue
+    val Disabled = com.dundueni.app.ui.theme.DisabledSurface
+    val Ink = com.dundueni.app.ui.theme.BrandInk
+    val Body = com.dundueni.app.ui.theme.SecondaryInk
+    val Muted = com.dundueni.app.ui.theme.SecondaryInk
 }

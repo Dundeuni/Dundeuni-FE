@@ -49,7 +49,7 @@ object FloatingMenuView {
             val pill = TextView(context).apply {
                 text = label
                 setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f * fontScale.coerceIn(.6f, 1.6f))
-                setTextColor(Color.rgb(18, 28, 44))
+                setTextColor(Color.rgb(17, 27, 43))
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 setPadding(dp(12), dp(7), dp(12), dp(7))
@@ -63,7 +63,7 @@ object FloatingMenuView {
                 clipChildren = false
                 clipToPadding = false
                 background = GradientDrawable().apply {
-                    setColor(Color.rgb(225, 224, 255))
+                    setColor(Color.rgb(238, 243, 255))
                     shape = GradientDrawable.OVAL
                 }
                 elevation = dp(4).toFloat()

@@ -35,8 +35,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 
 @Composable
 fun PhoneInputScreen(
@@ -93,6 +95,8 @@ fun PhoneInputScreen(
                 onValueChange = { phoneInput = it },
                 readOnly = isInspecting,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = dundueniOutlinedTextFieldColors(),
                 label = { Text("전화번호") },
                 placeholder = { Text("010-0000-0000") },
                 singleLine = true,

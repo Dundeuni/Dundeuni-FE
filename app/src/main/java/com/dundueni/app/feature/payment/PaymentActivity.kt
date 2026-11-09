@@ -25,6 +25,9 @@ import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
 import com.dundueni.app.ui.theme.SurfaceLight
+import com.dundueni.app.ui.theme.PageBackground
+import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.SoftBlue
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
@@ -67,11 +70,11 @@ fun PaymentScreen(remaining: Int, onClose: () -> Unit) {
     var annual by rememberSaveable { mutableStateOf(false) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPlan by rememberSaveable { mutableStateOf("pro") }
-    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = {
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).statusBarsPadding().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onClose) { Text("←", color = Color(0xFF171D2A)) }
+    Scaffold(containerColor = PageBackground, topBar = {
+        Row(Modifier.fillMaxWidth().background(PageBackground).statusBarsPadding().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onClose) { Text("←", color = BrandInk) }
             Text("멤버십 구독", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = onClose) { Text("✕", color = Color(0xFF171D2A)) }
+            TextButton(onClick = onClose) { Text("✕", color = BrandInk) }
         }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
@@ -82,7 +85,7 @@ fun PaymentScreen(remaining: Int, onClose: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Text(if (annual) "연간 결제 · 2개월 무료" else "내게 맞는 보호 기능을 살펴보세요.", color = Color.Gray)
             Spacer(Modifier.height(22.dp))
-            Row(Modifier.fillMaxWidth().background(Color(0xFFE3E8F4), RoundedCornerShape(30.dp)).padding(4.dp)) {
+            Row(Modifier.fillMaxWidth().background(SoftBlue, RoundedCornerShape(30.dp)).padding(4.dp)) {
                 listOf(false to "월간 결제", true to "연간 결제").forEach { (value, label) ->
                     Surface(onClick = { annual = value }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(24.dp), color = if (annual == value) Color.White else Color.Transparent) {
                         Box(Modifier.padding(12.dp), contentAlignment = Alignment.Center) { Text(label, fontWeight = FontWeight.Medium) }

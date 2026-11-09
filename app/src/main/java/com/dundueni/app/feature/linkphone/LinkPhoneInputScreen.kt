@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 
 /**
  * 링크(URL) 및 전화번호 입력, 유효성 검사, 붙여넣기, 삭제 및 검사 기능을 제공하는 Composable 화면이다.
@@ -93,6 +94,8 @@ fun LinkPhoneInputScreen(
             value = linkInput,
             onValueChange = { linkInput = it },
             modifier = Modifier.fillMaxWidth(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            colors = dundueniOutlinedTextFieldColors(),
             label = { Text("웹 링크 (URL)") },
             placeholder = { Text("https://example.com 또는 단축 URL") },
             singleLine = true,
@@ -122,6 +125,8 @@ fun LinkPhoneInputScreen(
             value = phoneInput,
             onValueChange = { phoneInput = it },
             modifier = Modifier.fillMaxWidth(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            colors = dundueniOutlinedTextFieldColors(),
             label = { Text("전화번호") },
             placeholder = { Text("010-0000-0000") },
             singleLine = true,
