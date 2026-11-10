@@ -577,11 +577,14 @@ private fun EasyResultContent(result: AnalysisResult, isDemo: Boolean) {
         RiskLevel.DANGER -> Danger
         RiskLevel.UNKNOWN -> Ink
     }
+    val badgeLabel = if (result.imageModelResult) {
+        result.imageOverallDecisionLabel?.takeIf { it.isNotBlank() } ?: RiskLevel.UNKNOWN.label
+    } else result.riskLevel.label
     ResultPanel {
         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Surface(color = SoftBlue, shape = CircleShape) {
-                Text("분석 결과 · ${result.riskLevel.label}", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                Text("분석 결과 · $badgeLabel", Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = tint, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
             Image(painterResource(when (result.riskLevel) {
