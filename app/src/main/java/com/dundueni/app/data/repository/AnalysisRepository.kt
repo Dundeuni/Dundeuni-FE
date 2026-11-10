@@ -13,6 +13,9 @@ import com.google.gson.Gson
 import com.google.gson.JsonParseException
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
@@ -23,7 +26,9 @@ class AnalysisRepository(
     private val apiService: AnalysisApiService,
     private val queryApiService: AnalysisQueryApiService? = null,
     private val demoMode: Boolean = false,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AnalysisResultRepository {
+    private val summaryRequests = mutableMapOf<String, CompletableDeferred<String?>>()
     suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> =
         apiService.analyzeImage(image)
 
@@ -86,7 +91,7 @@ class AnalysisRepository(
             }
         }
 
-    override suspend fun findResult(analysisId: String): AnalysisResult = withContext(Dispatchers.IO) {
+    override suspend fun findResult(analysisId: String): AnalysisResult = withContext(ioDispatcher) {
         val response = (queryApiService ?: throw AnalysisProtocolException("Analysis lookup is unavailable"))
             .getAnalysis(analysisId)
         if (response.code() != HTTP_OK) {
@@ -106,7 +111,10 @@ class AnalysisRepository(
         when (detail.status) {
             AnalysisExecutionStatus.COMPLETED.wireValue -> {
                 if (detail.result == null) throw AnalysisProtocolException("Normalized result is missing")
-                detail.toDomain()
+                val result = detail.toDomain()
+                if (result.type == "IMAGE" && result.summary.isNullOrBlank()) {
+                    result.copy(summary = completedSummaryOrNull(analysisId))
+                } else result
             }
             AnalysisExecutionStatus.QUEUED.wireValue ->
                 throw AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, analysisId, detail.errorCode)
@@ -116,6 +124,54 @@ class AnalysisRepository(
                 throw AnalysisFailedException(detail.errorCode, envelope.message)
             else -> throw AnalysisProtocolException("Unknown analysis detail status: ${detail.status}")
         }
+    }
+
+    /** Share concurrent lookups without starting a job outside the calling ViewModel's scope. */
+    private suspend fun completedSummaryOrNull(analysisId: String): String? {
+        val (request, owner) = synchronized(summaryRequests) {
+            summaryRequests[analysisId]?.let { it to false } ?: run {
+                val next = CompletableDeferred<String?>()
+                summaryRequests[analysisId] = next
+                next to true
+            }
+        }
+        if (!owner) return request.await()
+        try {
+            val summary = pollCompletedSummary(analysisId)
+            request.complete(summary)
+            return summary
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            request.cancel(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            request.complete(null)
+            return null
+        } finally {
+            synchronized(summaryRequests) { summaryRequests.remove(analysisId) }
+        }
+    }
+
+    private suspend fun pollCompletedSummary(analysisId: String): String? {
+        // Initial lookup plus at most five retries, only while the server reports PENDING.
+        repeat(6) { attempt ->
+            if (attempt > 0) delay(2_000)
+            val response = queryApiService?.getSummary(analysisId)
+            if (response?.code() != HTTP_OK) {
+                response?.errorBody()?.close()
+                return null
+            }
+            val envelope = response.body()
+            val summary = envelope?.result
+            if (envelope?.isSuccess != true || envelope.code != DETAIL_SUCCESS_CODE ||
+                summary?.analysisId != analysisId
+            ) return null
+            when (summary.summaryStatus) {
+                "COMPLETED" -> return summary.summary?.takeIf { it.isNotBlank() }
+                "PENDING" -> Unit
+                else -> return null
+            }
+        }
+        return null
     }
 
     private fun parseEnvelope(json: String): AnalysisResponseDto = try {

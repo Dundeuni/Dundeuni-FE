@@ -62,6 +62,7 @@ class AnalysisGetResponseTest {
                     "result":{"riskLevel":"UNKNOWN","reasons":[],"guidance":[],"summary":null}
                 }
             }"""))
+            server.enqueue(MockResponse().setResponseCode(200).setBody(summary(null)))
             val result = repository(server).findResult(id)
             assertNull(result.summary)
             assertNull(result.aiGenerationScore)
@@ -115,6 +116,60 @@ class AnalysisGetResponseTest {
         } finally { server.shutdown() }
         Unit
     }
+
+    @Test fun completedGeminiSummaryReachesExistingPresentation() = runBlocking {
+        val server = MockWebServer().apply { start() }
+        try {
+            server.enqueue(MockResponse().setResponseCode(200)
+                .setBody(detail("COMPLETED").replace("\"저장된 요약\"", "null")))
+            server.enqueue(MockResponse().setResponseCode(200).setBody(summary("COMPLETED")))
+            val result = repository(server).findResult(id)
+            assertEquals("Gemini 요약", result.summary)
+            assertEquals(listOf("저장된 모델 근거"), result.reasons)
+            assertEquals("UNKNOWN", result.normalizedRiskLevel)
+            server.takeRequest()
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals("/api/analysis/$id/summary", request.path)
+            assertNull(request.getHeader("X-Dundeuni-Auth-Required"))
+        } finally { server.shutdown() }
+    }
+
+    @Test fun unavailablePendingFailedAndInvalidSummariesPreserveAnalysis() = runBlocking {
+        val server = MockWebServer().apply { start() }
+        try {
+            val responses = listOf(
+                MockResponse().setResponseCode(404).setBody("{}"),
+                MockResponse().setResponseCode(500).setBody("{}"),
+                MockResponse().setResponseCode(200).setBody(summary("PENDING")),
+                MockResponse().setResponseCode(200).setBody(summary("FAILED")),
+                MockResponse().setResponseCode(200).setBody(summary(null)),
+                MockResponse().setResponseCode(200).setBody(summary("COMPLETED").replace(id, "other-id")),
+                MockResponse().setResponseCode(200).setBody(summary("COMPLETED").replace("ANALYSIS200", "OTHER")),
+                MockResponse().setResponseCode(200).setBody("invalid json"),
+            )
+            for (summaryResponse in responses) {
+                server.enqueue(MockResponse().setResponseCode(200)
+                    .setBody(detail("COMPLETED").replace("\"저장된 요약\"", "null")))
+                server.enqueue(summaryResponse)
+                // A PENDING response now permits five further summary-only lookups.
+                if (responses.indexOf(summaryResponse) == 2) repeat(5) {
+                    server.enqueue(MockResponse().setResponseCode(200).setBody(summary("PENDING")))
+                }
+                val result = repository(server).findResult(id)
+                assertNull(result.summary)
+                assertEquals("COMPLETED", result.status)
+                assertEquals(listOf("저장된 모델 근거"), result.reasons)
+                assertEquals(82.0, result.aiGenerationScore!!, 0.0)
+            }
+        } finally { server.shutdown() }
+    }
+
+    private fun summary(status: String?) = """{
+        "isSuccess":true,"code":"ANALYSIS200","result":{
+            "analysisId":"$id","summaryStatus":${status?.let { "\"$it\"" } ?: "null"},
+            "summary":"Gemini 요약","summaryModel":"gemini","summarizedAt":null}
+    }"""
 
     private fun repository(server: MockWebServer): AnalysisRepository {
         val client = RetrofitClient(server.url("/v1/").toString())
