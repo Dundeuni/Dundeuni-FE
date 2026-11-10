@@ -50,23 +50,23 @@ class AnalysisResultPreviewActivity : ComponentActivity() {
 @Preview(name = "PB-05 안전", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun SafeResultPreview() = DundueniFETheme {
-    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.SAFE), onAction = {})
+    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.SAFE), onAction = {}, isDemo = true)
 }
 
 @Preview(name = "PB-05 주의", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun CautionResultPreview() = DundueniFETheme {
-    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.CAUTION), onAction = {})
+    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.CAUTION), onAction = {}, isDemo = true)
 }
 
 @Preview(name = "PB-05 위험", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun DangerResultPreview() = DundueniFETheme {
-    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.DANGER), onAction = {})
+    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.DANGER), onAction = {}, isDemo = true)
 }
 
 @Preview(name = "PB-05 작은 화면·큰 글씨", widthDp = 320, heightDp = 720, fontScale = 1.3f, showBackground = true)
 @Composable
 private fun AccessibleResultPreview() = DundueniFETheme {
-    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.DANGER), onAction = {})
+    AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.DANGER), onAction = {}, isDemo = true)
 }

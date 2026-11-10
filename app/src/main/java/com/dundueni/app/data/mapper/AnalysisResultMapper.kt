@@ -1,6 +1,7 @@
 package com.dundueni.app.data.mapper
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.remote.api.TextAnalysisResponseResult
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisResponseResultDto
 import com.dundueni.app.data.remote.dto.AnalysisDetailDto
@@ -46,3 +47,12 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
         sourceType = sourceType,
     )
 }
+
+/** Text POST contains a classifier decision, not a normalized final fraud verdict. */
+fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(
+    analysisId = analysisId, type = type ?: "TEXT", status = status,
+    aiGenerationScore = null, aiRiskLevel = null, reasons = emptyList(),
+    modelVersion = null, errorCode = null, createdAt = null, completedAt = null, expiresAt = null,
+    textDecision = textResult?.decision,
+    sourceType = textResult?.sourceType,
+)

@@ -27,7 +27,7 @@ import com.dundueni.app.ui.component.InspectionLoadingDialog
  * 직접 이미지를 읽거나 API를 호출하지 않고 결과와 동작을 외부에서 받는다.
  * 재시도 버튼은 Activity의 입력 준비 흐름을 다시 시작하도록 요청한다.
  * 닫기 버튼도 전달받은 동작을 실행하며 화면 종료와 자원 정리는 Activity가 맡는다.
- * Fake 결과는 샘플 판정을 포함해 PB-05에 전달하고, 실제 결과는 판정 미확정 상태로 같은 화면에 전달한다.
+ * Fake 결과는 샘플 판정을 포함해 PB-05에 전달하고, 실제 결과는 서버의 정규화된 판정으로 같은 화면에 전달한다.
  */
 @Composable
 fun AnalysisFlowScreen(
@@ -42,7 +42,9 @@ fun AnalysisFlowScreen(
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
     val screen = state as? AnalysisUiState.ScreenSuccess
-    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.copy(historyType = historyType)
+    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.let {
+        if (it.historyType == HistoryType.TEXT) it else it.copy(historyType = historyType)
+    }
         ?: screen?.image?.toPb05Result(isDemo = false)?.copy(historyType = HistoryType.SCREEN)
         ?: screen?.text?.let { text ->
             PresentedResult(

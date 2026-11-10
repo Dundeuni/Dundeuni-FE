@@ -6,7 +6,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.mapper.toDomain
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
+import com.dundueni.app.feature.analysis.toPb05Result
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import com.dundueni.app.feature.analysisresult.AiLikelihood
@@ -144,7 +146,7 @@ class TextInspectionViewModel(
             error("Text analysis is not completed")
         }
         if (result.type != null && result.type != "TEXT") error("Unexpected analysis type")
-        return completedTextResult(id, result.textResult.decision, text)
+        return checkNotNull(result.toDomain().toPb05Result(isDemo = false)).copy(sourceText = text)
     }
 
     private fun refreshPending(id: String) {
@@ -156,7 +158,9 @@ class TextInspectionViewModel(
                 if (detail.type != "TEXT" || detail.sourceType !in setOf(null, "TEXT")) {
                     error("Unexpected text analysis type")
                 }
-                val result = completedTextResult(id, detail.textDecision, submittedText.orEmpty())
+                val result = checkNotNull(detail.toPb05Result(isDemo = false)).copy(
+                    sourceText = submittedText,
+                )
                 val json = Gson().toJson(result)
                 pendingAnalysisId = null
                 resultPendingOpen = json
@@ -170,24 +174,6 @@ class TextInspectionViewModel(
                 mutableUiState.value = TextInspectionUiState.Error
             }
         }
-    }
-
-    private fun completedTextResult(id: String, decision: String?, text: String): AnalysisResult {
-        val decisionLabel = when (decision) {
-            "normal" -> "일반 텍스트로 판단"
-            "phishing" -> "피싱 의심"
-            "defer" -> "판단 보류"
-            else -> error("Unknown text analysis decision")
-        }
-        return AnalysisResult(
-            id = id,
-            historyType = HistoryType.TEXT,
-            riskLevel = RiskLevel.UNKNOWN,
-            summary = "AI 텍스트 분석 결과: $decisionLabel. 이 판정은 참고 정보입니다.",
-            keyFinding = decisionLabel,
-            sourceText = text,
-            targetLabel = "입력한 텍스트 내용",
-        )
     }
 
     private class PendingTextAnalysis(val analysisId: String) : Exception()

@@ -59,7 +59,7 @@ class AnalysisResultMapperTest {
             }
         }""").toDomain()
         assertEquals("  FUTURE_VALUE  ", result.aiRiskLevel)
-        assertEquals("  FUTURE_VALUE  ", result.riskLevel)
+        assertNull(result.riskLevel)
         assertEquals(listOf(" reason "), result.reasons)
     }
 

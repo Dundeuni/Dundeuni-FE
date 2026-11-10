@@ -30,6 +30,7 @@ data class AnalysisResult(
     val riskLevel: RiskLevel,
     val summary: String,
     val keyFinding: String? = null,
+    val guidance: List<String> = emptyList(),
     val fraudLevel: RiskLevel? = null,
     val fraudScore: Double? = null,
     val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
