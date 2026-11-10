@@ -31,6 +31,12 @@ class AnalysisApiModeTest {
         server.start()
         try {
             server.enqueue(MockResponse().setResponseCode(202).setBody(completedResponse()))
+            server.enqueue(MockResponse().setResponseCode(200).setBody("""{
+                "isSuccess":true,"code":"ANALYSIS200","result":{
+                  "analysisId":"real-id","type":"IMAGE","status":"COMPLETED",
+                  "aiGenerationScore":76.3,"aiRiskLevel":"SERVER_RISK",
+                  "result":{"riskLevel":"UNKNOWN","reasons":["server reason"]}}}
+            """))
             val repository = AnalysisFlowDependencies.createRepository("REAL", server.url("/").toString())
                 as AnalysisRepository
             val result = repository.analyzeResult(image)

@@ -85,6 +85,37 @@ class AnalysisGetResponseTest {
         } finally { server.shutdown() }
     }
 
+
+    @Test fun completedPostRequiresGetAndNeverFallsBackAfterGetError() = runBlocking {
+        val server = MockWebServer().apply { start() }
+        try {
+            val repository = repository(server)
+            server.enqueue(MockResponse().setResponseCode(202).setBody("""{
+                "isSuccess":true,"code":"ANALYSIS202","result":{
+                "analysisId":"$id","type":"IMAGE","status":"COMPLETED","aiGenerationScore":1}}
+            """))
+            server.enqueue(MockResponse().setResponseCode(500).setBody("{}"))
+            val part = okhttp3.MultipartBody.Part.createFormData("file", "image.png",
+                okhttp3.RequestBody.create(null, byteArrayOf(1)))
+            val error = assertThrows(AnalysisLookupException::class.java) {
+                runBlocking { repository.analyzeResult(part) }
+            }
+            assertEquals(id, error.analysisId)
+            assertEquals(500, (error.cause as AnalysisHttpException).httpStatus)
+            server.enqueue(MockResponse().setResponseCode(200).setBody(detail("COMPLETED")))
+            val result = repository.findResult(id)
+            assertEquals(82.0, result.aiGenerationScore!!, 0.0)
+            assertEquals("POST", server.takeRequest().method)
+            repeat(2) {
+                val request = server.takeRequest()
+                assertEquals("GET", request.method)
+                assertEquals("/api/analysis/$id", request.path)
+            }
+            assertEquals(3, server.requestCount)
+        } finally { server.shutdown() }
+        Unit
+    }
+
     private fun repository(server: MockWebServer): AnalysisRepository {
         val client = RetrofitClient(server.url("/v1/").toString())
         return AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)

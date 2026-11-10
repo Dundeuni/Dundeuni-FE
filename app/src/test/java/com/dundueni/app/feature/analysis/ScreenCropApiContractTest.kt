@@ -27,7 +27,18 @@ class ScreenCropApiContractTest {
             val response = RetrofitClient(server.url("/").toString())
                 .textAnalysisApiService.analyzeScreenCrop(file)
             assertEquals(202, response.code())
-            val mapped = response.toCompletedScreenCrop()
+            server.enqueue(MockResponse().setResponseCode(200).setBody("""{
+                "isSuccess":true,"code":"ANALYSIS200","result":{
+                  "analysisId":"ocr-id","type":"TEXT","sourceType":"SCREEN_CROP","status":"COMPLETED",
+                  "result":{"riskLevel":"UNKNOWN","textDecision":"phishing","reasons":["GET reason"],"guidance":["GET guidance"],"summary":"GET summary"}}}
+            """))
+            val client = RetrofitClient(server.url("/").toString())
+            val mapped = response.toCompletedScreenCrop(
+                com.dundueni.app.data.repository.AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)
+            )
+            assertEquals("GET summary", mapped.detail.summary)
+            assertEquals(listOf("GET reason"), mapped.detail.reasons)
+            assertEquals(listOf("GET guidance"), mapped.detail.recommendedActions)
             assertEquals("ocr-id", mapped.analysisId)
             assertEquals("phishing", mapped.decision)
             assertEquals("피싱 의심", mapped.label)
@@ -45,6 +56,9 @@ class ScreenCropApiContractTest {
             assertTrue(multipart.contains("name=\"file\"; filename=\"capture.png\""))
             assertTrue(multipart.contains("png-bytes"))
             assertFalse(multipart.contains("name=\"text\""))
+            val get = server.takeRequest()
+            assertEquals("GET", get.method)
+            assertEquals("/api/analysis/ocr-id", get.path)
         } finally {
             server.shutdown()
         }

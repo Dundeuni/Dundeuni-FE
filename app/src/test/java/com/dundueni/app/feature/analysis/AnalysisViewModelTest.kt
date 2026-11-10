@@ -280,4 +280,74 @@ class AnalysisViewModelTest {
         runCurrent()
         assertEquals(AnalysisUiState.Idle, vm.uiState.value)
     }
+    @Test fun initialCompletedPostLookupFailureRetainsIdForRetry() = runTest {
+        var posts = 0
+        var gets = 0
+        val vm = viewModel(object : AnalysisResultRepository {
+            override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult {
+                posts++
+                throw com.dundueni.app.data.repository.AnalysisLookupException("id-1", ConnectException("offline"))
+            }
+            override suspend fun findResult(analysisId: String): AnalysisResult {
+                gets++
+                assertEquals("id-1", analysisId)
+                return result
+            }
+        })
+        vm.analyze(part); runCurrent()
+        assertEquals(AnalysisUiState.Error(AnalysisErrorKind.CONNECTION, pendingAnalysisId = "id-1"), vm.uiState.value)
+        vm.refreshPending(); runCurrent()
+        assertEquals(AnalysisUiState.Success(result), vm.uiState.value)
+        assertEquals(1, posts); assertEquals(1, gets)
+    }
+
+    @Test fun screenPartialSuccessKeepsCompletedSideAndRetriesOnlyPendingGet() = runTest {
+        for (imageSucceeds in listOf(true, false)) {
+            var imagePosts = 0
+            var textPosts = 0
+            val gets = mutableListOf<String>()
+            var refreshing = false
+            val text = result.copy(analysisId = "ocr-id", type = "TEXT", sourceType = "SCREEN_CROP",
+                textDecision = "phishing", summary = "OCR GET summary", reasons = listOf("OCR GET reason"))
+            val repository = object : AnalysisResultRepository {
+                override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult {
+                    imagePosts++
+                    if (!imageSucceeds) throw com.dundueni.app.data.repository.AnalysisLookupException("id-1", ConnectException("offline"))
+                    return result
+                }
+                override suspend fun findResult(analysisId: String): AnalysisResult {
+                    gets += analysisId
+                    if (!refreshing && imageSucceeds) throw AnalysisNotCompletedException(AnalysisExecutionStatus.ANALYZING, analysisId, null)
+                    return if (analysisId == "ocr-id") text else result
+                }
+            }
+            val api = object : com.dundueni.app.data.remote.api.TextAnalysisApiService {
+                override suspend fun analyzeText(request: com.dundueni.app.data.remote.api.TextAnalysisRequest): retrofit2.Response<com.dundueni.app.data.remote.api.TextAnalysisResponse> = error("Unexpected direct text")
+                override suspend fun analyzeScreenCrop(file: MultipartBody.Part, type: okhttp3.RequestBody, sourceType: okhttp3.RequestBody): retrofit2.Response<com.dundueni.app.data.remote.api.TextAnalysisResponse> {
+                    textPosts++
+                    return retrofit2.Response.success(202, com.dundueni.app.data.remote.api.TextAnalysisResponse(
+                        true, "ANALYSIS202", com.dundueni.app.data.remote.api.TextAnalysisResponseResult("ocr-id", "TEXT", "COMPLETED")))
+                }
+            }
+            val vm = AnalysisViewModel(repository) { api }.also { store.put("screen", it) }
+            vm.analyzePrepared(true) { part }; runCurrent()
+            val partial = vm.uiState.value as AnalysisUiState.ScreenSuccess
+            if (imageSucceeds) {
+                assertEquals(result, partial.image); assertNull(partial.text)
+                assertEquals("ocr-id", partial.textError?.pendingAnalysisId)
+            } else {
+                assertNull(partial.image); assertEquals("OCR GET summary", partial.text?.detail?.summary)
+                assertEquals("id-1", partial.imageError?.pendingAnalysisId)
+            }
+            refreshing = true
+            vm.refreshPending(); runCurrent()
+            val complete = vm.uiState.value as AnalysisUiState.ScreenSuccess
+            assertEquals(result, complete.image)
+            assertEquals(text, complete.text?.detail)
+            assertNull(complete.imageError); assertNull(complete.textError)
+            assertEquals(1, imagePosts); assertEquals(1, textPosts)
+            assertEquals(if (imageSucceeds) listOf("ocr-id", "ocr-id") else listOf("ocr-id", "id-1"), gets)
+        }
+    }
+
 }

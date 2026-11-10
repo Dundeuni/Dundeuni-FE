@@ -7,6 +7,9 @@ import com.dundueni.app.data.repository.AnalysisResultRepository
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.api.TextAnalysisApiService
+import com.dundueni.app.data.repository.AnalysisLookupException
+import com.dundueni.app.data.repository.findResultForDisplay
+import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.repository.AnalysisFailedException
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import java.io.IOException
@@ -39,6 +42,8 @@ class AnalysisViewModel(
     private val mutableUiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = mutableUiState.asStateFlow()
     private var requestJob: Job? = null
+    private var screenImage: Result<AnalysisResult>? = null
+    private var screenText: Result<ScreenCropAnalysis>? = null
     var attemptId: String = UUID.randomUUID().toString()
         private set
 
@@ -51,6 +56,7 @@ class AnalysisViewModel(
     /** Rechecks the ID from POST without uploading the image or creating another analysis. */
     @MainThread
     fun refreshPending() {
+        if (screenImage != null) { refreshScreen(); return }
         val id = when (val state = mutableUiState.value) {
             is AnalysisUiState.Pending -> state.analysisId
             is AnalysisUiState.Error -> state.pendingAnalysisId
@@ -85,8 +91,11 @@ class AnalysisViewModel(
 
     @MainThread
     fun analyzePrepared(screenCrop: Boolean, prepare: suspend () -> MultipartBody.Part) {
-        // 빠른 재클릭으로 같은 이미지를 중복 준비하거나 분석 요청이 겹치는 것을 막는다.
+        if (screenCrop && screenImage != null && screenHasLookup()) { refreshScreen(); return }
+        // Ignore duplicate requests before touching the saved independent outcomes.
         if (requestJob?.isActive == true || mutableUiState.value is AnalysisUiState.Pending) return
+        screenImage = null
+        screenText = null
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
@@ -100,24 +109,14 @@ class AnalysisViewModel(
                         val imageRequest = async { attempt { checkNotNull(repository.analyzeResult(image)) } }
                         val textRequest = async { attempt {
                             val api = checkNotNull(screenCropApi) { "Screen crop API is unavailable" }.invoke()
-                            api.analyzeScreenCrop(image).toCompletedScreenCrop()
+                            api.analyzeScreenCrop(image).toCompletedScreenCrop(repository)
                         } }
                         imageRequest.await() to textRequest.await()
                     }
                     ensureActive()
-                    val imageResult = imageOutcome.getOrNull()
-                    val textResult = textOutcome.getOrNull()
-                    mutableUiState.value = if (imageResult != null || textResult != null) {
-                        AnalysisUiState.ScreenSuccess(
-                            imageResult,
-                            textResult,
-                            imageOutcome.exceptionOrNull()?.toPartialError(),
-                            textOutcome.exceptionOrNull()?.toPartialError(),
-                        )
-                    } else {
-                        (imageOutcome.exceptionOrNull() ?: textOutcome.exceptionOrNull()
-                            ?: AnalysisProtocolException("No completed analysis result")).toPartialError()
-                    }
+                    screenImage = imageOutcome
+                    screenText = textOutcome
+                    publishScreenResult()
                 } else {
                     val result = checkNotNull(repository.analyzeResult(image))
                     ensureActive()
@@ -141,6 +140,59 @@ class AnalysisViewModel(
         }
     }
 
+    private fun Throwable.lookupId(): String? = when (this) {
+        is AnalysisLookupException -> analysisId
+        is AnalysisNotCompletedException -> analysisId
+        else -> null
+    }
+
+    private fun screenHasLookup(): Boolean =
+        screenImage?.exceptionOrNull()?.lookupId() != null || screenText?.exceptionOrNull()?.lookupId() != null
+
+    /** Recheck only unfinished IDs and keep an already successful side intact. */
+    private fun refreshScreen() {
+        if (requestJob?.isActive == true || !screenHasLookup()) return
+        requestJob = viewModelScope.launch {
+            mutableUiState.value = AnalysisUiState.Loading
+            try {
+                coroutineScope {
+                    val imageRequest = async {
+                        screenImage?.exceptionOrNull()?.lookupId()?.let { id ->
+                            screenImage = attempt { repository.findResultForDisplay(id) }
+                        }
+                    }
+                    val textRequest = async {
+                        screenText?.exceptionOrNull()?.lookupId()?.let { id ->
+                            screenText = attempt { repository.findResultForDisplay(id).toScreenCropAnalysis() }
+                        }
+                    }
+                    imageRequest.await()
+                    textRequest.await()
+                }
+                ensureActive()
+                publishScreenResult()
+            } catch (cancelled: CancellationException) {
+                mutableUiState.value = AnalysisUiState.Idle
+                throw cancelled
+            }
+        }
+    }
+
+    private fun publishScreenResult() {
+        val image = checkNotNull(screenImage)
+        val text = checkNotNull(screenText)
+        val imageError = image.exceptionOrNull()
+        val textError = text.exceptionOrNull()
+        mutableUiState.value = if (image.isSuccess || text.isSuccess) {
+            AnalysisUiState.ScreenSuccess(image.getOrNull(), text.getOrNull(),
+                imageError?.toPartialError(), textError?.toPartialError())
+        } else {
+            val error = listOfNotNull(imageError, textError)
+                .firstOrNull { it !is AnalysisNotCompletedException } ?: checkNotNull(imageError)
+            (error as Exception).toUiState()
+        }
+    }
+
     private suspend fun <T> attempt(block: suspend () -> T): Result<T> = try {
         Result.success(block())
     } catch (cancelled: CancellationException) {
@@ -152,11 +204,15 @@ class AnalysisViewModel(
     private fun Throwable.toPartialError(): AnalysisUiState.Error =
         when (val state = (this as? Exception)?.toUiState()) {
             is AnalysisUiState.Error -> state
-            is AnalysisUiState.Pending -> AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS)
+            is AnalysisUiState.Pending -> AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = state.analysisId)
             else -> AnalysisUiState.Error()
         }
 
     private fun Exception.toUiState(): AnalysisUiState = when (this) {
+        is AnalysisLookupException -> when (val state = (cause as Exception).toUiState()) {
+            is AnalysisUiState.Error -> state.copy(pendingAnalysisId = analysisId)
+            else -> state
+        }
         is AnalysisApiConfigurationException -> AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION)
         is AnalysisHttpException -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus)
         is AnalysisProtocolException -> AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)

@@ -82,8 +82,9 @@ fun AnalysisResultScreen(
                         Text("디자인 미리보기 · 샘플 데이터", Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFF795700), fontSize = 12.sp)
                     }
                 }
-                if (result.historyType != HistoryType.SCREEN || imageAnalysisError == null) if (LocalEasyMode.current) {
-                    EasyResultContent(result)
+                if (!LocalEasyMode.current) result.sourceText?.let { MessageQuote(it) }
+                if (LocalEasyMode.current) {
+                    EasyResultContent(result, isDemo)
                 } else when (result.riskLevel) {
                     RiskLevel.SAFE -> {
                         Column(
@@ -97,7 +98,7 @@ fun AnalysisResultScreen(
                         }
                         MetricsRow(result)
                         EvidencePanel(result)
-                        SafetyTip()
+                        if (isDemo) SafetyTip()
                     }
                     RiskLevel.CAUTION -> {
                         ResultHero(result)
@@ -114,9 +115,8 @@ fun AnalysisResultScreen(
                     }
                     RiskLevel.DANGER -> {
                         ResultHero(result)
-                        SummaryBanner("지금은 절대 돈을 보내지 마세요!", urgent = true)
+                        SummaryBanner(if (isDemo) "지금은 절대 돈을 보내지 마세요!" else result.summary, urgent = true)
                         Spacer(Modifier.height(4.dp))
-                        result.sourceText?.let { MessageQuote(it) }
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             MetricsRow(result)
                             Text("* 사기 위험과 AI 생성·변조 가능성은 각각 독립적으로 분석됩니다.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
@@ -126,7 +126,7 @@ fun AnalysisResultScreen(
                     RiskLevel.UNKNOWN -> {
                         ResultHero(result)
                         if (result.historyType == HistoryType.TEXT && result.keyFinding != null) {
-                            result.sourceText?.let { MessageQuote(it) }
+                            EvidencePanel(result)
                         } else {
                             UnclassifiedNotice()
                             MetricsRow(result)
@@ -144,6 +144,12 @@ fun AnalysisResultScreen(
                         } else {
                             Text("분석 결과를 표시할 수 없습니다: ${screenCropError ?: "응답 오류"}", color = Muted)
                         }
+                    }
+                }
+                if (result.recommendedActions.orEmpty().isNotEmpty()) {
+                    ResultPanel {
+                        Text("대응 안내", fontWeight = FontWeight.SemiBold, color = Ink)
+                        result.recommendedActions.orEmpty().forEach { Text(it, color = Ink) }
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -526,7 +532,7 @@ private fun ResultPanel(color: Color = Color.White, content: @Composable ColumnS
 
 /** Same service result, with a larger summary, independent metrics and readable evidence. */
 @Composable
-private fun EasyResultContent(result: AnalysisResult) {
+private fun EasyResultContent(result: AnalysisResult, isDemo: Boolean) {
     val tint = when (result.riskLevel) {
         RiskLevel.SAFE -> ProtectiveBlue
         RiskLevel.CAUTION -> CautionInk
@@ -593,7 +599,7 @@ private fun EasyResultContent(result: AnalysisResult) {
             Text(it, color = Ink, fontSize = 18.sp, lineHeight = 28.sp)
         }
     }
-    ResultPanel(color = SoftBlue) {
+    if (isDemo) ResultPanel(color = SoftBlue) {
         Text("이렇게 확인하세요", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(when (result.riskLevel) {
             RiskLevel.SAFE -> "낯선 요청은 한 번 더 확인하세요. 비밀번호나 인증번호는 알려주지 마세요."

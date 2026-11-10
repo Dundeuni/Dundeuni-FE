@@ -49,24 +49,31 @@ fun AnalysisFlowScreen(
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
     val screen = state as? AnalysisUiState.ScreenSuccess
+    val imagePresented = screen?.image?.toPb05Result(isDemo = false)
+    val textPresented = screen?.text?.detail?.toTextResult()
+    val screenPresented = (imagePresented ?: textPresented)?.let { primary ->
+        primary.copy(
+            historyType = HistoryType.SCREEN,
+            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
+            evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
+            recommendedActions = imagePresented?.recommendedActions.orEmpty() + textPresented?.recommendedActions.orEmpty(),
+            targetLabel = "캡처 화면",
+        )
+    }
     val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.copy(historyType = historyType)
-        ?: screen?.image?.toPb05Result(isDemo = false)?.copy(historyType = HistoryType.SCREEN)
-        ?: screen?.text?.let { text ->
-            PresentedResult(
-                id = text.analysisId,
-                historyType = HistoryType.SCREEN,
-                riskLevel = RiskLevel.UNKNOWN,
-                summary = "화면 문자 피싱 분석이 완료되었습니다.",
-                targetLabel = "캡처 화면",
+        ?: screenPresented
+    if (presented != null) {
+        Column {
+            if (screen?.imageError?.pendingAnalysisId != null || screen?.textError?.pendingAnalysisId != null) {
+                DundueniButton("결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
+            }
+            AnalysisResultRoute(
+                presented, onReturn = onClose, onHome = onHome, isDemo = isDemo,
+                screenCropDecision = screen?.text?.let { "${it.label}\n위험 수준: ${textPresented?.riskLevel?.label}" },
+                imageAnalysisError = screen?.imageError?.message,
+                screenCropError = screen?.textError?.message,
             )
         }
-    if (presented != null) {
-        AnalysisResultRoute(
-            presented, onReturn = onClose, onHome = onHome, isDemo = isDemo,
-            screenCropDecision = screen?.text?.label,
-            imageAnalysisError = screen?.imageError?.message,
-            screenCropError = screen?.textError?.message,
-        )
         return
     }
     Column(Modifier.fillMaxSize().background(PageBackground).verticalScroll(rememberScrollState()).padding(24.dp),

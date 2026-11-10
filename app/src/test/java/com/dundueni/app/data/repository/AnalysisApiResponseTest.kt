@@ -69,10 +69,9 @@ class AnalysisApiResponseTest {
 
     @Test
     fun domainResultPathReturnsOnlyCompletedAndRejectsFailedOrPendingStatuses() {
-        val completed = runBlocking {
-            repository(Response.success(202, body(successJson("COMPLETED")))).analyzeResult(part)
+        assertThrows(AnalysisLookupException::class.java) {
+            runBlocking { repository(Response.success(202, body(successJson("COMPLETED")))).analyzeResult(part) }
         }
-        assertEquals("COMPLETED", completed.status)
         for (status in listOf("FAILED", "QUEUED", "ANALYZING")) {
             assertThrows(IOException::class.java) {
                 runBlocking {

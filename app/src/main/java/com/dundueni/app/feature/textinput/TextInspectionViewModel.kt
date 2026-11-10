@@ -7,6 +7,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
+import com.dundueni.app.feature.analysis.completedTextAnalysisId
+import com.dundueni.app.feature.analysis.toTextResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import com.dundueni.app.feature.analysisresult.AiLikelihood
@@ -34,9 +36,16 @@ sealed interface TextInspectionUiState {
 }
 
 /** Keeps the submitted text and inspection state across Activity recreation. */
-class TextInspectionViewModel(
+class TextInspectionViewModel @JvmOverloads constructor(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
+    private val apiMode: String = BuildConfig.ANALYSIS_API_MODE,
+    private val textApi: () -> com.dundueni.app.data.remote.api.TextAnalysisApiService = {
+        AnalysisFlowDependencies.createTextApiService(application)
+    },
+    private val repository: () -> com.dundueni.app.data.repository.AnalysisResultRepository = {
+        AnalysisFlowDependencies.createRepository(application)
+    },
 ) : AndroidViewModel(application) {
     private val mutableUiState = MutableStateFlow<TextInspectionUiState>(TextInspectionUiState.Idle)
     val uiState: StateFlow<TextInspectionUiState> = mutableUiState.asStateFlow()
@@ -108,7 +117,7 @@ class TextInspectionViewModel(
         mutableUiState.value = TextInspectionUiState.Loading
         requestJob = viewModelScope.launch {
             try {
-                val result = when (BuildConfig.ANALYSIS_API_MODE.trim().uppercase()) {
+                val result = when (apiMode.trim().uppercase()) {
                     "FAKE" -> withContext(Dispatchers.Default) { createMockResult(text) }
                     "REAL" -> inspectWithApi(text)
                     else -> error("Unknown analysis API mode")
@@ -116,9 +125,9 @@ class TextInspectionViewModel(
                 val json = Gson().toJson(result)
                 resultPendingOpen = json
                 mutableUiState.value = TextInspectionUiState.Success(json)
-            } catch (pending: PendingTextAnalysis) {
+            } catch (pending: AnalysisNotCompletedException) {
                 pendingAnalysisId = pending.analysisId
-                mutableUiState.value = TextInspectionUiState.Pending(pending.analysisId)
+                mutableUiState.value = TextInspectionUiState.Pending(requireNotNull(pending.analysisId))
             } catch (cancelled: CancellationException) {
                 mutableUiState.value = TextInspectionUiState.Idle
                 throw cancelled
@@ -129,22 +138,20 @@ class TextInspectionViewModel(
     }
 
     private suspend fun inspectWithApi(text: String): AnalysisResult {
-        val response = AnalysisFlowDependencies.createTextApiService(getApplication())
-            .analyzeText(TextAnalysisRequest(text = text))
-        if (!response.isSuccessful) error("Text analysis HTTP ${response.code()}")
-        val body = response.body() ?: error("Text analysis response is missing")
-        if (body.isSuccess != true) error("Text analysis was not successful")
-        val result = body.result ?: error("Text analysis result is missing")
-        val id = result.analysisId?.takeIf { it.isNotBlank() }
-            ?: error("Text analysis ID is missing")
-        if (result.status == "QUEUED" || result.status == "ANALYZING") {
-            throw PendingTextAnalysis(id)
+        val id = textApi()
+            .analyzeText(TextAnalysisRequest(text = text)).completedTextAnalysisId()
+        pendingAnalysisId = id
+        return lookupTextResult(id, text)
+    }
+
+    private suspend fun lookupTextResult(id: String, text: String): AnalysisResult {
+        val detail = repository().findResult(id)
+        if (detail.type != "TEXT" || detail.sourceType !in setOf(null, "TEXT", "DIRECT")) {
+            error("Unexpected text analysis type")
         }
-        if (result.status != "COMPLETED" || result.textResult == null) {
-            error("Text analysis is not completed")
-        }
-        if (result.type != null && result.type != "TEXT") error("Unexpected analysis type")
-        return completedTextResult(id, result.textResult.decision, text)
+        val result = detail.toTextResult(text)
+        pendingAnalysisId = null
+        return result
     }
 
     private fun refreshPending(id: String) {
@@ -152,11 +159,7 @@ class TextInspectionViewModel(
         mutableUiState.value = TextInspectionUiState.Loading
         requestJob = viewModelScope.launch {
             try {
-                val detail = AnalysisFlowDependencies.createRepository(getApplication()).findResult(id)
-                if (detail.type != "TEXT" || detail.sourceType !in setOf(null, "TEXT")) {
-                    error("Unexpected text analysis type")
-                }
-                val result = completedTextResult(id, detail.textDecision, submittedText.orEmpty())
+                val result = lookupTextResult(id, submittedText.orEmpty())
                 val json = Gson().toJson(result)
                 pendingAnalysisId = null
                 resultPendingOpen = json
@@ -171,26 +174,6 @@ class TextInspectionViewModel(
             }
         }
     }
-
-    private fun completedTextResult(id: String, decision: String?, text: String): AnalysisResult {
-        val decisionLabel = when (decision) {
-            "normal" -> "일반 텍스트로 판단"
-            "phishing" -> "피싱 의심"
-            "defer" -> "판단 보류"
-            else -> error("Unknown text analysis decision")
-        }
-        return AnalysisResult(
-            id = id,
-            historyType = HistoryType.TEXT,
-            riskLevel = RiskLevel.UNKNOWN,
-            summary = "AI 텍스트 분석 결과: $decisionLabel. 이 판정은 참고 정보입니다.",
-            keyFinding = decisionLabel,
-            sourceText = text,
-            targetLabel = "입력한 텍스트 내용",
-        )
-    }
-
-    private class PendingTextAnalysis(val analysisId: String) : Exception()
 
     private fun createMockResult(text: String) = AnalysisResult(
         historyType = HistoryType.TEXT,

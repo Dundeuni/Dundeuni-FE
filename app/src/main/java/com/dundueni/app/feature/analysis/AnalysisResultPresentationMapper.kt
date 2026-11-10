@@ -32,6 +32,7 @@ internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
         evidence = descriptions.mapIndexed { index, description ->
             RiskEvidence("분석 근거 ${index + 1}", description)
         },
+        recommendedActions = recommendedActions,
         targetLabel = "선택한 이미지 또는 캡처 화면",
     )
 }
@@ -57,6 +58,32 @@ private fun AnalysisResult.toUnclassifiedPb05Result(): PresentedResult {
         evidence = descriptions.mapIndexed { index, description ->
             RiskEvidence("분석 근거 ${index + 1}", description)
         },
+        recommendedActions = recommendedActions,
         targetLabel = "선택한 이미지 또는 캡처 화면",
+    )
+}
+
+/** Map only explicit server findings; classifier scores are not fraud percentages. */
+internal fun AnalysisResult.toTextResult(text: String? = null): PresentedResult {
+    check(status == "COMPLETED" && type == "TEXT")
+    val decision = when (textDecision) {
+        "normal" -> "일반 텍스트로 판단"
+        "phishing" -> "피싱 의심"
+        "defer" -> "판단 보류"
+        else -> null
+    }
+    val level = RiskLevel.entries.firstOrNull { it.name == normalizedRiskLevel } ?: RiskLevel.UNKNOWN
+    return PresentedResult(
+        id = requireNotNull(analysisId),
+        historyType = HistoryType.TEXT,
+        riskLevel = level,
+        summary = summary?.takeIf { it.isNotBlank() } ?: "분석이 완료되었어요. 제공된 결과를 확인해주세요.",
+        keyFinding = decision,
+        sourceText = text,
+        evidence = reasons.filter { it.isNotBlank() }.mapIndexed { index, reason ->
+            RiskEvidence("분석 근거 ${index + 1}", reason)
+        },
+        recommendedActions = recommendedActions,
+        targetLabel = "입력한 텍스트 내용",
     )
 }

@@ -38,11 +38,21 @@ class AnalysisRepositoryTest {
                 return Response.success(202, body)
             }
         }
-        val result = AnalysisRepository(fake).analyzeResult(part)
-        assertEquals("SERVER_VALUE", result.aiRiskLevel)
-        assertEquals(82.4, result.aiGenerationScore!!, 0.0)
+        val query = object : com.dundueni.app.data.remote.api.AnalysisQueryApiService {
+            override suspend fun getAnalysis(analysisId: String) = Response.success(
+                com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto(true, "ANALYSIS200", result =
+                    com.dundueni.app.data.remote.dto.AnalysisDetailDto(
+                        analysisId = analysisId, type = "IMAGE", status = "COMPLETED",
+                        aiRiskLevel = "GET_VALUE", aiGenerationScore = 91.0,
+                        result = com.dundueni.app.data.remote.dto.NormalizedAnalysisResultDto(reasons = listOf("GET reason"))
+                    ))
+            )
+        }
+        val result = AnalysisRepository(fake, query).analyzeResult(part)
+        assertEquals("GET_VALUE", result.aiRiskLevel)
+        assertEquals(91.0, result.aiGenerationScore!!, 0.0)
         assertEquals("id-1", result.analysisId)
-        assertEquals(listOf("reason"), result.reasons)
+        assertEquals(listOf("GET reason"), result.reasons)
         assertTrue(result.recommendedActions.isEmpty())
         assertTrue(closed)
     }

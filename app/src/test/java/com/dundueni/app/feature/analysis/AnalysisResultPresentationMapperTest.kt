@@ -72,4 +72,26 @@ class AnalysisResultPresentationMapperTest {
             assertTrue(mapped.evidence.isEmpty())
         }
     }
+    @Test fun textDetailPreservesServerFindingsAndUnknownWithoutInventingScores() {
+        val detail = result.copy(type = "TEXT", normalizedRiskLevel = "CAUTION", textDecision = "phishing",
+            summary = "GET summary", reasons = listOf("GET reason"), recommendedActions = listOf("GET guidance"), riskScore = 0.9)
+        val mapped = detail.toTextResult("original https://example.com")
+        assertEquals(RiskLevel.CAUTION, mapped.riskLevel)
+        assertEquals("피싱 의심", mapped.keyFinding)
+        assertEquals("GET summary", mapped.summary)
+        assertEquals("original https://example.com", mapped.sourceText)
+        assertEquals("GET reason", mapped.evidence.single().description)
+        assertEquals(listOf("GET guidance"), mapped.recommendedActions)
+        assertNull(mapped.fraudScore)
+        for (risk in listOf(null, "UNKNOWN", "FUTURE")) {
+            val absent = detail.copy(normalizedRiskLevel = risk, textDecision = null, summary = null,
+                reasons = emptyList(), recommendedActions = emptyList(), riskScore = null).toTextResult()
+            assertEquals(RiskLevel.UNKNOWN, absent.riskLevel)
+            assertNull(absent.keyFinding)
+            assertTrue(absent.evidence.isEmpty())
+            assertTrue(absent.recommendedActions.isEmpty())
+            assertNull(absent.fraudScore)
+        }
+    }
+
 }

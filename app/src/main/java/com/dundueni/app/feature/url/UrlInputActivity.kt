@@ -1,6 +1,8 @@
 package com.dundueni.app.feature.url
 
 import android.os.Bundle
+import android.widget.Toast
+import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,6 +44,10 @@ class UrlInputActivity : ComponentActivity() {
                     UrlInputScreen(
                         onInspect = { url ->
                             if (showLimitIfExhausted(this@UrlInputActivity)) return@UrlInputScreen
+                            if (!BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true)) {
+                                Toast.makeText(this@UrlInputActivity, "링크 검사는 아직 서버에서 지원하지 않아요.", Toast.LENGTH_SHORT).show()
+                                return@UrlInputScreen
+                            }
                             val result = AnalysisResult(
                                 historyType = HistoryType.LINK,
                                 id = "url-scan-${UUID.randomUUID()}",

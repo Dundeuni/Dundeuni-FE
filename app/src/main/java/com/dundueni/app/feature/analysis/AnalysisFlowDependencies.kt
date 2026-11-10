@@ -52,7 +52,7 @@ object AnalysisFlowDependencies {
     ): AnalysisResultRepository {
         return try {
             when (mode.trim().uppercase()) {
-                FAKE_MODE -> AnalysisRepository(FakeAnalysisApiService())
+                FAKE_MODE -> AnalysisRepository(FakeAnalysisApiService(), demoMode = true)
                 REAL_MODE -> RetrofitClient(validateBaseUrl(baseUrl), sessionStore, onUnauthorized).let { client ->
                     AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)
                 }

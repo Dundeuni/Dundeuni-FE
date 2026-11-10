@@ -16,3 +16,17 @@ fun interface AnalysisResultRepository {
     suspend fun findResult(analysisId: String): AnalysisResult =
         throw UnsupportedOperationException("Analysis lookup is unavailable")
 }
+
+/** Preserve the POST ID even when the first detail lookup fails. */
+suspend fun AnalysisResultRepository.findResultForDisplay(analysisId: String): AnalysisResult = try {
+    findResult(analysisId)
+} catch (cancelled: kotlinx.coroutines.CancellationException) {
+    throw cancelled
+} catch (pending: AnalysisNotCompletedException) {
+    throw pending
+} catch (error: Exception) {
+    throw AnalysisLookupException(analysisId, error)
+}
+
+class AnalysisLookupException(val analysisId: String, cause: Exception) :
+    java.io.IOException("Analysis detail lookup failed", cause)

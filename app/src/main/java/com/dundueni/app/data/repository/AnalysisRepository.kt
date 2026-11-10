@@ -22,6 +22,7 @@ import retrofit2.Response
 class AnalysisRepository(
     private val apiService: AnalysisApiService,
     private val queryApiService: AnalysisQueryApiService? = null,
+    private val demoMode: Boolean = false,
 ) : AnalysisResultRepository {
     suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> =
         apiService.analyzeImage(image)
@@ -67,7 +68,14 @@ class AnalysisRepository(
     /** A pending or failed analysis is never exposed to the UI as a completed result. */
     override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult =
         when (val outcome = analyzeResponse(image)) {
-            is AnalysisRequestOutcome.Completed -> outcome.response.toDomain()
+            is AnalysisRequestOutcome.Completed -> {
+                if (demoMode) outcome.response.toDomain()
+                else {
+                    val id = outcome.response.result?.analysisId?.takeIf { it.isNotBlank() }
+                        ?: throw AnalysisProtocolException("Analysis ID is missing")
+                    findResultForDisplay(id)
+                }
+            }
             is AnalysisRequestOutcome.Failed -> {
                 val result = outcome.response.result
                 throw AnalysisFailedException(result?.errorCode, outcome.response.message)
