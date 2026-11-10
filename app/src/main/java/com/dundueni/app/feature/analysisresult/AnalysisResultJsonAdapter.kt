@@ -35,6 +35,12 @@ object AnalysisResultJsonAdapter {
             sourceText = value.optionalText("sourceText"),
             sourceUrl = value.optionalText("sourceUrl"),
             targetLabel = value.optionalText("targetLabel") ?: "수신된 문자 메시지 및 첨부 링크",
+            imageModelResult = value.optBoolean("imageModelResult", false),
+            imageOverallDecisionLabel = value.optionalText("imageOverallDecisionLabel"),
+            imageGenerationDecision = value.optionalText("imageGenerationDecision"),
+            imageGenerationDisplayScore = value.optionalScore("imageGenerationDisplayScore"),
+            imageManipulationDecision = value.optionalText("imageManipulationDecision"),
+            imageManipulationDisplayScore = value.optionalScore("imageManipulationDisplayScore"),
         )
     }
 

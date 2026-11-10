@@ -125,7 +125,7 @@ fun AnalysisResultScreen(
                     }
                     RiskLevel.UNKNOWN -> {
                         ResultHero(result)
-                        UnclassifiedNotice()
+                        UnclassifiedNotice(result.imageModelResult)
                         MetricsRow(result)
                         EvidencePanel(result, isDemo)
                     }
@@ -181,16 +181,18 @@ private fun ResultHeader(onAction: (ResultAction) -> Unit) {
 private fun ResultHero(result: AnalysisResult) {
     if (result.riskLevel == RiskLevel.UNKNOWN) {
         val hasTextDecision = result.historyType == HistoryType.TEXT && result.keyFinding != null
+        val imageDecision = result.imageOverallDecisionLabel?.takeIf { result.imageModelResult && it.isNotBlank() }
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(80.dp).background(SoftBlue, CircleShape), contentAlignment = Alignment.Center) {
                 Image(painterResource(R.drawable.dundeuni_mascot_search), null, Modifier.size(80.dp))
             }
             Surface(color = Color(0xFFE8EEFF), shape = CircleShape) {
-                Text(if (hasTextDecision) "분석 완료 · 텍스트 판정" else "분석 완료 · 판정 정보 없음",
+                Text(if (result.imageModelResult) "이미지 종합 판정" else if (hasTextDecision) "분석 완료 · 텍스트 판정" else "분석 완료 · 판정 정보 없음",
                     Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = Ink, fontSize = 11.sp)
             }
-            Text(if (hasTextDecision) result.keyFinding!! else "결과 정보를 확인해주세요",
+            Text(imageDecision ?: if (result.imageModelResult) "판정 미확정"
+                else if (hasTextDecision) result.keyFinding!! else "결과 정보를 확인해주세요",
                 color = Ink, fontSize = 24.sp, lineHeight = 32.sp,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Text(result.summary, color = Muted, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
@@ -283,11 +285,13 @@ private fun SummaryBanner(message: String, urgent: Boolean) {
 }
 
 @Composable
-private fun UnclassifiedNotice() {
+private fun UnclassifiedNotice(imageModelResult: Boolean) {
     Surface(color = SoftBlue, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("최종 위험 판정 미확정", fontSize = 14.sp, color = Ink, fontWeight = FontWeight.SemiBold)
-            Text("사기 위험을 안전·주의·위험으로 판정할 정보는 아직 제공되지 않았어요.", fontSize = 12.sp, color = Muted, lineHeight = 19.sp)
+            Text(if (imageModelResult) "사기 위험도 정보 없음" else "최종 위험 판정 미확정", fontSize = 14.sp, color = Ink, fontWeight = FontWeight.SemiBold)
+            Text(if (imageModelResult) "이미지 생성·변조 판정과 별개로 사기 위험도 정보는 제공되지 않았어요."
+                else "사기 위험을 안전·주의·위험으로 판정할 정보는 아직 제공되지 않았어요.",
+                fontSize = 12.sp, color = Muted, lineHeight = 19.sp)
         }
     }
 }
@@ -321,6 +325,19 @@ private fun MetricsRow(result: AnalysisResult, nested: Boolean = false) {
         else -> ProtectiveBlue
     }
     val danger = result.riskLevel == RiskLevel.DANGER
+    if (result.imageModelResult) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("사기 위험도", fraudLabel, result.fraudScore, fraudTint,
+                ResultIcon.SHIELD_OUTLINE, Modifier.fillMaxWidth(), nested, result.riskLevel, isAi = false)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ImageModelCard("AI 생성 판정", result.imageGenerationDecision,
+                    result.imageGenerationDisplayScore, true, Modifier.weight(1f))
+                ImageModelCard("이미지 변조 판정", result.imageManipulationDecision,
+                    result.imageManipulationDisplayScore, false, Modifier.weight(1f))
+            }
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MetricCard(if (danger) "사기 위험" else "사기 위험도", fraudLabel, result.fraudScore, fraudTint,
             if (danger) ResultIcon.ALERT else ResultIcon.SHIELD_OUTLINE, Modifier.weight(1f), nested, result.riskLevel,
@@ -330,6 +347,32 @@ private fun MetricsRow(result: AnalysisResult, nested: Boolean = false) {
             isAi = true)
     }
 }
+
+@Composable
+private fun ImageModelCard(
+    title: String, decision: String?, displayScore: Double?, generation: Boolean, modifier: Modifier,
+) {
+    Surface(modifier = modifier, color = Color.White, shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, CardOutline)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+            Text(imageDecisionLabel(decision, generation), color = Ink, fontSize = 16.sp,
+                lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(displayScore?.let { "표시 점수 ${formatScore(it)}/100" } ?: "표시 점수 정보 없음",
+                color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+        }
+    }
+}
+
+private fun imageDecisionLabel(decision: String?, generation: Boolean): String =
+    when (decision?.trim()?.uppercase(Locale.ROOT)) {
+        "AI_GENERATED_SUSPECTED" -> if (generation) "AI 생성 의심" else "정보 없음"
+        "NO_CLEAR_GENERATION_SIGNAL" -> if (generation) "뚜렷한 AI 생성 신호 없음" else "정보 없음"
+        "MANIPULATION_SUSPECTED" -> if (generation) "정보 없음" else "이미지 변조 의심"
+        "NO_CLEAR_MANIPULATION_SIGNAL" -> if (generation) "정보 없음" else "뚜렷한 이미지 변조 신호 없음"
+        "INCONCLUSIVE" -> "판정 미확정"
+        else -> "정보 없음"
+    }
 
 @Composable
 private fun MetricCard(
@@ -547,12 +590,13 @@ private fun EasyResultContent(result: AnalysisResult, isDemo: Boolean) {
                 RiskLevel.DANGER -> R.drawable.dundeuni_mascot_danger
                 RiskLevel.UNKNOWN -> R.drawable.dundeuni_mascot_search
             }), null, Modifier.size(112.dp))
-            Text(when (result.riskLevel) {
-                RiskLevel.SAFE -> "지금 보신 내용은\n안전해 보여요"
-                RiskLevel.CAUTION -> "조금 더\n확인해보세요"
-                RiskLevel.DANGER -> "위험할 가능성이\n높아요"
-                RiskLevel.UNKNOWN -> "결과 정보를\n확인해주세요"
-            }, color = tint, fontSize = 28.sp, lineHeight = 38.sp,
+            Text(result.imageOverallDecisionLabel?.takeIf { result.imageModelResult && it.isNotBlank() }
+                ?: if (result.imageModelResult) "판정 미확정" else when (result.riskLevel) {
+                    RiskLevel.SAFE -> "지금 보신 내용은\n안전해 보여요"
+                    RiskLevel.CAUTION -> "조금 더\n확인해보세요"
+                    RiskLevel.DANGER -> "위험할 가능성이\n높아요"
+                    RiskLevel.UNKNOWN -> "결과 정보를\n확인해주세요"
+                }, color = tint, fontSize = 28.sp, lineHeight = 38.sp,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Text(result.summary, color = Ink, fontSize = 20.sp, lineHeight = 30.sp, textAlign = TextAlign.Center)
             result.keyFinding?.takeIf { it.isNotBlank() && it != result.summary }?.let {
@@ -561,16 +605,29 @@ private fun EasyResultContent(result: AnalysisResult, isDemo: Boolean) {
             Text("분석 대상: ${result.targetLabel}", color = Muted, fontSize = 16.sp, lineHeight = 24.sp)
         }
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        EasyMetric("사기 위험도", when (result.fraudLevel) {
-            RiskLevel.SAFE -> "낮음"
-            RiskLevel.CAUTION -> "주의"
-            RiskLevel.DANGER -> "높음"
-            RiskLevel.UNKNOWN -> "판정 미확정"
-            null -> "정보 없음"
-        }, result.fraudScore, Modifier.weight(1f))
-        EasyMetric("AI 생성·변조 가능성", result.aiRiskLabel ?: result.aiLikelihood.label,
-            result.aiScore, Modifier.weight(1f))
+    val fraudLabel = when (result.fraudLevel) {
+        RiskLevel.SAFE -> "낮음"
+        RiskLevel.CAUTION -> "주의"
+        RiskLevel.DANGER -> "높음"
+        RiskLevel.UNKNOWN -> "판정 미확정"
+        null -> "정보 없음"
+    }
+    if (result.imageModelResult) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            EasyMetric("사기 위험도", fraudLabel, result.fraudScore, Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ImageModelCard("AI 생성 판정", result.imageGenerationDecision,
+                    result.imageGenerationDisplayScore, true, Modifier.weight(1f))
+                ImageModelCard("이미지 변조 판정", result.imageManipulationDecision,
+                    result.imageManipulationDisplayScore, false, Modifier.weight(1f))
+            }
+        }
+    } else {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            EasyMetric("사기 위험도", fraudLabel, result.fraudScore, Modifier.weight(1f))
+            EasyMetric("AI 생성·변조 가능성", result.aiRiskLabel ?: result.aiLikelihood.label,
+                result.aiScore, Modifier.weight(1f))
+        }
     }
     ResultPanel {
         Text("분석에서 확인한 내용", color = Ink, fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold)

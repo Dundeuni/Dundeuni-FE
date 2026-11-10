@@ -8,7 +8,7 @@ import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 
-/** Only normalized BE risk selects a real verdict; scores and text decisions remain independent. */
+/** Image model decisions stay separate from the final fraud risk and text classification. */
 internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
     if (status != "COMPLETED") return null
     if (isDemo && type != "IMAGE") return null
@@ -38,19 +38,19 @@ internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
 /** Scores and text classification never supply the final fraud verdict. */
 private fun AnalysisResult.toRealPb05Result(): PresentedResult {
     val descriptions = reasons.filter { it.isNotBlank() }
+    val isText = type == "TEXT"
     val likelihood = when (aiRiskLevel?.trim()?.uppercase(Locale.ROOT)) {
         "LOW" -> AiLikelihood.LOW
         "MEDIUM" -> AiLikelihood.MEDIUM
         "HIGH" -> AiLikelihood.HIGH
         else -> AiLikelihood.UNKNOWN
     }
-    val level = when (normalizedRiskLevel) {
+    val level = when (if (isText) normalizedRiskLevel else null) {
         "SAFE" -> RiskLevel.SAFE
         "CAUTION" -> RiskLevel.CAUTION
         "DANGER" -> RiskLevel.DANGER
         else -> RiskLevel.UNKNOWN
     }
-    val isText = type == "TEXT"
     val decisionLabel = if (isText) when (textDecision) {
         "normal" -> "일반 텍스트로 판단"
         "phishing" -> "피싱 의심"
@@ -66,9 +66,15 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
         guidance = recommendedActions.filter { it.isNotBlank() },
         summary = summary?.takeIf { it.isNotBlank() }
             ?: "서버에서 분석 요약을 제공하지 않았어요.",
-        aiLikelihood = likelihood,
-        aiRiskLabel = aiRiskLevel?.trim()?.takeIf { it.isNotEmpty() }?.take(60),
-        aiScore = aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
+        aiLikelihood = if (isText) likelihood else AiLikelihood.UNKNOWN,
+        aiRiskLabel = if (isText) aiRiskLevel?.trim()?.takeIf { it.isNotEmpty() }?.take(60) else null,
+        aiScore = if (isText) aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 } else null,
+        imageModelResult = !isText,
+        imageOverallDecisionLabel = if (isText) null else imageOverallDecisionLabel?.takeIf { it.isNotBlank() },
+        imageGenerationDecision = if (isText) null else imageGenerationDecision,
+        imageGenerationDisplayScore = if (isText) null else imageGenerationDisplayScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
+        imageManipulationDecision = if (isText) null else imageManipulationDecision,
+        imageManipulationDisplayScore = if (isText) null else imageManipulationDisplayScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
         evidence = descriptions.mapIndexed { index, description ->
             RiskEvidence("분석 근거 ${index + 1}", description)
         },

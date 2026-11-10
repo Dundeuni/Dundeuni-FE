@@ -24,27 +24,34 @@ fun AnalysisResponseResultDto.toDomain(): AnalysisResult = AnalysisResult(
     expiresAt = expiresAt
 )
 
-/** GET uses result.result for common findings; outer IMAGE fields keep their original meaning. */
+/** GET uses the documented outer fields; older normalized results remain readable. */
 fun AnalysisDetailDto.toDomain(): AnalysisResult {
-    val normalized = requireNotNull(result) { "Normalized analysis result is missing" }
+    val normalized = result
     return AnalysisResult(
         analysisId = analysisId,
         type = type,
         status = status,
         aiGenerationScore = aiGenerationScore,
         aiRiskLevel = aiRiskLevel,
-        reasons = normalized.reasons.orEmpty().filterNotNull().filter { it.isNotBlank() },
+        reasons = (normalized?.reasons ?: reasons?.map { it?.description }).orEmpty()
+            .filterNotNull().filter { it.isNotBlank() },
         modelVersion = modelVersion,
         errorCode = errorCode,
         createdAt = createdAt,
         completedAt = completedAt,
         expiresAt = expiresAt,
-        recommendedActions = normalized.guidance.orEmpty().filterNotNull().filter { it.isNotBlank() },
-        summary = normalized.summary,
-        normalizedRiskLevel = normalized.riskLevel,
-        textDecision = normalized.textDecision,
-        riskScore = normalized.riskScore,
+        recommendedActions = (guides ?: normalized?.guidance).orEmpty()
+            .filterNotNull().filter { it.isNotBlank() },
+        summary = normalized?.summary,
+        normalizedRiskLevel = normalized?.riskLevel,
+        textDecision = normalized?.textDecision,
+        riskScore = normalized?.riskScore,
         sourceType = sourceType,
+        imageOverallDecisionLabel = if (type == "IMAGE") overallResult?.decisionLabel else null,
+        imageGenerationDecision = if (type == "IMAGE") models?.generation?.decision else null,
+        imageGenerationDisplayScore = if (type == "IMAGE") models?.generation?.displayScore else null,
+        imageManipulationDecision = if (type == "IMAGE") models?.manipulation?.decision else null,
+        imageManipulationDisplayScore = if (type == "IMAGE") models?.manipulation?.displayScore else null,
     )
 }
 

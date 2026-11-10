@@ -20,6 +20,11 @@ data class AnalysisResult(
     val textDecision: String? = null,
     val riskScore: Double? = null,
     val sourceType: String? = null,
+    val imageOverallDecisionLabel: String? = null,
+    val imageGenerationDecision: String? = null,
+    val imageGenerationDisplayScore: Double? = null,
+    val imageManipulationDecision: String? = null,
+    val imageManipulationDisplayScore: Double? = null,
 ) {
     /** Compatibility accessor for the existing result screen; only the normalized final verdict is exposed. */
     val riskLevel: String? get() = normalizedRiskLevel

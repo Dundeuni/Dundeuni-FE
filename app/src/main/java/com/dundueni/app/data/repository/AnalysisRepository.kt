@@ -110,7 +110,6 @@ class AnalysisRepository(
         }
         when (detail.status) {
             AnalysisExecutionStatus.COMPLETED.wireValue -> {
-                if (detail.result == null) throw AnalysisProtocolException("Normalized result is missing")
                 val result = detail.toDomain()
                 if (result.type == "IMAGE" && result.summary.isNullOrBlank()) {
                     result.copy(summary = completedSummaryOrNull(analysisId))

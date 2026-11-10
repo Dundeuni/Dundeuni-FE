@@ -41,12 +41,20 @@ data class AnalysisResult(
     val sourceUrl: String? = null,
     val targetLabel: String = "수신된 문자 메시지 및 첨부 링크",
     val historyType: HistoryType = HistoryType.UNKNOWN,
+    val imageModelResult: Boolean = false,
+    val imageOverallDecisionLabel: String? = null,
+    val imageGenerationDecision: String? = null,
+    val imageGenerationDisplayScore: Double? = null,
+    val imageManipulationDecision: String? = null,
+    val imageManipulationDisplayScore: Double? = null,
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }
         require(summary.isNotBlank()) { "분석 요약이 필요합니다." }
         require(fraudScore == null || fraudScore.isFinite() && fraudScore in 0.0..100.0)
         require(aiScore == null || aiScore.isFinite() && aiScore in 0.0..100.0)
+        require(imageGenerationDisplayScore == null || imageGenerationDisplayScore.isFinite() && imageGenerationDisplayScore in 0.0..100.0)
+        require(imageManipulationDisplayScore == null || imageManipulationDisplayScore.isFinite() && imageManipulationDisplayScore in 0.0..100.0)
     }
 }
 

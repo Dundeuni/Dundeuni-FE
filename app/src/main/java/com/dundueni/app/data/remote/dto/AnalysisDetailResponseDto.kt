@@ -1,6 +1,6 @@
 package com.dundueni.app.data.remote.dto
 
-/** GET /api/analysis/{analysisId}; the normalized result is inside the outer result. */
+/** GET /api/analysis/{analysisId}. */
 data class AnalysisDetailResponseDto(
     val isSuccess: Boolean? = null,
     val code: String? = null,
@@ -18,6 +18,9 @@ data class AnalysisDetailDto(
     val reasons: List<AnalysisReasonDto?>? = null,
     val modelVersion: String? = null,
     val errorCode: String? = null,
+    val models: AnalysisImageModelsDto? = null,
+    val overallResult: AnalysisOverallResultDto? = null,
+    val guides: List<String?>? = null,
     val imageResultStatus: String? = null,
     val modelResults: List<AnalysisModelResultDto?>? = null,
     val result: NormalizedAnalysisResultDto? = null,
@@ -27,10 +30,24 @@ data class AnalysisDetailDto(
     val expiresAt: String? = null,
 )
 
+data class AnalysisImageModelsDto(
+    val status: String? = null,
+    val generation: AnalysisModelResultDto? = null,
+    val manipulation: AnalysisModelResultDto? = null,
+)
+
+data class AnalysisOverallResultDto(
+    val decision: String? = null,
+    val decisionLabel: String? = null,
+    val policyVersion: String? = null,
+    val suspectedKinds: List<String?>? = null,
+    val uncertainKinds: List<String?>? = null,
+)
+
 data class AnalysisModelResultDto(
     val kind: String? = null,
     val status: String? = null,
-    val displayScore: Int? = null,
+    val displayScore: Double? = null,
     val decision: String? = null,
     val reasons: List<AnalysisReasonDto?>? = null,
     val limitations: List<String?>? = null,
