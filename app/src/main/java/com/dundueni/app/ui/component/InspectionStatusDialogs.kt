@@ -151,38 +151,70 @@ private fun InspectionStatusDialog(
                 }
             }
         }
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
+        InspectionStatusContent(mascotResId, mascotDescription, title, description, actions)
+    }
+}
+
+/** Shared card used by Activity dialogs and the service overlay window. */
+@Composable
+private fun InspectionStatusContent(
+    @DrawableRes mascotResId: Int,
+    mascotDescription: String,
+    title: String,
+    description: String,
+    actions: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Image(
-                    painter = painterResource(mascotResId),
-                    contentDescription = mascotDescription,
-                    modifier = Modifier.size(112.dp),
-                )
-                Spacer(Modifier.height(20.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(24.dp))
-                actions()
-            }
+            Image(
+                painter = painterResource(mascotResId),
+                contentDescription = mascotDescription,
+                modifier = Modifier.size(112.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(24.dp))
+            actions()
+        }
+    }
+}
+
+@Composable
+fun InspectionCompletedContent(onViewResult: () -> Unit, onClose: () -> Unit) {
+    InspectionStatusContent(
+        mascotResId = R.drawable.dundeuni_mascot_thumbs_up,
+        mascotDescription = "검사를 완료한 든든이",
+        title = "검사가 완료됐어요 !",
+        description = "검사 결과를 확인해 주세요.",
+    ) {
+        DundueniButton("검사 결과 조회", onViewResult, Modifier.fillMaxWidth())
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onClose,
+            modifier = Modifier.fillMaxWidth().height(DundueniDimens.ButtonHeight),
+            shape = DundueniDefaultShape,
+        ) {
+            Text("닫기", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

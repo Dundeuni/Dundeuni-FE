@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,10 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import com.dundueni.app.feature.floatingbutton.FloatingButtonService
+import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
+import com.google.gson.Gson
 
 /** 기존 Activity 전환 방식으로 연결하는 내부 검사 화면입니다. */
 /**
@@ -51,6 +56,7 @@ class AnalysisActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        FloatingButtonService.prepareCompletionOverlay(this)
         if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
             FloatingButtonManager.suspendForActivity(overlayOwner)
         }
@@ -94,15 +100,42 @@ class AnalysisActivity : ComponentActivity() {
             if (showLimitIfExhausted(this)) { finish(); return }
             startAnalysis()
         }
+        lifecycleScope.launch {
+            combine(viewModel.uiState, lifecycle.currentStateFlow) { state, visibility -> state to visibility }
+                .collect { (state, visibility) ->
+                    val isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true)
+                    val result = state.toPresentedResult(isDemo,
+                        if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE) ?: return@collect
+                    val key = "image:${viewModel.attemptId}"
+                    if (visibility == Lifecycle.State.RESUMED) {
+                        viewModel.completionDelivery.claim(key)
+                        FloatingButtonService.dismissInspectionCompleted(key)
+                    } else if (visibility != Lifecycle.State.DESTROYED && !isFinishing &&
+                        viewModel.completionDelivery.claim(key)) {
+                        if (!BasicInspectionQuota(this@AnalysisActivity).recordCompleted(viewModel.attemptId)) return@collect
+                        val screen = state as? AnalysisUiState.ScreenSuccess
+                        val destination = AnalysisResultActivity.createIntent(this@AnalysisActivity,
+                            Gson().toJson(result), isDemo, suspendFloatingButton = true)
+                            .putExtra(AnalysisResultActivity.EXTRA_SCREEN_CROP_DECISION,
+                                screen?.text?.let { "${it.label}\n위험 수준: ${it.detail.toTextResult().riskLevel.label}" })
+                            .putExtra(AnalysisResultActivity.EXTRA_IMAGE_ERROR, screen?.imageError?.message)
+                            .putExtra(AnalysisResultActivity.EXTRA_TEXT_ERROR, screen?.textError?.message)
+                        FloatingButtonService.showInspectionCompleted(key, destination)
+                    }
+                }
+        }
+
         setContent {
             DundueniFETheme {
                 // 화면 수명에 맞춰 상태를 관찰하고, 변경된 상태를 Compose 화면에 전달한다.
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val visibility by lifecycle.currentStateFlow.collectAsState()
                 var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
                 val success = state is AnalysisUiState.Success || state is AnalysisUiState.ScreenSuccess
                 // Fake transport reuses its server analysis ID; each completed request uses its own local attempt ID.
                 val resultId = if (success) viewModel.attemptId else null
-                LaunchedEffect(resultId) {
+                LaunchedEffect(resultId, visibility) {
+                    if (visibility != Lifecycle.State.RESUMED) return@LaunchedEffect
                     if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
                     if (BasicInspectionQuota(this@AnalysisActivity).recordCompleted(resultId)) {
                         allowedResultId = resultId

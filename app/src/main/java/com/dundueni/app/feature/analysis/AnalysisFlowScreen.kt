@@ -49,21 +49,8 @@ fun AnalysisFlowScreen(
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
     val screen = state as? AnalysisUiState.ScreenSuccess
-    val imagePresented = screen?.image?.toPb05Result(isDemo = false)
     val textPresented = screen?.text?.detail?.toTextResult()
-    val screenPresented = (imagePresented ?: textPresented)?.let { primary ->
-        primary.copy(
-            historyType = HistoryType.SCREEN,
-            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
-            evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
-            guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
-            targetLabel = "캡처 화면",
-        )
-    }
-    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.let {
-        if (it.historyType == HistoryType.TEXT) it else it.copy(historyType = historyType)
-    }
-        ?: screenPresented
+    val presented = state.toPresentedResult(isDemo, historyType)
     if (presented != null) {
         Column {
             if (screen?.imageError?.pendingAnalysisId != null || screen?.textError?.pendingAnalysisId != null) {
@@ -138,4 +125,26 @@ fun AnalysisResultContent(result: AnalysisResult) {
         Text("대응 행동")
         result.recommendedActions.forEach { Text(it) }
     }
+}
+
+/** Reuses the inline PB-05 mapping for the overlay destination. */
+internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: HistoryType): PresentedResult? {
+    val state = this
+    val screen = state as? AnalysisUiState.ScreenSuccess
+    val imagePresented = screen?.image?.toPb05Result(isDemo = false)
+    val textPresented = screen?.text?.detail?.toTextResult()
+    val screenPresented = (imagePresented ?: textPresented)?.let { primary ->
+        primary.copy(
+            historyType = HistoryType.SCREEN,
+            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
+            evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
+            guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
+            targetLabel = "캡처 화면",
+        )
+    }
+    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.let {
+        if (it.historyType == HistoryType.TEXT) it else it.copy(historyType = historyType)
+    }
+        ?: screenPresented
+    return presented
 }
