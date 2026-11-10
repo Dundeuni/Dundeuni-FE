@@ -1,10 +1,14 @@
 package com.dundueni.app.feature.analysis
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,6 +25,9 @@ import com.dundueni.app.feature.analysisresult.AnalysisResult as PresentedResult
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
+import com.dundueni.app.ui.component.DundueniButton
+import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.theme.PageBackground
 
 /**
  * 전달받은 검사 상태에 맞춰 준비·로딩·결과·실패 안내를 보여 주는 화면이다.
@@ -64,7 +71,9 @@ fun AnalysisFlowScreen(
         )
         return
     }
-    Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().background(PageBackground).verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("검사 진행", style = MaterialTheme.typography.titleLarge)
         if (isDemo) Text("Mock 검사 — 실제 이미지 분석 결과가 아닙니다.")
         when (state) {
             AnalysisUiState.Idle -> Text("검사 준비 중")
@@ -75,12 +84,11 @@ fun AnalysisFlowScreen(
             is AnalysisUiState.Error -> Unit
         }
         if (state is AnalysisUiState.Pending) {
-            Button(onClick = onRefresh) { Text("결과 다시 확인") }
+            DundueniButton("결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
         }
         if (state !is AnalysisUiState.Error) {
-            Button(onClick = onClose) {
-                Text(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기")
-            }
+            DundueniButton(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기", onClose,
+                Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
         }
     }
     when (state) {

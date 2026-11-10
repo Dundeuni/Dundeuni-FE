@@ -24,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 
 /**
  * 텍스트 입력, 붙여넣기, 삭제(지우기), 검사 기능을 제공하는 Composable 화면이다.
@@ -95,6 +97,8 @@ fun TextInputScreen(
             value = textInput,
             onValueChange = onTextChange,
             enabled = !isInspecting,
+            shape = RoundedCornerShape(12.dp),
+            colors = dundueniOutlinedTextFieldColors(),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),

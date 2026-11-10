@@ -28,8 +28,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 
 @Composable
 fun UrlInputScreen(
@@ -79,6 +81,8 @@ fun UrlInputScreen(
             value = urlInput,
             onValueChange = { urlInput = it },
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = dundueniOutlinedTextFieldColors(),
             label = { Text("웹 링크 (URL)") },
             placeholder = { Text("https://example.com") },
             singleLine = true,

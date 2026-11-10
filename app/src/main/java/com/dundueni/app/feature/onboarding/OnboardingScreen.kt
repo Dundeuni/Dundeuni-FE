@@ -37,11 +37,11 @@ import com.dundueni.app.feature.home.QuickScanCard
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
 
-private val OnboardingBackground = Color(0xFFF7F8FC)
-private val OnboardingInk = Color(0xFF171B24)
-private val OnboardingMuted = Color(0xFF626B79)
-private val OnboardingBlue = Color(0xFF0758D5)
-private val OnboardingPaleBlue = Color(0xFFEAF0FF)
+private val OnboardingBackground = com.dundueni.app.ui.theme.PageBackground
+private val OnboardingInk = com.dundueni.app.ui.theme.BrandInk
+private val OnboardingMuted = com.dundueni.app.ui.theme.SecondaryInk
+private val OnboardingBlue = com.dundueni.app.ui.theme.ProtectiveBlue
+private val OnboardingPaleBlue = com.dundueni.app.ui.theme.SoftBlue
 
 @Composable
 fun OnboardingScreen(

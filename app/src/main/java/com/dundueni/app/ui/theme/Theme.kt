@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,6 +34,9 @@ import com.dundueni.app.feature.floatingbutton.FloatingButtonPreferences
 
 
 
+/** Read-only app mode, backed by the existing shared settings across activities. */
+val LocalEasyMode = staticCompositionLocalOf { false }
+
 private val LightColorScheme = lightColorScheme(
     primary = PrimaryMidnight,
     primaryContainer = PrimaryContainer,
@@ -39,6 +44,10 @@ private val LightColorScheme = lightColorScheme(
 
     background = CanvasSubLayer,
     surface = SurfaceLight,
+    surfaceContainer = SoftBlue,
+    surfaceContainerLow = PageBackground,
+    onSurface = BrandInk,
+    onSurfaceVariant = SecondaryInk,
 
     error = Danger
 )
@@ -55,18 +64,33 @@ fun DundueniFETheme(
     var appTextScale by remember(context) {
         mutableFloatStateOf(FloatingButtonPreferences.appTextScale(context))
     }
+    var easyMode by remember(preferences) {
+        mutableStateOf(preferences.getBoolean(FloatingButtonPreferences.KEY_EASY_MODE, false))
+    }
     DisposableEffect(preferences) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == FloatingButtonPreferences.KEY_FONT_SIZE || key == FloatingButtonPreferences.KEY_FONT_SCALE) {
                 appTextScale = FloatingButtonPreferences.appTextScale(context)
             }
         }
+        val modeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == FloatingButtonPreferences.KEY_EASY_MODE || key == null) {
+                easyMode = preferences.getBoolean(FloatingButtonPreferences.KEY_EASY_MODE, false)
+            }
+        }
+        preferences.registerOnSharedPreferenceChangeListener(modeListener)
+        // Read after registration as another activity can update the setting.
+        easyMode = preferences.getBoolean(FloatingButtonPreferences.KEY_EASY_MODE, false)
         preferences.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+        onDispose {
+            preferences.unregisterOnSharedPreferenceChangeListener(listener)
+            preferences.unregisterOnSharedPreferenceChangeListener(modeListener)
+        }
     }
 
     val density = LocalDensity.current
     CompositionLocalProvider(
+        LocalEasyMode provides easyMode,
         LocalDensity provides Density(density.density, density.fontScale * appTextScale),
     ) {
         MaterialTheme(
