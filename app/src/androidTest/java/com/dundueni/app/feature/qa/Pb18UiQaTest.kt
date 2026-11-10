@@ -116,7 +116,7 @@ class Pb18UiQaTest {
             assertReachableAboveKeyboard("검사하기")
             capture("phone-landscape-inspect")
             compose.onNodeWithText("검사하기").performClick()
-            waitText("Inspection Result")
+            waitText("결과 화면")
             compose.onNodeWithText("디자인 미리보기 · 샘플 데이터").assertIsDisplayed()
             val activity = current()
             instrumentation.runOnMainSync { activity.finish() }
@@ -135,7 +135,7 @@ class Pb18UiQaTest {
         HistoryStore(context).save(AnalysisResult("pb18-fixture-image", RiskLevel.SAFE, "QA fixture", historyType = HistoryType.IMAGE), 100)
         val result = AnalysisResult("pb18-fixture-text", RiskLevel.SAFE, "QA fixture", historyType = HistoryType.TEXT)
         ActivityScenario.launch<AnalysisResultActivity>(AnalysisResultActivity.createIntent(context, Gson().toJson(result))).use {
-            waitText("Inspection Result")
+            waitText("결과 화면")
             compose.onNodeWithText("검사 결과 기록에 보관하기").performScrollTo().performClick()
             waitText("검사 결과가 기록에 보관되었어요")
             assertEquals(HistoryType.TEXT, HistoryStore(context).read().first { it.id == result.id }.type)

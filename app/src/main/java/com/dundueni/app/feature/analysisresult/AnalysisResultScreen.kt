@@ -163,7 +163,7 @@ private fun ResultHeader(onAction: (ResultAction) -> Unit) {
             Box(Modifier.size(24.dp).background(Color(0xFF111B2B), CircleShape), contentAlignment = Alignment.Center) {
                 ResultGlyph(ResultIcon.SHIELD, ProtectiveBlue, 14.dp)
             }
-            Text(if (LocalEasyMode.current) "검사 결과" else "Inspection Result", Modifier.weight(1f).padding(start = 10.dp), color = Ink, fontSize = 18.sp,
+            Text("결과 화면", Modifier.weight(1f).padding(start = 10.dp), color = Ink, fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             IconButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.semantics { contentDescription = "결과 화면 닫기" }) {
                 ResultGlyph(ResultIcon.CLOSE, Ink, 18.dp)
@@ -184,7 +184,7 @@ private fun ResultHero(result: AnalysisResult) {
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(80.dp).background(SoftBlue, CircleShape), contentAlignment = Alignment.Center) {
-                ResultGlyph(ResultIcon.SEARCH, ProtectiveBlue, 34.dp)
+                Image(painterResource(R.drawable.dundeuni_mascot_search), null, Modifier.size(80.dp))
             }
             Surface(color = Color(0xFFE8EEFF), shape = CircleShape) {
                 Text(if (hasTextDecision) "분석 완료 · 텍스트 판정" else "분석 완료 · 판정 정보 없음",
@@ -211,12 +211,12 @@ private fun ResultHero(result: AnalysisResult) {
                 RiskLevel.CAUTION -> SoftCaution
                 else -> SoftRed
             }, CircleShape), contentAlignment = Alignment.Center) {
-                ResultGlyph(when (result.riskLevel) {
-                    RiskLevel.SAFE -> ResultIcon.SHIELD
-                    RiskLevel.CAUTION -> ResultIcon.WARNING
-                    RiskLevel.DANGER -> ResultIcon.SHIELD_HEART
-                    RiskLevel.UNKNOWN -> ResultIcon.SEARCH
-                }, statusColor, 36.dp)
+                Image(painterResource(when (result.riskLevel) {
+                    RiskLevel.SAFE -> R.drawable.dundeuni_mascot_default
+                    RiskLevel.CAUTION -> R.drawable.dundeuni_mascot_suspicious
+                    RiskLevel.DANGER -> R.drawable.dundeuni_mascot_danger
+                    RiskLevel.UNKNOWN -> R.drawable.dundeuni_mascot_search
+                }), null, Modifier.size(80.dp))
             }
             if (!safe) {
                 Surface(modifier = Modifier.align(Alignment.TopEnd), color = statusColor, shape = CircleShape, border = BorderStroke(2.dp, PageBackground)) {
@@ -542,7 +542,7 @@ private fun EasyResultContent(result: AnalysisResult, isDemo: Boolean) {
                     color = tint, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
             Image(painterResource(when (result.riskLevel) {
-                RiskLevel.SAFE -> R.drawable.dundeuni_mascot_thumbs_up
+                RiskLevel.SAFE -> R.drawable.dundeuni_mascot_default
                 RiskLevel.CAUTION -> R.drawable.dundeuni_mascot_suspicious
                 RiskLevel.DANGER -> R.drawable.dundeuni_mascot_danger
                 RiskLevel.UNKNOWN -> R.drawable.dundeuni_mascot_search
