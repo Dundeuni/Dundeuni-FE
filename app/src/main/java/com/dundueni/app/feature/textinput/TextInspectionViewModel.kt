@@ -47,6 +47,7 @@ class TextInspectionViewModel @JvmOverloads constructor(
         AnalysisFlowDependencies.createRepository(application)
     },
 ) : AndroidViewModel(application) {
+    val completionDelivery = com.dundueni.app.feature.analysis.InspectionCompletionDelivery()
     private val mutableUiState = MutableStateFlow<TextInspectionUiState>(TextInspectionUiState.Idle)
     val uiState: StateFlow<TextInspectionUiState> = mutableUiState.asStateFlow()
     val inputText: StateFlow<String> = savedStateHandle.getStateFlow(INPUT_TEXT_KEY, "")

@@ -1,6 +1,19 @@
 package com.dundueni.app.feature.floatingbutton
 
 import android.animation.Animator
+import android.content.Context
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.dundueni.app.ui.component.InspectionCompletedContent
+import com.dundueni.app.ui.theme.DundueniFETheme
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
@@ -71,6 +84,7 @@ import kotlin.math.abs
  */
 class FloatingButtonService : Service() {
 
+    private val completionWindows = mutableMapOf<String, Pair<ComposeView, CompletionWindowOwner>>()
     private lateinit var windowManager: WindowManager
     private var floatingButton: ImageButton? = null
     private var floatingButtonX = 30
@@ -109,6 +123,27 @@ class FloatingButtonService : Service() {
     private var settingsListenerRegistered = false
 
     companion object {
+        private const val ACTION_PREPARE_COMPLETION = "com.dundueni.app.action.PREPARE_COMPLETION"
+
+        /** Called only while an inspection Activity is visible; never requests permission. */
+        fun prepareCompletionOverlay(context: Context) {
+            if (!Settings.canDrawOverlays(context) || activeInstance != null) return
+            try {
+                ContextCompat.startForegroundService(context,
+                    Intent(context, FloatingButtonService::class.java).setAction(ACTION_PREPARE_COMPLETION))
+            } catch (error: RuntimeException) {
+                Log.w("FloatingButtonService", "완료 오버레이 서비스 준비 실패", error)
+            }
+        }
+
+        fun showInspectionCompleted(id: String, resultIntent: Intent, onOpened: () -> Unit = {}) {
+            activeInstance?.showCompletionWindow(id, resultIntent, onOpened)
+        }
+
+        fun dismissInspectionCompleted(id: String) {
+            activeInstance?.dismissCompletionWindow(id)
+        }
+
         private const val CHANNEL_ID = "floating_button_channel"
         private const val NOTIFICATION_ID = 1001
         const val ACTION_SCREEN_SCAN = "com.dundueni.app.action.SCREEN_SCAN"
@@ -119,6 +154,75 @@ class FloatingButtonService : Service() {
         @Volatile
         var isFloatingButtonVisible: Boolean = false
             private set
+    }
+
+    private class CompletionWindowOwner : LifecycleOwner, SavedStateRegistryOwner {
+        private val registry = LifecycleRegistry(this)
+        private val savedState = SavedStateRegistryController.create(this)
+        override val lifecycle: Lifecycle get() = registry
+        override val savedStateRegistry: SavedStateRegistry get() = savedState.savedStateRegistry
+        init {
+            savedState.performAttach()
+            savedState.performRestore(null)
+            registry.currentState = Lifecycle.State.RESUMED
+        }
+        fun destroy() { registry.currentState = Lifecycle.State.DESTROYED }
+    }
+
+    private fun dismissCompletionWindow(id: String) {
+        val (view, owner) = completionWindows.remove(id) ?: return
+        try {
+            removeOverlay(view)
+        } catch (error: RuntimeException) {
+            Log.w("FloatingButtonService", "완료 오버레이 제거 제한", error)
+        }
+        view.disposeComposition()
+        owner.destroy()
+    }
+
+    private fun showCompletionWindow(id: String, resultIntent: Intent, onOpened: () -> Unit) {
+        if (destroyed || !::windowManager.isInitialized || !Settings.canDrawOverlays(this) ||
+            completionWindows.containsKey(id)) return
+        val owner = CompletionWindowOwner()
+        val view = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            setContent {
+                DundueniFETheme {
+                    InspectionCompletedContent(
+                        onViewResult = {
+                            // The explicit user tap is the only background Activity launch here.
+                            try {
+                                startActivity(Intent(resultIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                onOpened()
+                                dismissCompletionWindow(id)
+                            } catch (error: RuntimeException) {
+                                Log.w("FloatingButtonService", "완료 결과 화면 실행 실패", error)
+                                Toast.makeText(this@FloatingButtonService,
+                                    "결과 화면을 열지 못했어요. 앱에서 다시 확인해 주세요.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onClose = { dismissCompletionWindow(id) },
+                    )
+                }
+            }
+        }
+        // Match the existing platform dialog width, centered with its same dim amount.
+        val width = (resources.displayMetrics.widthPixels *
+            if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 0.65f else 0.87f).toInt()
+        val params = WindowManager.LayoutParams(
+            width, WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_DIM_BEHIND,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.CENTER; dimAmount = 0.45f }
+        completionWindows[id] = view to owner
+        try {
+            windowManager.addView(view, params)
+        } catch (error: RuntimeException) {
+            Log.w("FloatingButtonService", "완료 오버레이 표시 제한", error)
+            dismissCompletionWindow(id)
+        }
     }
 
     override fun onCreate() {
@@ -647,7 +751,7 @@ class FloatingButtonService : Service() {
                 // Bitmap은 여기서 해제하고, 전달하지 못한 임시 파일도 삭제한다.
                 input.bitmap.recycle()
                 if (!handedOff) file?.delete()
-                if (stopServiceAfterHandoff) stopSelf()
+                if (stopServiceAfterHandoff && !handedOff) stopSelf()
             }
         }
     }
@@ -816,6 +920,8 @@ class FloatingButtonService : Service() {
         startId: Int
     ): Int {
 
+        if (intent?.action == ACTION_PREPARE_COMPLETION) return START_NOT_STICKY
+
         // 시스템이 Service를 종료했을 경우 가능한 범위에서 재생성 요청
         if (intent?.action == ACTION_SCREEN_SCAN) {
             val temporaryScan = floatingButton == null
@@ -830,6 +936,7 @@ class FloatingButtonService : Service() {
     override fun onDestroy() {
 
         destroyed = true
+        completionWindows.keys.toList().forEach(::dismissCompletionWindow)
         if (settingsListenerRegistered) {
             settingsPreferences.unregisterOnSharedPreferenceChangeListener(settingsListener)
             settingsListenerRegistered = false

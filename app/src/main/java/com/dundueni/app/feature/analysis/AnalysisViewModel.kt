@@ -39,6 +39,7 @@ class AnalysisViewModel(
     private val repository: AnalysisResultRepository,
     private val screenCropApi: (() -> TextAnalysisApiService)? = null,
 ) : ViewModel() {
+    val completionDelivery = com.dundueni.app.feature.analysis.InspectionCompletionDelivery()
     private val mutableUiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = mutableUiState.asStateFlow()
     private var requestJob: Job? = null

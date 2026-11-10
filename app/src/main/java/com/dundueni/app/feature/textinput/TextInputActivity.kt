@@ -1,13 +1,17 @@
 package com.dundueni.app.feature.textinput
 
 import android.os.Bundle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import com.dundueni.app.feature.floatingbutton.FloatingButtonService
 import com.dundueni.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,6 +41,7 @@ class TextInputActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        FloatingButtonService.prepareCompletionOverlay(this)
         FloatingButtonManager.suspendForActivity(overlayOwner)
     }
 
@@ -49,6 +54,37 @@ class TextInputActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         viewModel = ViewModelProvider(this)[TextInspectionViewModel::class.java]
+
+        lifecycleScope.launch {
+            combine(viewModel.uiState, lifecycle.currentStateFlow) { state, visibility -> state to visibility }
+                .collect { (state, visibility) ->
+                    val success = state as? TextInspectionUiState.Success ?: return@collect
+                    if (isFinishing || visibility == Lifecycle.State.DESTROYED) return@collect
+                    try {
+                        val id = JsonParser.parseString(success.resultJson).asJsonObject.get("id").asString
+                        val key = "text:$id"
+                        val foreground = visibility == Lifecycle.State.RESUMED
+                        if (!foreground && !viewModel.completionDelivery.claim(key)) return@collect
+                        if (!BasicInspectionQuota(this@TextInputActivity).recordCompleted(id)) {
+                            if (foreground) showLimitIfExhausted(this@TextInputActivity)
+                            return@collect
+                        }
+                        val destination = AnalysisResultActivity.createIntent(this@TextInputActivity,
+                            success.resultJson,
+                            isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
+                            suspendFloatingButton = true)
+                        if (foreground) {
+                            FloatingButtonService.dismissInspectionCompleted(key)
+                            startActivity(destination)
+                            viewModel.onResultOpened()
+                        } else {
+                            FloatingButtonService.showInspectionCompleted(key, destination, viewModel::onResultOpened)
+                        }
+                    } catch (_: Exception) {
+                        viewModel.onResultOpenFailure()
+                    }
+                }
+        }
 
         setContent {
             DundueniFETheme {
@@ -98,25 +134,6 @@ class TextInputActivity : ComponentActivity() {
                         },
                     )
                     else -> Unit
-                }
-                LaunchedEffect(state) {
-                    val success = state as? TextInspectionUiState.Success ?: return@LaunchedEffect
-                    try {
-                        val id = JsonParser.parseString(success.resultJson).asJsonObject.get("id").asString
-                        if (!BasicInspectionQuota(this@TextInputActivity).recordCompleted(id)) {
-                            showLimitIfExhausted(this@TextInputActivity)
-                            viewModel.onResultOpened()
-                            return@LaunchedEffect
-                        }
-                        startActivity(AnalysisResultActivity.createIntent(
-                            this@TextInputActivity, success.resultJson,
-                            isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
-                            suspendFloatingButton = true,
-                        ))
-                        viewModel.onResultOpened()
-                    } catch (_: Exception) {
-                        viewModel.onResultOpenFailure()
-                    }
                 }
             }
         }

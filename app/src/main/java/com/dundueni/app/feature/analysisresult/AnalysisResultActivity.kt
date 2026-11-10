@@ -22,6 +22,9 @@ class AnalysisResultActivity : ComponentActivity() {
     private val overlayOwner = "text-result:${java.util.UUID.randomUUID()}"
 
     companion object {
+        const val EXTRA_SCREEN_CROP_DECISION = "analysis.screenCropDecision"
+        const val EXTRA_IMAGE_ERROR = "analysis.imageError"
+        const val EXTRA_TEXT_ERROR = "analysis.textError"
         const val EXTRA_RESULT_JSON = "com.dundueni.app.analysis.RESULT_JSON"
         const val EXTRA_IS_DEMO = "com.dundueni.app.analysis.IS_DEMO"
         const val EXTRA_SUSPEND_FLOATING_BUTTON = "com.dundueni.app.analysis.SUSPEND_FLOATING_BUTTON"
@@ -63,7 +66,10 @@ class AnalysisResultActivity : ComponentActivity() {
         setContent {
             DundueniFETheme {
                 if (result != null) {
-                    AnalysisResultRoute(result, onReturn = ::finish, onHome = ::returnToHome, isDemo = isDemo)
+                    AnalysisResultRoute(result, onReturn = ::finish, onHome = ::returnToHome, isDemo = isDemo,
+                        screenCropDecision = intent.getStringExtra(EXTRA_SCREEN_CROP_DECISION),
+                        imageAnalysisError = intent.getStringExtra(EXTRA_IMAGE_ERROR),
+                        screenCropError = intent.getStringExtra(EXTRA_TEXT_ERROR))
                 } else {
                     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                         Column(Modifier.safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.Center,
