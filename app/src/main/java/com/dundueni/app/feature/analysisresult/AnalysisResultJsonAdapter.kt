@@ -15,13 +15,13 @@ object AnalysisResultJsonAdapter {
         return AnalysisResult(
             id = value.requiredText("id"),
             historyType = historyType,
-            riskLevel = if (historyType == HistoryType.TEXT && riskLevel.equals("UNKNOWN", ignoreCase = true)) {
-                RiskLevel.UNKNOWN
-            } else {
-                RiskLevel.fromWireValue(riskLevel)
-            },
+            riskLevel = if (riskLevel == "UNKNOWN") RiskLevel.UNKNOWN else RiskLevel.fromWireValue(riskLevel),
             summary = value.requiredText("summary"),
             keyFinding = value.optionalText("keyFinding"),
+            guidance = value.optJSONArray("guidance")?.let { items ->
+                List(items.length()) { items.getString(it) }.filter { it.isNotBlank() }
+            }.orEmpty(),
+            aiRiskLabel = value.optionalText("aiRiskLabel"),
             fraudLevel = value.optionalText("fraudLevel")?.let(RiskLevel::fromWireValue),
             fraudScore = value.optionalScore("fraudScore"),
             aiLikelihood = value.optionalText("aiLikelihood")?.let {

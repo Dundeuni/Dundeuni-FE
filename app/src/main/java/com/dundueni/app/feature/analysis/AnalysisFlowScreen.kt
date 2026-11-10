@@ -56,11 +56,13 @@ fun AnalysisFlowScreen(
             historyType = HistoryType.SCREEN,
             summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
             evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
-            recommendedActions = imagePresented?.recommendedActions.orEmpty() + textPresented?.recommendedActions.orEmpty(),
+            guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
             targetLabel = "캡처 화면",
         )
     }
-    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.copy(historyType = historyType)
+    val presented = (state as? AnalysisUiState.Success)?.result?.toPb05Result(isDemo)?.let {
+        if (it.historyType == HistoryType.TEXT) it else it.copy(historyType = historyType)
+    }
         ?: screenPresented
     if (presented != null) {
         Column {

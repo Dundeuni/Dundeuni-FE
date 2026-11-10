@@ -25,7 +25,7 @@ class AnalysisResultScreenTest {
 
     @Test fun safeShowsEvidenceAndDispatchesSave() {
         var dispatched: ResultAction? = null
-        compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.SAFE), onAction = { dispatched = it }) } }
+        compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.SAFE), onAction = { dispatched = it }, isDemo = true) } }
         compose.onNodeWithText("현재는 안전해 보여요").assertIsDisplayed()
         screenshot("pb05-safe")
         compose.onNodeWithText("비정상 발신자 및 사칭 패턴 없음").performScrollTo().assertIsDisplayed()
@@ -35,7 +35,7 @@ class AnalysisResultScreenTest {
 
     @Test fun cautionShowsIndependentScoresAndDomainAction() {
         var dispatched: ResultAction? = null
-        compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.CAUTION), onAction = { dispatched = it }) } }
+        compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.CAUTION), onAction = { dispatched = it }, isDemo = true) } }
         compose.onNodeWithText("조금 더 확인해보세요").assertIsDisplayed()
         screenshot("pb05-caution")
         compose.onNodeWithText("위험 점수 64%").performScrollTo().assertIsDisplayed()
@@ -46,7 +46,7 @@ class AnalysisResultScreenTest {
 
     @Test fun dangerShowsUrgentWarningAndCallAction() {
         var dispatched: ResultAction? = null
-        compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.DANGER), onAction = { dispatched = it }) } }
+        compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.DANGER), onAction = { dispatched = it }, isDemo = true) } }
         compose.onNodeWithText("위험할 가능성이 높아요").assertIsDisplayed()
         compose.onNodeWithText("지금은 절대 돈을 보내지 마세요!").assertIsDisplayed()
         screenshot("pb05-danger")
@@ -63,9 +63,12 @@ class AnalysisResultScreenTest {
         compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").performScrollTo().assertIsNotEnabled()
     }
 
-    @Test fun unknownVerdictInJsonIsRejected() {
-        val bad = """{"id":"test","riskLevel":"UNKNOWN","summary":"요약"}"""
+    @Test fun unknownVerdictStaysNeutralAndUnsupportedVerdictIsRejected() {
+        val bad = """{"id":"test","riskLevel":"UNSUPPORTED","summary":"요약"}"""
         assertTrue(runCatching { AnalysisResultJsonAdapter.decode(bad) }.isFailure)
+        assertEquals(RiskLevel.UNKNOWN, AnalysisResultJsonAdapter.decode(
+            """{"id":"test","riskLevel":"UNKNOWN","summary":"요약"}""",
+        ).riskLevel)
         val valid = """{"id":"test","riskLevel":"DANGER","summary":"요약","fraudScore":4}"""
         assertEquals(RiskLevel.DANGER, AnalysisResultJsonAdapter.decode(valid).riskLevel)
     }

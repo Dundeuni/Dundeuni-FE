@@ -81,7 +81,7 @@ class AnalysisResultPresentationMapperTest {
         assertEquals("GET summary", mapped.summary)
         assertEquals("original https://example.com", mapped.sourceText)
         assertEquals("GET reason", mapped.evidence.single().description)
-        assertEquals(listOf("GET guidance"), mapped.recommendedActions)
+        assertEquals(listOf("GET guidance"), mapped.guidance)
         assertNull(mapped.fraudScore)
         for (risk in listOf(null, "UNKNOWN", "FUTURE")) {
             val absent = detail.copy(normalizedRiskLevel = risk, textDecision = null, summary = null,
@@ -89,7 +89,7 @@ class AnalysisResultPresentationMapperTest {
             assertEquals(RiskLevel.UNKNOWN, absent.riskLevel)
             assertNull(absent.keyFinding)
             assertTrue(absent.evidence.isEmpty())
-            assertTrue(absent.recommendedActions.isEmpty())
+            assertTrue(absent.guidance.isEmpty())
             assertNull(absent.fraudScore)
         }
     }

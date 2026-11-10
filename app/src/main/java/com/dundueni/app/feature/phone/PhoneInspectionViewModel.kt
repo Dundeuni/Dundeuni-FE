@@ -8,6 +8,9 @@ import com.dundueni.app.data.auth.AuthSessionSource
 import com.dundueni.app.data.remote.api.PhoneAnalysisRequestDto
 import com.dundueni.app.data.remote.api.PhoneAnalysisResponseDto
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
+import com.dundueni.app.feature.analysisresult.AnalysisResult
+import com.dundueni.app.feature.analysisresult.RiskLevel
+import com.dundueni.app.feature.history.HistoryType
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,4 +81,16 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
     fun dismiss() {
         if (mutableUiState.value != PhoneInspectionUiState.Loading) mutableUiState.value = PhoneInspectionUiState.Idle
     }
+}
+
+/** Phone POST supplies completion metadata only; no fraud verdict can be inferred. */
+internal fun PhoneAnalysisResponseDto.toPb05Result(): AnalysisResult {
+    require(isCompleted()) { "Phone analysis is not completed" }
+    return AnalysisResult(
+        id = requireNotNull(analysisId),
+        historyType = HistoryType.PHONE,
+        riskLevel = RiskLevel.UNKNOWN,
+        summary = "전화번호 검사가 완료되었어요. 서버에서 위험도와 판단 근거를 제공하지 않았어요.",
+        targetLabel = "입력한 전화번호",
+    )
 }

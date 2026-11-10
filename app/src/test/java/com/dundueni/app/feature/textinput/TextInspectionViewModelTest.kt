@@ -108,7 +108,7 @@ class TextInspectionViewModelTest {
             assertEquals("original text", json.get("sourceText").asString)
             assertEquals("UNKNOWN", json.get("riskLevel").asString)
             assertEquals("GET reason", json.getAsJsonArray("evidence")[0].asJsonObject.get("description").asString)
-            assertEquals("GET guidance", json.getAsJsonArray("recommendedActions")[0].asString)
+            assertEquals("GET guidance", json.getAsJsonArray("guidance")[0].asString)
             assertTrue(!json.has("fraudScore"))
             assertEquals(1, posts); assertEquals(3, gets)
         } finally { Dispatchers.resetMain() }

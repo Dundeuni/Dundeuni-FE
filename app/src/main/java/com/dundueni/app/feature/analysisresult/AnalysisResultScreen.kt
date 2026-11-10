@@ -97,13 +97,13 @@ fun AnalysisResultScreen(
                             TargetRow(result.targetLabel)
                         }
                         MetricsRow(result)
-                        EvidencePanel(result)
+                        EvidencePanel(result, isDemo)
                         if (isDemo) SafetyTip()
                     }
                     RiskLevel.CAUTION -> {
                         ResultHero(result)
                         Spacer(Modifier.height(8.dp))
-                        SummaryBanner(result.keyFinding ?: result.summary, urgent = false)
+                        SummaryBanner(if (isDemo) result.keyFinding ?: result.summary else result.summary, urgent = false)
                         ResultPanel {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text("다차원 정밀 진단 결과", fontSize = 13.sp, color = Ink)
@@ -111,7 +111,7 @@ fun AnalysisResultScreen(
                             }
                             MetricsRow(result, nested = true)
                         }
-                        EvidencePanel(result)
+                        EvidencePanel(result, isDemo)
                     }
                     RiskLevel.DANGER -> {
                         ResultHero(result)
@@ -121,18 +121,17 @@ fun AnalysisResultScreen(
                             MetricsRow(result)
                             Text("* 사기 위험과 AI 생성·변조 가능성은 각각 독립적으로 분석됩니다.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
                         }
-                        EvidencePanel(result)
+                        EvidencePanel(result, isDemo)
                     }
                     RiskLevel.UNKNOWN -> {
                         ResultHero(result)
-                        if (result.historyType == HistoryType.TEXT && result.keyFinding != null) {
-                            EvidencePanel(result)
-                        } else {
-                            UnclassifiedNotice()
-                            MetricsRow(result)
-                            EvidencePanel(result)
-                        }
+                        UnclassifiedNotice()
+                        MetricsRow(result)
+                        EvidencePanel(result, isDemo)
                     }
+                }
+                if (!isDemo) {
+                    SafetyTip(result.guidance)
                 }
                 if (result.historyType == HistoryType.SCREEN &&
                     (screenCropDecision != null || screenCropError != null)) {
@@ -144,12 +143,6 @@ fun AnalysisResultScreen(
                         } else {
                             Text("분석 결과를 표시할 수 없습니다: ${screenCropError ?: "응답 오류"}", color = Muted)
                         }
-                    }
-                }
-                if (result.recommendedActions.orEmpty().isNotEmpty()) {
-                    ResultPanel {
-                        Text("대응 안내", fontWeight = FontWeight.SemiBold, color = Ink)
-                        result.recommendedActions.orEmpty().forEach { Text(it, color = Ink) }
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -386,7 +379,7 @@ private fun MetricCard(
 internal fun formatScore(score: Double): String = if (score % 1.0 == 0.0) score.toInt().toString() else String.format(Locale.ROOT, "%.1f", score)
 
 @Composable
-private fun EvidencePanel(result: AnalysisResult) {
+private fun EvidencePanel(result: AnalysisResult, isDemo: Boolean) {
     val safe = result.riskLevel == RiskLevel.SAFE
     val danger = result.riskLevel == RiskLevel.DANGER
     ResultPanel {
@@ -401,7 +394,7 @@ private fun EvidencePanel(result: AnalysisResult) {
                 fontWeight = if (safe) FontWeight.Medium else FontWeight.SemiBold, color = Ink)
             if (result.evidence.isNotEmpty() && (safe || danger)) {
                 Surface(color = if (safe) Color(0xFFE7EEFF) else Color(0xFFE4E8F4), shape = CircleShape) {
-                    Text(if (safe) "${result.evidence.size}건 모두 통과" else "${result.evidence.size}가지 단서 감지",
+                    Text(if (!isDemo) "${result.evidence.size}개 근거" else if (safe) "${result.evidence.size}건 모두 통과" else "${result.evidence.size}가지 단서 감지",
                         Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = if (safe) ProtectiveBlue else Muted,
                         fontSize = 10.sp, lineHeight = 14.sp)
                 }
@@ -438,15 +431,17 @@ private fun EvidencePanel(result: AnalysisResult) {
 }
 
 @Composable
-private fun SafetyTip() {
+private fun SafetyTip(guidance: List<String>? = null) {
     ResultPanel(color = SoftBlue) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(30.dp).background(Color(0xFFE3E8F5), CircleShape), contentAlignment = Alignment.Center) {
                 ResultGlyph(ResultIcon.TIP, Ink, 17.dp)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("든든이 보안 수칙", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                Text("안전하더라도 개인정보나 비밀번호, 계좌 인증번호를 입력하라는 요청은 항상 주의하세요. 공식 창구를 재확인하는 것이 가장 안전합니다.", color = Muted, fontSize = 12.sp, lineHeight = 20.sp)
+                Text(if (guidance == null) "든든이 보안 수칙" else "대응 안내", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(guidance?.takeIf { it.isNotEmpty() }?.joinToString("\n")
+                    ?: if (guidance != null) "서버에서 대응 안내를 제공하지 않았어요."
+                    else "안전하더라도 개인정보나 비밀번호, 계좌 인증번호를 입력하라는 요청은 항상 주의하세요. 공식 창구를 재확인하는 것이 가장 안전합니다.", color = Muted, fontSize = 12.sp, lineHeight = 20.sp)
             }
         }
     }

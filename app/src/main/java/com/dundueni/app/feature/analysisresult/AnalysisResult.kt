@@ -30,6 +30,7 @@ data class AnalysisResult(
     val riskLevel: RiskLevel,
     val summary: String,
     val keyFinding: String? = null,
+    val guidance: List<String> = emptyList(),
     val fraudLevel: RiskLevel? = null,
     val fraudScore: Double? = null,
     val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
@@ -40,7 +41,6 @@ data class AnalysisResult(
     val sourceUrl: String? = null,
     val targetLabel: String = "수신된 문자 메시지 및 첨부 링크",
     val historyType: HistoryType = HistoryType.UNKNOWN,
-    val recommendedActions: List<String> = emptyList(),
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }

@@ -13,7 +13,7 @@ data class AnalysisResult(
     val createdAt: String?,
     val completedAt: String?,
     val expiresAt: String?,
-    /** The current BE response does not contain actions; kept empty until the contract adds them. */
+    /** Normalized GET guidance; POST responses without guidance leave this empty. */
     val recommendedActions: List<String> = emptyList(),
     val summary: String? = null,
     val normalizedRiskLevel: String? = null,
@@ -21,6 +21,6 @@ data class AnalysisResult(
     val riskScore: Double? = null,
     val sourceType: String? = null,
 ) {
-    /** Compatibility accessor for the existing result screen; value remains the raw BE string. */
-    val riskLevel: String? get() = aiRiskLevel
+    /** Compatibility accessor for the existing result screen; only the normalized final verdict is exposed. */
+    val riskLevel: String? get() = normalizedRiskLevel
 }

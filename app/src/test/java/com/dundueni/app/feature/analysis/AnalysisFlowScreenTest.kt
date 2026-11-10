@@ -145,6 +145,59 @@ class AnalysisFlowScreenTest {
         }
     }
 
+    @Test fun realNormalizedTextContentIsVisibleInSharedPb05() {
+        val domain = result("HIGH").copy(type = "TEXT", normalizedRiskLevel = "UNKNOWN",
+            textDecision = "phishing", summary = "서버 텍스트 요약",
+            recommendedActions = listOf("서버 텍스트 대응"), reasons = listOf("서버 텍스트 근거"))
+        compose.setContent { DundueniFETheme {
+            AnalysisFlowScreen(AnalysisUiState.Success(domain), {}, {}, {}, isDemo = false)
+        } }
+        compose.onNodeWithText("서버 텍스트 요약").assertIsDisplayed()
+        compose.onNodeWithText("피싱 의심").assertIsDisplayed()
+        compose.onNodeWithText("서버 텍스트 근거").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("서버 텍스트 대응").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("디자인 미리보기 · 샘플 데이터").assertDoesNotExist()
+    }
+
+    @Test fun realNormalizedDangerUsesServerSummaryAndGuidance() {
+        val domain = result("LOW").copy(normalizedRiskLevel = "DANGER", summary = "서버 위험 요약",
+            recommendedActions = listOf("첫 서버 대응", "두 번째 서버 대응"))
+        compose.setContent { DundueniFETheme {
+            AnalysisFlowScreen(AnalysisUiState.Success(domain), {}, {}, {}, isDemo = false)
+        } }
+        compose.onNodeWithText("위험할 가능성이 높아요").assertIsDisplayed()
+        compose.onNodeWithText("지금은 절대 돈을 보내지 마세요!").assertDoesNotExist()
+        compose.onNodeWithText("첫 서버 대응\n두 번째 서버 대응").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun realScreenKeepsImageVerdictSeparateFromTextDecision() {
+        val state = AnalysisUiState.ScreenSuccess(
+            image = result("HIGH").copy(normalizedRiskLevel = "CAUTION", summary = "이미지 서버 요약",
+                recommendedActions = listOf("이미지 서버 대응")),
+            text = ScreenCropAnalysis("text-id", "normal"), imageError = null, textError = null,
+        )
+        compose.setContent { DundueniFETheme {
+            AnalysisFlowScreen(state, {}, {}, {}, isDemo = false)
+        } }
+        compose.onNodeWithText("조금 더 확인해보세요").assertIsDisplayed()
+        compose.onNodeWithText("이미지 서버 대응").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("정상 신호").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("현재는 안전해 보여요").assertDoesNotExist()
+    }
+
+    @Test fun realScreenTextOnlyDoesNotInventImageVerdict() {
+        val state = AnalysisUiState.ScreenSuccess(
+            image = null, text = ScreenCropAnalysis("text-id", "phishing"),
+            imageError = AnalysisUiState.Error(), textError = null,
+        )
+        compose.setContent { DundueniFETheme {
+            AnalysisFlowScreen(state, {}, {}, {}, isDemo = false)
+        } }
+        compose.onNodeWithText("피싱 의심").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("위험할 가능성이 높아요").assertDoesNotExist()
+        compose.onNodeWithText("분석 점수 41.2%").assertDoesNotExist()
+    }
+
     private fun result(risk: String) = AnalysisResult(
         analysisId = "test-id", type = "IMAGE", status = "COMPLETED",
         aiGenerationScore = 41.2, aiRiskLevel = risk, reasons = listOf("test-reason"),

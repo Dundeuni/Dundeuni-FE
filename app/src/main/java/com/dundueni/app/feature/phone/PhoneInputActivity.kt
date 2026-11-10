@@ -10,9 +10,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +55,6 @@ class PhoneInputActivity : ComponentActivity() {
             DundueniFETheme {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
-                var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
                 Box(modifier = Modifier.safeDrawingPadding()) {
                     PhoneInputScreen(
                         onInspect = { phone ->
@@ -90,15 +86,6 @@ class PhoneInputActivity : ComponentActivity() {
                         onCancelInspection = viewModel::dismiss,
                         showRetry = BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true),
                     )
-                    is PhoneInspectionUiState.Success -> {
-                        val result = (state as PhoneInspectionUiState.Success).response
-                        if (allowedResultId == result.analysisId) AlertDialog(
-                            onDismissRequest = viewModel::dismiss,
-                            title = { Text("전화번호 검사 완료") },
-                            text = { Text("상태: ${result.status}\n분석 ID: ${result.analysisId}\n위험도와 판단 근거는 아직 제공되지 않았어요.") },
-                            confirmButton = { TextButton(onClick = viewModel::dismiss) { Text("확인") } },
-                        )
-                    }
                     else -> Unit
                 }
                 LaunchedEffect(state) {
@@ -107,7 +94,12 @@ class PhoneInputActivity : ComponentActivity() {
                         is PhoneInspectionUiState.Success -> {
                             val id = current.response.analysisId ?: return@LaunchedEffect
                             if (BasicInspectionQuota(this@PhoneInputActivity).recordCompleted(id)) {
-                                allowedResultId = id
+                                val result = current.response.toPb05Result()
+                                startActivity(AnalysisResultActivity.createIntent(
+                                    this@PhoneInputActivity, Gson().toJson(result),
+                                    isDemo = false, suspendFloatingButton = true,
+                                ))
+                                viewModel.dismiss()
                             } else {
                                 viewModel.dismiss()
                                 showLimitIfExhausted(this@PhoneInputActivity)

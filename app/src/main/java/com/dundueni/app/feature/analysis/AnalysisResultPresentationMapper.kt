@@ -2,19 +2,18 @@ package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.feature.history.HistoryType
+import java.util.Locale
 import com.dundueni.app.feature.analysisresult.AnalysisResult as PresentedResult
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 
-/**
- * The current BE contract supplies AI likelihood, not an overall fraud verdict.
- * Synthetic results select PB-05's sample verdict layouts. Real results use its neutral layout.
- */
+/** Only normalized BE risk selects a real verdict; scores and text decisions remain independent. */
 internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
     if (status != "COMPLETED") return null
-    if (type != "IMAGE" && (isDemo || type != null)) return null
-    if (!isDemo) return toUnclassifiedPb05Result()
+    if (isDemo && type != "IMAGE") return null
+    if (!isDemo && type !in setOf(null, "IMAGE", "TEXT")) return null
+    if (!isDemo) return toRealPb05Result()
     val level = when (aiRiskLevel) {
         "MOCK_SAFE" -> RiskLevel.SAFE
         "MOCK_CAUTION" -> RiskLevel.CAUTION
@@ -32,58 +31,54 @@ internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
         evidence = descriptions.mapIndexed { index, description ->
             RiskEvidence("분석 근거 ${index + 1}", description)
         },
-        recommendedActions = recommendedActions,
         targetLabel = "선택한 이미지 또는 캡처 화면",
     )
 }
 
-/** Real AI likelihood is not an overall fraud verdict; keep the shared result layout neutral. */
-private fun AnalysisResult.toUnclassifiedPb05Result(): PresentedResult {
+/** Scores and text classification never supply the final fraud verdict. */
+private fun AnalysisResult.toRealPb05Result(): PresentedResult {
     val descriptions = reasons.filter { it.isNotBlank() }
-    val likelihood = when (aiRiskLevel?.trim()?.uppercase()) {
+    val likelihood = when (aiRiskLevel?.trim()?.uppercase(Locale.ROOT)) {
         "LOW" -> AiLikelihood.LOW
         "MEDIUM" -> AiLikelihood.MEDIUM
         "HIGH" -> AiLikelihood.HIGH
         else -> AiLikelihood.UNKNOWN
     }
+    val level = when (normalizedRiskLevel) {
+        "SAFE" -> RiskLevel.SAFE
+        "CAUTION" -> RiskLevel.CAUTION
+        "DANGER" -> RiskLevel.DANGER
+        else -> RiskLevel.UNKNOWN
+    }
+    val isText = type == "TEXT"
+    val decisionLabel = if (isText) when (textDecision) {
+        "normal" -> "일반 텍스트로 판단"
+        "phishing" -> "피싱 의심"
+        "defer" -> "판단 보류"
+        else -> null
+    } else null
     return PresentedResult(
-        historyType = HistoryType.IMAGE,
+        historyType = if (isText) HistoryType.TEXT else HistoryType.IMAGE,
         id = analysisId?.takeIf { it.isNotBlank() } ?: "image-result-${hashCode()}",
-        riskLevel = RiskLevel.UNKNOWN,
+        riskLevel = level,
+        fraudLevel = level.takeUnless { it == RiskLevel.UNKNOWN },
+        keyFinding = decisionLabel,
+        guidance = recommendedActions.filter { it.isNotBlank() },
         summary = summary?.takeIf { it.isNotBlank() }
-            ?: "분석이 완료되었어요. 제공된 AI 정보와 분석 근거를 확인해주세요.",
+            ?: "서버에서 분석 요약을 제공하지 않았어요.",
         aiLikelihood = likelihood,
         aiRiskLabel = aiRiskLevel?.trim()?.takeIf { it.isNotEmpty() }?.take(60),
         aiScore = aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
         evidence = descriptions.mapIndexed { index, description ->
             RiskEvidence("분석 근거 ${index + 1}", description)
         },
-        recommendedActions = recommendedActions,
-        targetLabel = "선택한 이미지 또는 캡처 화면",
+        targetLabel = if (isText) "입력한 텍스트 내용" else "선택한 이미지 또는 캡처 화면",
     )
 }
 
-/** Map only explicit server findings; classifier scores are not fraud percentages. */
+/** Preserve the submitted text while sharing dev's normalized verdict and guidance mapping. */
 internal fun AnalysisResult.toTextResult(text: String? = null): PresentedResult {
     check(status == "COMPLETED" && type == "TEXT")
-    val decision = when (textDecision) {
-        "normal" -> "일반 텍스트로 판단"
-        "phishing" -> "피싱 의심"
-        "defer" -> "판단 보류"
-        else -> null
-    }
-    val level = RiskLevel.entries.firstOrNull { it.name == normalizedRiskLevel } ?: RiskLevel.UNKNOWN
-    return PresentedResult(
-        id = requireNotNull(analysisId),
-        historyType = HistoryType.TEXT,
-        riskLevel = level,
-        summary = summary?.takeIf { it.isNotBlank() } ?: "분석이 완료되었어요. 제공된 결과를 확인해주세요.",
-        keyFinding = decision,
-        sourceText = text,
-        evidence = reasons.filter { it.isNotBlank() }.mapIndexed { index, reason ->
-            RiskEvidence("분석 근거 ${index + 1}", reason)
-        },
-        recommendedActions = recommendedActions,
-        targetLabel = "입력한 텍스트 내용",
-    )
+    require(!analysisId.isNullOrBlank())
+    return checkNotNull(toPb05Result(isDemo = false)).copy(sourceText = text)
 }
