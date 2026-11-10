@@ -15,6 +15,7 @@ import retrofit2.http.POST
 import retrofit2.http.GET
 import retrofit2.http.Path
 import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
+import com.dundueni.app.data.remote.dto.AnalysisSummaryResponseDto
 
 /**
  * 분석 서버에 어떤 방식으로 이미지를 보낼지 정의하는 API 계약이다.
@@ -39,6 +40,10 @@ interface AnalysisQueryApiService {
     @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
     @GET("/api/analysis/{analysisId}")
     suspend fun getAnalysis(@Path("analysisId") analysisId: String): Response<AnalysisDetailResponseDto>
+
+    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
+    @GET("/api/analysis/{analysisId}/summary")
+    suspend fun getSummary(@Path("analysisId") analysisId: String): Response<AnalysisSummaryResponseDto>
 }
 
 interface TextAnalysisApiService {
