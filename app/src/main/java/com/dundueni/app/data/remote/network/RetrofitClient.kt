@@ -7,6 +7,7 @@ import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.remote.api.AuthApiService
 import com.dundueni.app.data.remote.api.PhoneAnalysisApiService
 import com.dundueni.app.data.remote.api.PhotoSelectionApiService
+import com.dundueni.app.data.remote.api.ServerHistoryApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -52,6 +53,10 @@ class RetrofitClient(
 
     val textAnalysisApiService: TextAnalysisApiService by lazy {
         retrofit.create(TextAnalysisApiService::class.java)
+    }
+
+    val historyApiService: ServerHistoryApiService by lazy {
+        retrofit.create(ServerHistoryApiService::class.java)
     }
 
     val phoneAnalysisApiService: PhoneAnalysisApiService by lazy {

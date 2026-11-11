@@ -43,6 +43,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +69,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dundueni.app.R
+import com.dundueni.app.BuildConfig
+import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.Instant
 import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
@@ -111,7 +117,22 @@ fun HomeScreen(
     val context = LocalContext.current
     val easy = LocalEasyMode.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var recentRecords by remember(context) { mutableStateOf(loadRecentRecords(context)) }
+    val realHistory = BuildConfig.ANALYSIS_API_MODE.equals("REAL", ignoreCase = true)
+    var recentRecords by remember(context) { mutableStateOf(if (realHistory) emptyList() else loadRecentRecords(context)) }
+    var recentRevision by remember { mutableIntStateOf(0) }
+    LaunchedEffect(realHistory, recentRevision) {
+        if (realHistory) {
+            val fetched = withContext(Dispatchers.IO) { runCatching {
+                AnalysisFlowDependencies.createHistoryRepository(context).list(2).mapNotNull { item ->
+                    val id = item.id ?: return@mapNotNull null
+                    val savedAt = item.createdAt?.let { Instant.parse(it).toEpochMilli() } ?: return@mapNotNull null
+                    HomeRecentRecord(id, if (item.type == "PHONE" && item.status == "COMPLETED")
+                        item.phoneResult?.riskLevel ?: "UNKNOWN" else "UNKNOWN", savedAt, null, item.status)
+                }
+            } }
+            fetched.onSuccess { recentRecords = it }.onFailure { recentRecords = emptyList() }
+        }
+    }
     var remainingInspections by remember(context) { mutableStateOf(BasicInspectionQuota(context).remaining()) }
     val quotaResetRevision by BasicInspectionQuota.resetRevision.collectAsState()
     LaunchedEffect(quotaResetRevision) {
@@ -120,7 +141,7 @@ fun HomeScreen(
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                recentRecords = loadRecentRecords(context)
+                if (realHistory) recentRevision++ else recentRecords = loadRecentRecords(context)
                 remainingInspections = BasicInspectionQuota(context).remaining()
             }
         }
@@ -337,7 +358,7 @@ internal fun QuickScanCard(icon: String, label: String, modifier: Modifier, onCl
     }
 }
 
-private data class HomeRecentRecord(val id: String, val risk: String, val savedAt: Long, val aiScore: Int?)
+private data class HomeRecentRecord(val id: String, val risk: String, val savedAt: Long, val aiScore: Int?, val status: String? = null)
 
 private fun loadRecentRecords(context: Context): List<HomeRecentRecord> = runCatching {
     val saved = context.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE)
@@ -379,7 +400,11 @@ private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Uni
         "DANGER" -> "위험"
         "CAUTION" -> "주의"
         "SAFE" -> "안전"
-        else -> record.aiScore?.let { "AI 생성 $it%" } ?: "분석 완료"
+        else -> when (record.status) {
+            "QUEUED", "ANALYZING" -> "분석 중"
+            "FAILED" -> "분석 실패"
+            else -> record.aiScore?.let { "AI 생성 $it%" } ?: "판정 미확정"
+        }
     }
     val badgeColor = when (record.risk.uppercase()) {
         "DANGER" -> SoftDanger

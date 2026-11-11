@@ -19,10 +19,16 @@ data class HistoryRecord(
     val aiScore: Double? = null,
     // Display-only sample information. Original content is never written by the history store.
     val preview: String? = null,
+    val status: String? = null,
+    val evidence: List<String> = emptyList(),
     val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
 ) {
     val title: String get() = "${type.label} 검사"
-    val statusLabel: String get() = if (type == HistoryType.IMAGE && aiLikelihood == AiLikelihood.HIGH) "AI 생성 의심" else riskLevel.label
+    val statusLabel: String get() = when (status) {
+        "QUEUED", "ANALYZING" -> "분석 중"
+        "FAILED" -> "분석 실패"
+        else -> if (type == HistoryType.IMAGE && aiLikelihood == AiLikelihood.HIGH) "AI 생성 의심" else riskLevel.label
+    }
     fun date(zone: ZoneId = ZoneId.systemDefault()): LocalDate =
         Instant.ofEpochMilli(savedAt).atZone(zone).toLocalDate()
 }

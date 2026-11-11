@@ -74,7 +74,7 @@ class TextInspectionViewModel @JvmOverloads constructor(
         if (requestJob?.isActive == true ||
             mutableUiState.value is TextInspectionUiState.Pending) return
         val normalized = text.trim()
-        if (normalized.length !in 5..3_000) {
+        if (normalized.codePointCount(0, normalized.length) !in 5..3_000) {
             mutableUiState.value = TextInspectionUiState.InvalidInput
             return
         }

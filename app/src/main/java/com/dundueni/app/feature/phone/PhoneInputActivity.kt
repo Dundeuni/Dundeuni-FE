@@ -99,7 +99,7 @@ class PhoneInputActivity : ComponentActivity() {
                         is PhoneInspectionUiState.Success -> {
                             val id = quotaAttemptId ?: current.response.analysisId ?: return@LaunchedEffect
                             if (BasicInspectionQuota(this@PhoneInputActivity).recordCompleted(id)) {
-                                val result = current.response.toPb05Result()
+                                val result = current.result
                                 startActivity(AnalysisResultActivity.createIntent(
                                     this@PhoneInputActivity, Gson().toJson(result),
                                     isDemo = false, suspendFloatingButton = true,

@@ -2,6 +2,7 @@ package com.dundueni.app.feature.analysisresult
 
 import android.content.ActivityNotFoundException
 import android.content.Context
+import com.dundueni.app.BuildConfig
 import android.content.Intent
 import android.net.Uri
 import android.view.HapticFeedbackConstants
@@ -38,7 +39,7 @@ fun AnalysisResultRoute(
     var riskHapticPlayed by rememberSaveable(result.id) { mutableStateOf(false) }
     val preferences = remember(context) { context.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE) }
     val historyStore = remember(context) { HistoryStore(context) }
-    var saved by rememberSaveable(result.id) { mutableStateOf(hasSavedResult(preferences.getString("results", "[]"), result.id)) }
+    var saved by rememberSaveable(result.id) { mutableStateOf((!isDemo && BuildConfig.ANALYSIS_API_MODE.equals("REAL", ignoreCase = true)) || hasSavedResult(preferences.getString("results", "[]"), result.id)) }
     var saving by remember { mutableStateOf(false) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
 

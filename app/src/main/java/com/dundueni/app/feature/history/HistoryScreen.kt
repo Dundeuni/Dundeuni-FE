@@ -89,6 +89,8 @@ fun HistoryScreen(
     onHome: () -> Unit,
     onDelete: (String) -> Unit,
     onClear: () -> Unit,
+    onSelect: (String) -> Unit = {},
+    allowDelete: Boolean = true,
     loading: Boolean = false,
     error: String? = null,
     onRetry: () -> Unit = {},
@@ -127,7 +129,7 @@ fun HistoryScreen(
         }
     }
     LaunchedEffect(records, loading) {
-        if (!loading && selectedId != null && selected == null) selectedId = null
+        if (!loading && selectedId != null && selected == null && initialRecordId == null) selectedId = null
     }
     BackHandler {
         when {
@@ -173,7 +175,8 @@ fun HistoryScreen(
     ) { padding ->
         Box(Modifier.padding(padding).imePadding().fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             if (selected != null) {
-                HistoryDetail(selected, easy, error, onRetry, onBack = closeDetail, onDelete = { onDelete(selected.id) })
+                HistoryDetail(selected, easy, error, onRetry, onBack = closeDetail,
+                    onDelete = { onDelete(selected.id) }, allowDelete = allowDelete)
             } else {
                 LazyColumn(
                     state = listState,
@@ -191,7 +194,7 @@ fun HistoryScreen(
                             Spacer(Modifier.weight(1f))
                             IconButton(onClick = { searching = !searching; if (!searching) query = TextFieldValue() },
                                 modifier = Modifier.semantics { contentDescription = "검사 기록 검색" }) { ResultGlyph(ResultIcon.SEARCH, Ink, 19.dp) }
-                            IconButton(onClick = onClear, enabled = records.isNotEmpty() && !loading,
+                            if (allowDelete) IconButton(onClick = onClear, enabled = records.isNotEmpty() && !loading,
                                 modifier = Modifier.semantics { contentDescription = "전체 검사 기록 삭제" }) {
                                 HistoryGlyph(HistoryIcon.TRASH, if (records.isNotEmpty() && !loading) Ink else Muted, 19.dp)
                             }
@@ -241,12 +244,12 @@ fun HistoryScreen(
                                         }
                                         if (easy) {
                                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                                group.forEach { record -> key(record.id) { HistoryCard(record, true) { selectedId = record.id } } }
+                                                group.forEach { record -> key(record.id) { HistoryCard(record, true) { selectedId = record.id; onSelect(record.id) } } }
                                             }
                                         } else Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                                             Column {
                                                 group.forEachIndexed { index, record ->
-                                                    key(record.id) { HistoryCard(record, easy) { selectedId = record.id } }
+                                                    key(record.id) { HistoryCard(record, easy) { selectedId = record.id; onSelect(record.id) } }
                                                     if (index < group.lastIndex) HorizontalDivider(Modifier.padding(start = 64.dp, end = 12.dp), color = Outline)
                                                 }
                                             }
@@ -256,7 +259,7 @@ fun HistoryScreen(
                             }
                         }
                     }
-                    if (!loading && error == null && records.isNotEmpty()) item {
+                    if (allowDelete && !loading && error == null && records.isNotEmpty()) item {
                         Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (easy) {
                                 Button(onClick = onClear, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(12.dp),
@@ -287,11 +290,11 @@ fun HistoryScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(when (current) {
-                        "settings" -> "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요."
-                        "profile" -> "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요."
+                        "settings" -> if (allowDelete) "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요." else "서버에 저장된 검사 기록을 확인할 수 있어요."
+                        "profile" -> if (allowDelete) "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요." else "현재 계정의 검사 기록을 서버에서 조회해요."
                         else -> "검사 기록 화면에는 별도의 알림 내역이 없어요. 실제 앱에서는 기기의 앱 알림 설정을 열 수 있어요."
                     }, fontSize = 14.sp, lineHeight = 22.sp)
-                    if (current == "settings") {
+                    if (allowDelete && current == "settings") {
 
                         TextButton(onClick = { panel = null; onClear() }, enabled = records.isNotEmpty() && !loading) { Text("전체 기록 지우기", color = Red) }
                     }
@@ -450,7 +453,7 @@ private fun HistorySearchField(value: TextFieldValue, onValueChange: (TextFieldV
 }
 
 @Composable
-private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, onRetry: () -> Unit, onBack: () -> Unit, onDelete: () -> Unit) {
+private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, onRetry: () -> Unit, onBack: () -> Unit, onDelete: () -> Unit, allowDelete: Boolean) {
     LazyColumn(Modifier.testTag("history-detail").widthIn(max = 600.dp).fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (error != null) item { EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy) }
         item {
@@ -481,7 +484,11 @@ private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, 
         item {
             Panel {
                 Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
-                Text("이 기록에는 세부 근거가 저장되어 있지 않아요. 원문·링크·근거 내용은 기기에 보관하지 않습니다.", color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
+                if (record.evidence.isEmpty()) {
+                    Text(if (allowDelete) "이 기록에는 세부 근거가 저장되어 있지 않아요. 원문·링크·근거 내용은 기기에 보관하지 않습니다." else "서버에서 제공한 세부 근거가 없어요.", color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
+                } else record.evidence.forEach { reason ->
+                    Text(reason, color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
+                }
             }
         }
         item { Notice(when (record.riskLevel) {
@@ -494,7 +501,7 @@ private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(containerColor = Ink)) { Text("목록으로 돌아가기") }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
+                if (allowDelete) OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
                     border = BorderStroke(1.dp, Red.copy(alpha = .25f))) {
                     HistoryGlyph(HistoryIcon.TRASH, Red, 16.dp)
                     Text("이 기록 삭제하기", Modifier.padding(start = 6.dp), color = Red)

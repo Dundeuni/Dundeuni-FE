@@ -8,6 +8,7 @@ import com.dundueni.app.data.remote.api.AnalysisApiService
 import com.dundueni.app.data.remote.api.FakeAnalysisApiService
 import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.remote.api.PhoneAnalysisApiService
+import com.dundueni.app.data.repository.ServerHistoryRepository
 import com.dundueni.app.data.remote.network.RetrofitClient
 import com.dundueni.app.data.repository.AnalysisRepository
 import com.dundueni.app.data.repository.AnalysisResultRepository
@@ -37,6 +38,12 @@ object AnalysisFlowDependencies {
         AuthSessionRuntime.store(context),
         AuthSessionRuntime::onUnauthorized,
     ).textAnalysisApiService
+
+    fun createHistoryRepository(context: Context): ServerHistoryRepository = ServerHistoryRepository(RetrofitClient(
+        validateBaseUrl(BuildConfig.ANALYSIS_API_BASE_URL),
+        AuthSessionRuntime.store(context),
+        AuthSessionRuntime::onUnauthorized,
+    ).historyApiService)
 
     fun createPhoneApiService(context: Context): PhoneAnalysisApiService = RetrofitClient(
         validateBaseUrl(BuildConfig.ANALYSIS_API_BASE_URL),
