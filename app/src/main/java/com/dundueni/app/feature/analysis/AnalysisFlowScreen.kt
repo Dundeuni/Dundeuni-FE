@@ -1,6 +1,10 @@
 package com.dundueni.app.feature.analysis
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +19,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.BuildConfig
@@ -45,6 +55,7 @@ fun AnalysisFlowScreen(
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
     historyType: HistoryType = HistoryType.IMAGE,
     onRefresh: () -> Unit = {},
+    onChoosePhoto: (String) -> Unit = {},
 ) {
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
@@ -72,6 +83,50 @@ fun AnalysisFlowScreen(
         when (state) {
             AnalysisUiState.Idle -> Text("검사 준비 중")
             AnalysisUiState.Loading -> Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
+            is AnalysisUiState.Selection -> {
+                val upload = state.upload
+                val image = checkNotNull(upload.image)
+                val original = checkNotNull(upload.original)
+                var selected by rememberSaveable(upload.uploadId) { mutableStateOf<String?>(null) }
+                Text(if (upload.elements.isNullOrEmpty())
+                    "사진 영역을 찾지 못했어요. 전체 이미지를 분석할까요?"
+                else "전체 이미지 또는 표시된 사진 영역을 선택해 주세요.")
+                Text("업로드는 10분 후 만료됩니다. 만료되면 이미지를 다시 업로드해 주세요.")
+                Box(Modifier.fillMaxWidth().aspectRatio(state.preview.width.toFloat() / state.preview.height)) {
+                    Image(state.preview.asImageBitmap(), contentDescription = "업로드한 이미지",
+                        modifier = Modifier.fillMaxSize())
+                    Canvas(Modifier.fillMaxSize().pointerInput(upload.uploadId, selected) {
+                        detectTapGestures { tap ->
+                            val x = tap.x * image.width / size.width
+                            val y = tap.y * image.height / size.height
+                            selected = upload.elements.orEmpty().lastOrNull { candidate ->
+                                val box = candidate.bbox ?: return@lastOrNull false
+                                x >= box.left && x <= box.left + box.width &&
+                                    y >= box.top && y <= box.top + box.height
+                            }?.elementId ?: original.elementId
+                        }
+                    }) {
+                        upload.elements.orEmpty().forEach { candidate ->
+                            val box = candidate.bbox ?: return@forEach
+                            val color = if (selected == candidate.elementId) Color(0xFF1463D6) else Color(0xFFFFC107)
+                            drawRect(color, Offset(box.left * size.width / image.width,
+                                box.top * size.height / image.height),
+                                Size(box.width * size.width / image.width,
+                                    box.height * size.height / image.height),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                        }
+                    }
+                }
+                DundueniButton("전체 이미지 선택", { selected = original.elementId }, Modifier.fillMaxWidth(),
+                    DundueniButtonType.SECONDARY)
+                upload.elements.orEmpty().forEachIndexed { index, candidate ->
+                    DundueniButton("사진 후보 ${index + 1}${if (selected == candidate.elementId) " ✓" else ""}",
+                        { selected = candidate.elementId }, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
+                }
+                if (selected == original.elementId) Text("선택: 전체 이미지")
+                if (selected != null) DundueniButton("선택한 대상 분석", { onChoosePhoto(checkNotNull(selected)) },
+                    Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
+            }
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
             is AnalysisUiState.ScreenSuccess -> Unit
             is AnalysisUiState.Pending -> Text("분석 요청이 접수되었으며 서버에서 처리 중입니다.")
@@ -97,7 +152,8 @@ fun AnalysisFlowScreen(
                     state.httpStatus?.let { append("\nHTTP 상태: $it") }
                     if (canRetry) append(if (state.pendingAnalysisId != null)
                         "\n다시 시도하면 같은 분석 ID로 결과를 조회합니다."
-                    else "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
+                    else if (isDemo) "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다."
+                    else "\n다시 시도하면 이미지를 다시 업로드합니다.")
                 },
                 onRetry = {
                     loadingPopupDismissed = false

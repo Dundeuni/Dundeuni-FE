@@ -14,6 +14,7 @@ import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.DELETE
 import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisSummaryResponseDto
 
@@ -45,6 +46,46 @@ interface AnalysisQueryApiService {
     @GET("/api/analysis/{analysisId}/summary")
     suspend fun getSummary(@Path("analysisId") analysisId: String): Response<AnalysisSummaryResponseDto>
 }
+
+interface PhotoSelectionApiService {
+    @Multipart
+    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
+    @POST("/api/analysis/image-uploads")
+    suspend fun upload(@Part file: MultipartBody.Part): Response<PhotoUploadResponse>
+
+    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
+    @POST("/api/analysis/image-uploads/{uploadId}/analyses")
+    suspend fun select(
+        @Path("uploadId") uploadId: String,
+        @Body request: PhotoSelectionRequest,
+    ): Response<ResponseBody>
+
+    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
+    @DELETE("/api/analysis/image-uploads/{uploadId}")
+    suspend fun cancel(@Path("uploadId") uploadId: String): Response<ResponseBody>
+}
+
+data class PhotoSelectionRequest(val elementId: String)
+data class PhotoUploadResponse(
+    val isSuccess: Boolean? = null,
+    val code: String? = null,
+    val result: PhotoUpload? = null,
+)
+data class PhotoUpload(
+    val uploadId: String? = null,
+    val status: String? = null,
+    val image: PhotoImage? = null,
+    val expiresAt: String? = null,
+    val original: PhotoCandidate? = null,
+    val elements: List<PhotoCandidate>? = null,
+)
+data class PhotoImage(val width: Int = 0, val height: Int = 0, val coordinateSpace: String? = null)
+data class PhotoCandidate(
+    val elementId: String? = null,
+    val type: String? = null,
+    val bbox: PhotoBox? = null,
+)
+data class PhotoBox(val left: Int = 0, val top: Int = 0, val width: Int = 0, val height: Int = 0)
 
 interface TextAnalysisApiService {
     @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")

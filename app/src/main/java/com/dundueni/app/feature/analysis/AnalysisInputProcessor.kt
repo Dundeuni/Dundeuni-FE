@@ -1,7 +1,11 @@
 package com.dundueni.app.feature.analysis
 
 import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
+import com.dundueni.app.data.image.ImageUploadPreprocessor
 import java.io.File
 import com.dundueni.app.data.model.PreprocessedImage
 import com.dundueni.app.data.image.ImagePreprocessor
@@ -11,6 +15,10 @@ import com.dundueni.app.data.remote.network.ImageMultipartFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MultipartBody
+import okio.Buffer
+import java.io.ByteArrayInputStream
+
+data class PreparedPhotoUpload(val part: MultipartBody.Part, val preview: Bitmap)
 
 /** 두 입력을 동일한 전처리/Multipart 경로로 연결합니다. Bitmap 소유권은 호출자에게 있습니다. */
 /**
@@ -36,5 +44,37 @@ class AnalysisInputProcessor(contentResolver: ContentResolver, cacheDirectory: F
             PreprocessedImage.PhotoPicker(Uri.fromFile(file), "image/png", "capture.png", file.length()),
             AnalysisApiContract.IMAGE_FIELD
         )
+    }
+
+    suspend fun preparePhotoUpload(input: ImageInput): PreparedPhotoUpload = withContext(Dispatchers.IO) {
+        val part = multipartFactory.createPart(preprocessor.preprocess(input), "file")
+        PreparedPhotoUpload(part, preview(part))
+    }
+
+    suspend fun prepareCaptureUpload(file: File): PreparedPhotoUpload = withContext(Dispatchers.IO) {
+        val part = prepareCaptureFile(file)
+        PreparedPhotoUpload(part, preview(part))
+    }
+
+    private fun preview(part: MultipartBody.Part): Bitmap {
+        val buffer = Buffer()
+        checkNotNull(part.body).writeTo(buffer)
+        val bytes = buffer.readByteArray()
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) error("Unable to display image")
+        val sample = BitmapFactory.Options().apply {
+            inSampleSize = generateSequence(1) { it * 2 }
+                .first { bounds.outWidth / it <= 1200 && bounds.outHeight / it <= 1200 }
+        }
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, sample)
+            ?: error("Unable to display image")
+        val orientation = ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(
+            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        val matrix = ImageUploadPreprocessor.orientationMatrix(orientation)
+        if (matrix.isIdentity) return decoded
+        val oriented = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        decoded.recycle()
+        return oriented
     }
 }

@@ -12,6 +12,7 @@ import com.dundueni.app.data.repository.findResultForDisplay
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.repository.AnalysisFailedException
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
+import com.dundueni.app.data.repository.PhotoSelectionRepository
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.UUID
@@ -37,14 +38,19 @@ import okhttp3.MultipartBody
  */
 class AnalysisViewModel(
     private val repository: AnalysisResultRepository,
+    photoSelectionProvider: (() -> PhotoSelectionRepository)? = null,
     private val screenCropApi: (() -> TextAnalysisApiService)? = null,
 ) : ViewModel() {
+    private val photoSelection by lazy { photoSelectionProvider?.invoke() }
     val completionDelivery = com.dundueni.app.feature.analysis.InspectionCompletionDelivery()
     private val mutableUiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = mutableUiState.asStateFlow()
     private var requestJob: Job? = null
     private var screenImage: Result<AnalysisResult>? = null
     private var screenText: Result<ScreenCropAnalysis>? = null
+    private var selectionPart: MultipartBody.Part? = null
+    private var selectionScreenCrop = false
+    private var pendingUploadId: String? = null
     var attemptId: String = UUID.randomUUID().toString()
         private set
 
@@ -52,6 +58,82 @@ class AnalysisViewModel(
     @MainThread
     fun analyze(image: MultipartBody.Part) {
         analyzePrepared { image }
+    }
+
+    @MainThread
+    fun uploadPrepared(screenCrop: Boolean, prepare: suspend () -> PreparedPhotoUpload) {
+        if (requestJob?.isActive == true) return
+        requestJob = viewModelScope.launch {
+            mutableUiState.value = AnalysisUiState.Loading
+            var prepared = false
+            try {
+                cancelUpload()
+                val input = prepare()
+                prepared = true
+                val upload = checkNotNull(photoSelection).upload(input.part)
+                ensureActive()
+                selectionPart = input.part
+                selectionScreenCrop = screenCrop
+                pendingUploadId = upload.uploadId
+                mutableUiState.value = AnalysisUiState.Selection(upload, input.preview)
+            } catch (cancelled: CancellationException) {
+                mutableUiState.value = AnalysisUiState.Idle
+                throw cancelled
+            } catch (exception: Exception) {
+                mutableUiState.value = if (prepared) exception.toUiState()
+                    else AnalysisUiState.Error(AnalysisErrorKind.INPUT)
+            }
+        }
+    }
+
+    @MainThread
+    fun choosePhoto(elementId: String) {
+        val selection = mutableUiState.value as? AnalysisUiState.Selection ?: return
+        if (requestJob?.isActive == true) return
+        val uploadId = selection.upload.uploadId ?: return
+        val choices = listOfNotNull(selection.upload.original) + selection.upload.elements.orEmpty()
+        if (choices.none { it.elementId == elementId }) return
+        attemptId = UUID.randomUUID().toString()
+        requestJob = viewModelScope.launch {
+            mutableUiState.value = AnalysisUiState.Loading
+            try {
+                if (selectionScreenCrop) {
+                    val (image, text) = coroutineScope {
+                        val imageRequest = async { attempt { checkNotNull(photoSelection).select(uploadId, elementId) } }
+                        val textRequest = async { attempt {
+                            val api = checkNotNull(screenCropApi).invoke()
+                            api.analyzeScreenCrop(checkNotNull(selectionPart)).toCompletedScreenCrop(repository)
+                        } }
+                        imageRequest.await() to textRequest.await()
+                    }
+                    ensureActive()
+                    screenImage = image
+                    screenText = text
+                    if (image.isSuccess || image.exceptionOrNull() is AnalysisLookupException ||
+                        image.exceptionOrNull() is AnalysisNotCompletedException) pendingUploadId = null
+                    publishScreenResult()
+                } else {
+                    val result = checkNotNull(photoSelection).select(uploadId, elementId)
+                    ensureActive()
+                    pendingUploadId = null
+                    mutableUiState.value = AnalysisUiState.Success(result)
+                }
+            } catch (cancelled: CancellationException) {
+                mutableUiState.value = AnalysisUiState.Idle
+                throw cancelled
+            } catch (exception: Exception) {
+                if (!isActive) ensureActive()
+                if (exception is AnalysisLookupException || exception is AnalysisNotCompletedException)
+                    pendingUploadId = null
+                mutableUiState.value = exception.toUiState()
+            }
+        }
+    }
+
+    suspend fun cancelUpload() {
+        val id = pendingUploadId ?: return
+        pendingUploadId = null
+        try { photoSelection?.cancel(id) } catch (_: Exception) { /* Server TTL handles missing uploads. */ }
     }
 
     /** Rechecks the ID from POST without uploading the image or creating another analysis. */
@@ -215,7 +297,11 @@ class AnalysisViewModel(
             else -> state
         }
         is AnalysisApiConfigurationException -> AnalysisUiState.Error(AnalysisErrorKind.CONFIGURATION)
-        is AnalysisHttpException -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus)
+        is AnalysisHttpException -> when (code) {
+            "PHOTO_DETECTION503" -> AnalysisUiState.Error(AnalysisErrorKind.PHOTO_DETECTION, httpStatus)
+            else -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus,
+                reuploadRequired = httpStatus == 404 && pendingUploadId != null)
+        }
         is AnalysisProtocolException -> AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
         is AnalysisNotCompletedException -> {
             val id = analysisId

@@ -2,6 +2,8 @@ package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.repository.AnalysisExecutionStatus
+import com.dundueni.app.data.remote.api.PhotoUpload
+import android.graphics.Bitmap
 
 /**
  * 검사 화면이 무엇을 보여 줄지 결정하는 현재 상태를 표현한다.
@@ -12,6 +14,7 @@ import com.dundueni.app.data.repository.AnalysisExecutionStatus
 sealed interface AnalysisUiState {
     data object Idle : AnalysisUiState
     data object Loading : AnalysisUiState
+    data class Selection(val upload: PhotoUpload, val preview: Bitmap) : AnalysisUiState
     data class Pending(val analysisId: String, val status: AnalysisExecutionStatus) : AnalysisUiState
     data class Success(val result: AnalysisResult) : AnalysisUiState
     data class ScreenSuccess(
@@ -25,9 +28,11 @@ sealed interface AnalysisUiState {
         val kind: AnalysisErrorKind = AnalysisErrorKind.UNKNOWN,
         val httpStatus: Int? = null,
         val pendingAnalysisId: String? = null,
+        val reuploadRequired: Boolean = false,
     ) : AnalysisUiState {
         val message: String
-            get() = if (kind == AnalysisErrorKind.HTTP) {
+            get() = if (reuploadRequired) "업로드가 만료되었거나 서버 재시작으로 사라졌습니다. 이미지를 다시 업로드해 주세요."
+            else if (kind == AnalysisErrorKind.HTTP) {
                 when (httpStatus) {
                     400 -> "잘못된 분석 요청입니다."
                     401 -> "로그인이 필요합니다."
@@ -46,6 +51,7 @@ sealed interface AnalysisUiState {
 }
 
 enum class AnalysisErrorKind(val message: String) {
+    PHOTO_DETECTION("사진 후보를 찾는 중 오류가 발생했습니다. 이미지를 다시 업로드해 주세요."),
     INPUT("이미지를 읽거나 변환하지 못했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요."),
     CONFIGURATION("분석 서버 연결 설정을 확인해 주세요."),
     CONNECTION("분석 서버에 연결하지 못했습니다. 네트워크와 서버 실행 상태를 확인해 주세요."),
