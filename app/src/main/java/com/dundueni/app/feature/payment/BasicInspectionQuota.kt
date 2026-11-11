@@ -3,8 +3,10 @@ package com.dundueni.app.feature.payment
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import com.dundueni.app.BuildConfig
+import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Local Basic allowance. A completed inspection consumes one of the five available uses. */
+/** Local Basic allowance. Each inspection attempt consumes one of the five available uses. */
 class BasicInspectionQuota(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("basic_inspection_quota", Context.MODE_PRIVATE)
 
@@ -21,12 +23,22 @@ class BasicInspectionQuota(context: Context) {
         preferences.edit().putStringSet(KEY_IDS, ids + id).commit()
     }
 
+    fun recordAttempt(id: String): Boolean = recordCompleted(id)
+
+    internal fun resetForDebug(): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        val reset = synchronized(lock) { preferences.edit().remove(KEY_IDS).commit() }
+        if (reset) resetRevision.value = resetRevision.value + 1L
+        return reset
+    }
+
     private fun completedIds(): Set<String> = preferences.getStringSet(KEY_IDS, emptySet())?.toSet().orEmpty()
 
     companion object {
         const val LIMIT = 5
         private const val KEY_IDS = "completed_ids"
         private val lock = Any()
+        val resetRevision = MutableStateFlow(0L)
     }
 }
 

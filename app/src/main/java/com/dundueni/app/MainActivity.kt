@@ -28,7 +28,6 @@ import com.dundueni.app.feature.home.HomeScreen
 import com.dundueni.app.feature.history.HistoryActivity
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
-import com.dundueni.app.feature.url.UrlInputActivity
 import com.dundueni.app.feature.phone.PhoneInputActivity
 import com.dundueni.app.feature.payment.PaymentActivity
 import com.dundueni.app.feature.settings.SettingsScreen
@@ -128,7 +127,6 @@ class MainActivity : ComponentActivity() {
                     onScreenScan = ::requestScreenScan,
                     onImageScan = ::openPhotoPicker,
                     onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
-                    onUrlScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
                     onPhoneScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
                     onMembership = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
@@ -305,6 +303,7 @@ class MainActivity : ComponentActivity() {
     private fun verifyFloatingButtonStarted() {
         floatingButtonEnabled = true
         mainHandler.postDelayed({
+            if (!FloatingButtonManager.isUserEnabled(this)) return@postDelayed
             syncFloatingButtonState()
             if (!floatingButtonEnabled) showMessage("안심 버튼을 표시하지 못했습니다.")
         }, 700L)

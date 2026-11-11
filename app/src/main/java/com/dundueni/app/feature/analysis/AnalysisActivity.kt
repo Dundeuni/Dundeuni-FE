@@ -54,6 +54,7 @@ class AnalysisActivity : ComponentActivity() {
     private lateinit var viewModel: AnalysisViewModel
     private var captureFile: File? = null
     private var redirectingToLogin = false
+    private var quotaAttemptId: String? = null
 
     override fun onStart() {
         super.onStart()
@@ -118,7 +119,7 @@ class AnalysisActivity : ComponentActivity() {
                         FloatingButtonService.dismissInspectionCompleted(key)
                     } else if (visibility != Lifecycle.State.DESTROYED && !isFinishing &&
                         viewModel.completionDelivery.claim(key)) {
-                        if (!BasicInspectionQuota(this@AnalysisActivity).recordCompleted(viewModel.attemptId)) return@collect
+                        if (!BasicInspectionQuota(this@AnalysisActivity).recordAttempt(quotaAttemptId ?: viewModel.attemptId)) return@collect
                         val screen = state as? AnalysisUiState.ScreenSuccess
                         val destination = AnalysisResultActivity.createIntent(this@AnalysisActivity,
                             Gson().toJson(result), isDemo, suspendFloatingButton = true)
@@ -139,11 +140,11 @@ class AnalysisActivity : ComponentActivity() {
                 var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
                 val success = state is AnalysisUiState.Success || state is AnalysisUiState.ScreenSuccess
                 // Fake transport reuses its server analysis ID; each completed request uses its own local attempt ID.
-                val resultId = if (success) viewModel.attemptId else null
+                val resultId = if (success) quotaAttemptId ?: viewModel.attemptId else null
                 LaunchedEffect(resultId, visibility) {
                     if (visibility != Lifecycle.State.RESUMED) return@LaunchedEffect
                     if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
-                    if (BasicInspectionQuota(this@AnalysisActivity).recordCompleted(resultId)) {
+                    if (BasicInspectionQuota(this@AnalysisActivity).recordAttempt(resultId)) {
                         allowedResultId = resultId
                     } else {
                         showLimitIfExhausted(this@AnalysisActivity)
@@ -163,6 +164,13 @@ class AnalysisActivity : ComponentActivity() {
 
     private fun startAnalysis() {
         if (showLimitIfExhausted(this)) { finish(); return }
+        val attemptId = UUID.randomUUID().toString()
+        if (!BasicInspectionQuota(this).recordAttempt(attemptId)) {
+            showLimitIfExhausted(this)
+            finish()
+            return
+        }
+        quotaAttemptId = attemptId
         val processor = AnalysisInputProcessor(applicationContext.contentResolver, applicationContext.cacheDir)
         val file = captureFile
         val uri = intent.data
