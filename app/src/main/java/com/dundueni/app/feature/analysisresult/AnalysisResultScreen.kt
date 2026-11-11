@@ -156,23 +156,27 @@ fun AnalysisResultScreen(
 @Composable
 private fun ResultHeader(onAction: (ResultAction) -> Unit) {
     Surface(color = PageBackground, shadowElevation = 1.dp) {
-        Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.semantics { contentDescription = "뒤로 가기" }) {
-                ResultGlyph(ResultIcon.BACK, Ink, 22.dp)
-            }
-            Box(Modifier.size(24.dp).background(Color(0xFF111B2B), CircleShape), contentAlignment = Alignment.Center) {
-                ResultGlyph(ResultIcon.SHIELD, ProtectiveBlue, 14.dp)
-            }
-            Text("결과 화면", Modifier.weight(1f).padding(start = 10.dp), color = Ink, fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            IconButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.semantics { contentDescription = "결과 화면 닫기" }) {
-                ResultGlyph(ResultIcon.CLOSE, Ink, 18.dp)
-            }
-            IconButton(onClick = { onAction(ResultAction.PROFILE) }, modifier = Modifier.semantics { contentDescription = "계정" }) {
-                Box(Modifier.size(32.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
-                    ResultGlyph(ResultIcon.PROFILE, Color.White, 16.dp)
+        Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { onAction(ResultAction.RETURN) },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    Text("← 원래 화면으로 돌아가기", modifier = Modifier.fillMaxWidth(),
+                        color = Ink, style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold)
+                }
+                IconButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.semantics { contentDescription = "결과 화면 닫기" }) {
+                    ResultGlyph(ResultIcon.CLOSE, Ink, 18.dp)
+                }
+                IconButton(onClick = { onAction(ResultAction.PROFILE) }, modifier = Modifier.semantics { contentDescription = "계정" }) {
+                    Box(Modifier.size(32.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
+                        ResultGlyph(ResultIcon.PROFILE, Color.White, 16.dp)
+                    }
                 }
             }
+            Text("결과 화면", Modifier.padding(start = 20.dp, bottom = 8.dp), color = Ink, fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold)
         }
     }
 }

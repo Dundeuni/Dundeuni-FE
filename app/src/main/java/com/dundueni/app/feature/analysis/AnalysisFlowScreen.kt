@@ -59,6 +59,35 @@ fun AnalysisFlowScreen(
 ) {
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
+    // The host window is translucent: render only the dialog over the screen that launched inspection.
+    when (state) {
+        AnalysisUiState.Idle -> return
+        AnalysisUiState.Loading -> {
+            if (!loadingPopupDismissed) InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+            return
+        }
+        is AnalysisUiState.Error -> {
+            val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
+            InspectionErrorDialog(
+                message = buildString {
+                    append(state.message)
+                    state.httpStatus?.let { append("\nHTTP 상태: $it") }
+                    if (canRetry) append(if (state.pendingAnalysisId != null)
+                        "\n다시 시도하면 같은 분석 ID로 결과를 조회합니다."
+                    else if (isDemo) "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다."
+                    else "\n다시 시도하면 이미지를 다시 업로드합니다.")
+                },
+                onRetry = {
+                    loadingPopupDismissed = false
+                    if (state.pendingAnalysisId != null) onRefresh() else onRetry()
+                },
+                onCancelInspection = onClose,
+                showRetry = canRetry,
+            )
+            return
+        }
+        else -> Unit
+    }
     val screen = state as? AnalysisUiState.ScreenSuccess
     val textPresented = screen?.text?.detail?.toTextResult()
     val presented = state.toPresentedResult(isDemo, historyType)
@@ -139,31 +168,6 @@ fun AnalysisFlowScreen(
             DundueniButton(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기", onClose,
                 Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
         }
-    }
-    when (state) {
-        AnalysisUiState.Loading -> if (!loadingPopupDismissed) {
-            InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
-        }
-        is AnalysisUiState.Error -> {
-            val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
-            InspectionErrorDialog(
-                message = buildString {
-                    append(state.message)
-                    state.httpStatus?.let { append("\nHTTP 상태: $it") }
-                    if (canRetry) append(if (state.pendingAnalysisId != null)
-                        "\n다시 시도하면 같은 분석 ID로 결과를 조회합니다."
-                    else if (isDemo) "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다."
-                    else "\n다시 시도하면 이미지를 다시 업로드합니다.")
-                },
-                onRetry = {
-                    loadingPopupDismissed = false
-                    if (state.pendingAnalysisId != null) onRefresh() else onRetry()
-                },
-                onCancelInspection = onClose,
-                showRetry = canRetry,
-            )
-        }
-        else -> Unit
     }
 }
 
