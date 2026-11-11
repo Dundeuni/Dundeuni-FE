@@ -6,7 +6,7 @@ import android.content.Intent
 import com.dundueni.app.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Local Basic allowance. Each inspection attempt consumes one of the five available uses. */
+/** Local Basic allowance. Each completed inspection consumes one of the five available uses. */
 class BasicInspectionQuota(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("basic_inspection_quota", Context.MODE_PRIVATE)
 
@@ -22,8 +22,6 @@ class BasicInspectionQuota(context: Context) {
         if (ids.size >= LIMIT) return@synchronized false
         preferences.edit().putStringSet(KEY_IDS, ids + id).commit()
     }
-
-    fun recordAttempt(id: String): Boolean = recordCompleted(id)
 
     internal fun resetForDebug(): Boolean {
         if (!BuildConfig.DEBUG) return false

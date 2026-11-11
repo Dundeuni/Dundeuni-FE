@@ -33,11 +33,9 @@ import com.google.gson.Gson
 import java.util.UUID
 
 class PhoneInputActivity : ComponentActivity() {
-    companion object { private const val STATE_QUOTA_ATTEMPT_ID = "quota_attempt_id" }
     private val overlayOwner = "phone-input:${UUID.randomUUID()}"
     private lateinit var viewModel: PhoneInspectionViewModel
     private var redirectingToLogin = false
-    private var quotaAttemptId: String? = null
 
     override fun onStart() {
         super.onStart()
@@ -52,7 +50,6 @@ class PhoneInputActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        quotaAttemptId = savedInstanceState?.getString(STATE_QUOTA_ATTEMPT_ID)
         viewModel = ViewModelProvider(this)[PhoneInspectionViewModel::class.java]
         setContent {
             DundueniFETheme {
@@ -64,7 +61,6 @@ class PhoneInputActivity : ComponentActivity() {
                             if (showLimitIfExhausted(this@PhoneInputActivity)) return@PhoneInputScreen
                             when (BuildConfig.ANALYSIS_API_MODE.trim().uppercase()) {
                                 "REAL" -> {
-                                    if (!beginQuotaAttempt()) return@PhoneInputScreen
                                     loadingPopupDismissed = false
                                     viewModel.inspect(phone)
                                 }
@@ -84,7 +80,6 @@ class PhoneInputActivity : ComponentActivity() {
                         message = (state as PhoneInspectionUiState.Error).message,
                         onRetry = {
                             if (showLimitIfExhausted(this@PhoneInputActivity)) return@InspectionErrorDialog
-                            if (!beginQuotaAttempt()) return@InspectionErrorDialog
                             loadingPopupDismissed = false
                             viewModel.retry()
                         },
@@ -97,7 +92,7 @@ class PhoneInputActivity : ComponentActivity() {
                     when (val current = state) {
                         PhoneInspectionUiState.LoginRequired -> redirectToLogin()
                         is PhoneInspectionUiState.Success -> {
-                            val id = quotaAttemptId ?: current.response.analysisId ?: return@LaunchedEffect
+                            val id = current.response.analysisId ?: return@LaunchedEffect
                             if (BasicInspectionQuota(this@PhoneInputActivity).recordCompleted(id)) {
                                 val result = current.result
                                 startActivity(AnalysisResultActivity.createIntent(
@@ -115,21 +110,6 @@ class PhoneInputActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    private fun beginQuotaAttempt(): Boolean {
-        val attemptId = UUID.randomUUID().toString()
-        if (!BasicInspectionQuota(this).recordAttempt(attemptId)) {
-            showLimitIfExhausted(this)
-            return false
-        }
-        quotaAttemptId = attemptId
-        return true
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        quotaAttemptId?.let { outState.putString(STATE_QUOTA_ATTEMPT_ID, it) }
-        super.onSaveInstanceState(outState)
     }
 
     private fun redirectToLogin() {
