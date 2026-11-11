@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 
 sealed interface TextInspectionUiState {
     data object Idle : TextInspectionUiState
+    data object InvalidInput : TextInspectionUiState
     data object Loading : TextInspectionUiState
     data class Success(val resultJson: String) : TextInspectionUiState
     data class Pending(val analysisId: String) : TextInspectionUiState
@@ -61,15 +62,24 @@ class TextInspectionViewModel @JvmOverloads constructor(
     @MainThread
     fun updateInputText(text: String) {
         if (mutableUiState.value != TextInspectionUiState.Loading &&
-            mutableUiState.value !is TextInspectionUiState.Pending) savedStateHandle[INPUT_TEXT_KEY] = text
+            mutableUiState.value !is TextInspectionUiState.Pending) {
+            savedStateHandle[INPUT_TEXT_KEY] = text
+            if (mutableUiState.value == TextInspectionUiState.InvalidInput)
+                mutableUiState.value = TextInspectionUiState.Idle
+        }
     }
 
     @MainThread
     fun inspect(text: String) {
-        if (text.isBlank() || requestJob?.isActive == true ||
+        if (requestJob?.isActive == true ||
             mutableUiState.value is TextInspectionUiState.Pending) return
-        submittedText = text
-        startInspection(text)
+        val normalized = text.trim()
+        if (normalized.length !in 5..3_000) {
+            mutableUiState.value = TextInspectionUiState.InvalidInput
+            return
+        }
+        submittedText = normalized
+        startInspection(normalized)
     }
 
     @MainThread

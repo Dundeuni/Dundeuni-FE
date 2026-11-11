@@ -13,6 +13,8 @@ import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 
+internal class ImageResolutionException : IOException("Image resolution must be 32..8192 px per side and at most 16000000 pixels")
+
 /** IO 스레드에서 호출한다. 호출자가 소유한 Bitmap/캡처 파일은 수정하거나 삭제하지 않는다. */
 internal class ImageUploadPreprocessor(
     private val resolver: ContentResolver,
@@ -27,6 +29,7 @@ internal class ImageUploadPreprocessor(
             is PreprocessedImage.PhotoPicker -> preparePhoto(image)
             is PreprocessedImage.ScreenCapture -> {
                 check(!image.bitmap.isRecycled) { "Screen capture bitmap is recycled" }
+                validateResolution(image.bitmap.width, image.bitmap.height)
                 compress(image.bitmap, Bitmap.CompressFormat.PNG, 100)?.let {
                     upload(it, "capture.png", converted = false)
                 } ?: jpeg(image.bitmap, "capture.png", ExifInterface.ORIENTATION_NORMAL)
@@ -47,6 +50,7 @@ internal class ImageUploadPreprocessor(
             if (source.length() == 0L) throw IOException("Image is empty")
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(source.path, options)
+            validateResolution(options.outWidth, options.outHeight)
             checkMemory(options.outWidth, options.outHeight)
             val bitmap = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -114,6 +118,9 @@ internal class ImageUploadPreprocessor(
         if (bytes.isEmpty() || bytes.size > MAX_BYTES) throw IOException("Invalid image size")
         val mime = format(bytes) ?: throw IOException("Invalid encoded image signature")
         if (converted && mime != "image/jpeg") throw IOException("Expected JPEG output")
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        validateResolution(bounds.outWidth, bounds.outHeight)
         val extension = if (mime == "image/png") "png" else "jpg"
         val safeName = name?.substringAfterLast('/')?.substringAfterLast('\\')
             ?.replace(Regex("[\\r\\n\\\"]"), "_")?.takeIf { it.isNotBlank() }
@@ -152,6 +159,10 @@ internal class ImageUploadPreprocessor(
 
     companion object {
         const val MAX_BYTES = 10_485_760
+        internal fun validateResolution(width: Int, height: Int) {
+            if (width !in 32..8_192 || height !in 32..8_192 ||
+                width.toLong() * height > 16_000_000L) throw ImageResolutionException()
+        }
         private const val MAX_BITMAP_BYTES = 128L * 1024 * 1024
         private val PNG = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
         private fun format(bytes: ByteArray): String? = when {

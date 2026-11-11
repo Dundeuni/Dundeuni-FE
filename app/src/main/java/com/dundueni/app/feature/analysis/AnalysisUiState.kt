@@ -52,6 +52,7 @@ sealed interface AnalysisUiState {
 
 enum class AnalysisErrorKind(val message: String) {
     PHOTO_DETECTION("사진 후보를 찾는 중 오류가 발생했습니다. 이미지를 다시 업로드해 주세요."),
+    RESOLUTION("이미지는 가로·세로 각각 32~8,192px, 전체 1,600만 픽셀 이하여야 합니다."),
     INPUT("이미지를 읽거나 변환하지 못했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요."),
     CONFIGURATION("분석 서버 연결 설정을 확인해 주세요."),
     CONNECTION("분석 서버에 연결하지 못했습니다. 네트워크와 서버 실행 상태를 확인해 주세요."),

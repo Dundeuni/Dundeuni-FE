@@ -26,6 +26,24 @@ import org.robolectric.annotation.Config
 @Config(sdk = [28])
 @OptIn(ExperimentalCoroutinesApi::class)
 class TextInspectionViewModelTest {
+    @Test fun directTextRequiresTrimmedLengthAndSubmitsNormalizedText() = runBlocking {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val viewModel = TextInspectionViewModel(RuntimeEnvironment.getApplication(), SavedStateHandle(), apiMode = "FAKE")
+            viewModel.inspect(" 1234 ")
+            assertEquals(TextInspectionUiState.InvalidInput, viewModel.uiState.value)
+            viewModel.inspect("x".repeat(3_001))
+            assertEquals(TextInspectionUiState.InvalidInput, viewModel.uiState.value)
+            viewModel.updateInputText(" 12345 ")
+            assertEquals(TextInspectionUiState.Idle, viewModel.uiState.value)
+            viewModel.inspect(" 12345 ")
+            val success = withTimeout(5_000) {
+                viewModel.uiState.filterIsInstance<TextInspectionUiState.Success>().first()
+            }
+            assertEquals("12345", JsonParser.parseString(success.resultJson).asJsonObject.get("sourceText").asString)
+        } finally { Dispatchers.resetMain() }
+    }
+
     @Test fun savedInputAndRetryKeepTheTextResultType() = runBlocking {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {

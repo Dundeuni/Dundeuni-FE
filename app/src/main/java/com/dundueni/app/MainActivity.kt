@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                     onFloatingButtonChange = ::onFloatingButtonChange,
                     onScreenScan = ::requestScreenScan,
                     onImageScan = ::openPhotoPicker,
-                    onTextScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
+                    onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
                     onUrlScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, UrlInputActivity::class.java)) },
                     onPhoneScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },

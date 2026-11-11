@@ -13,6 +13,7 @@ import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.repository.AnalysisFailedException
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import com.dundueni.app.data.repository.PhotoSelectionRepository
+import com.dundueni.app.data.image.ImageResolutionException
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.UUID
@@ -80,7 +81,9 @@ class AnalysisViewModel(
                 mutableUiState.value = AnalysisUiState.Idle
                 throw cancelled
             } catch (exception: Exception) {
-                mutableUiState.value = if (prepared) exception.toUiState()
+                mutableUiState.value = if (exception is ImageResolutionException)
+                    AnalysisUiState.Error(AnalysisErrorKind.RESOLUTION)
+                    else if (prepared) exception.toUiState()
                     else AnalysisUiState.Error(AnalysisErrorKind.INPUT)
             }
         }
@@ -130,10 +133,18 @@ class AnalysisViewModel(
         }
     }
 
-    suspend fun cancelUpload() {
-        val id = pendingUploadId ?: return
-        pendingUploadId = null
-        try { photoSelection?.cancel(id) } catch (_: Exception) { /* Server TTL handles missing uploads. */ }
+    suspend fun cancelUpload(): Boolean {
+        val id = pendingUploadId ?: return true
+        return try {
+            checkNotNull(photoSelection).cancel(id)
+            pendingUploadId = null
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (exception: Exception) {
+            android.util.Log.w("AnalysisViewModel", "Image upload cancellation failed: ${exception.javaClass.simpleName}")
+            false
+        }
     }
 
     /** Rechecks the ID from POST without uploading the image or creating another analysis. */

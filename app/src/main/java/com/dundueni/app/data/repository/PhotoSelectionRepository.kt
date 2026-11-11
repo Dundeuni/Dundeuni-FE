@@ -62,11 +62,18 @@ class PhotoSelectionRepository(
     }
 
     suspend fun cancel(uploadId: String) = withContext(Dispatchers.IO) {
-        api.cancel(uploadId).also { response ->
+        val response = api.cancel(uploadId)
+        if (response.code() != 200) {
             response.body()?.close()
-            response.errorBody()?.close()
+            throw response.failure()
         }
-        Unit
+        response.errorBody()?.close()
+        val raw = response.body()?.use { it.string() }
+            ?: throw AnalysisProtocolException("Image upload cancellation response is missing")
+        val envelope = try { gson.fromJson(raw, AnalysisErrorResponseDto::class.java) }
+            catch (error: RuntimeException) { throw AnalysisProtocolException("Invalid image upload cancellation response", error) }
+        if (envelope?.isSuccess != true || envelope.code != "IMAGE_UPLOAD200" || envelope.result != null)
+            throw AnalysisProtocolException("Unexpected image upload cancellation response")
     }
 
     private fun <T> Response<T>.failure(): AnalysisHttpException {

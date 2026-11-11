@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -178,8 +179,12 @@ class AnalysisActivity : ComponentActivity() {
 
     private fun closeAnalysis() {
         lifecycleScope.launch {
-            viewModel.cancelUpload()
-            finish()
+            try {
+                if (!viewModel.cancelUpload())
+                    Toast.makeText(this@AnalysisActivity, "이미지 업로드 취소를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
+            } finally {
+                finish()
+            }
         }
     }
 
