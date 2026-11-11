@@ -47,6 +47,12 @@ data class AnalysisResult(
     val imageGenerationDisplayScore: Double? = null,
     val imageManipulationDecision: String? = null,
     val imageManipulationDisplayScore: Double? = null,
+    val textDecision: String? = null,
+    val textRiskScore: Double? = null,
+    val textSourceType: String? = null,
+    val textNeedsReview: Boolean? = null,
+    val textReasonCodes: List<String>? = null,
+    val textOcrUsed: Boolean? = null,
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }
@@ -55,6 +61,7 @@ data class AnalysisResult(
         require(aiScore == null || aiScore.isFinite() && aiScore in 0.0..100.0)
         require(imageGenerationDisplayScore == null || imageGenerationDisplayScore.isFinite() && imageGenerationDisplayScore in 0.0..100.0)
         require(imageManipulationDisplayScore == null || imageManipulationDisplayScore.isFinite() && imageManipulationDisplayScore in 0.0..100.0)
+        require(textRiskScore == null || textRiskScore.isFinite() && textRiskScore in 0.0..1.0)
     }
 }
 

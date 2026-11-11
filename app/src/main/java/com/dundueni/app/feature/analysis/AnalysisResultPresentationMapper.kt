@@ -75,6 +75,12 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
         imageGenerationDisplayScore = if (isText) null else imageGenerationDisplayScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
         imageManipulationDecision = if (isText) null else imageManipulationDecision,
         imageManipulationDisplayScore = if (isText) null else imageManipulationDisplayScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
+        textDecision = if (isText) textDecision else null,
+        textRiskScore = if (isText) riskScore?.takeIf { it.isFinite() && it in 0.0..1.0 } else null,
+        textSourceType = if (isText) sourceType else null,
+        textNeedsReview = if (isText) textNeedsReview else null,
+        textReasonCodes = if (isText) textReasonCodes else null,
+        textOcrUsed = if (isText) textOcrUsed else null,
         evidence = descriptions.mapIndexed { index, description ->
             RiskEvidence("분석 근거 ${index + 1}", description)
         },

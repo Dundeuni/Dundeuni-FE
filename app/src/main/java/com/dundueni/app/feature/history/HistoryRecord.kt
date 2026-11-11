@@ -22,6 +22,12 @@ data class HistoryRecord(
     val status: String? = null,
     val evidence: List<String> = emptyList(),
     val aiLikelihood: AiLikelihood = AiLikelihood.UNKNOWN,
+    val textDecision: String? = null,
+    val textRiskScore: Double? = null,
+    val textSourceType: String? = null,
+    val textNeedsReview: Boolean? = null,
+    val textReasonCodes: List<String>? = null,
+    val textOcrUsed: Boolean? = null,
 ) {
     val title: String get() = "${type.label} 검사"
     val statusLabel: String get() = when (status) {

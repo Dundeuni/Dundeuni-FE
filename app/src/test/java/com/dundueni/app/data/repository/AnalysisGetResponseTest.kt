@@ -13,6 +13,32 @@ import org.junit.Test
 class AnalysisGetResponseTest {
     private val id = "9dca5a1c-9736-43b1-9b7c-fad6b9ce7e72"
 
+    @Test fun completedTextDetailMapsStoredDecisionScoreAndQuality() = runBlocking {
+        val server = MockWebServer().apply { start() }
+        try {
+            server.enqueue(MockResponse().setResponseCode(200).setBody("""{
+                "isSuccess":true,"code":"ANALYSIS200","result":{
+                    "analysisId":"$id","type":"TEXT","status":"COMPLETED",
+                    "textResult":{"decision":"defer","riskScore":0.37,"sourceType":"TEXT",
+                        "quality":{"needsReview":true,"reasonCodes":["LOW_CONFIDENCE"],"ocrUsed":false}}
+                }
+            }"""))
+            val result = repository(server).findResult(id)
+            assertEquals(id, result.analysisId)
+            assertEquals("TEXT", result.type)
+            assertEquals("COMPLETED", result.status)
+            assertEquals("defer", result.textDecision)
+            assertEquals(0.37, result.riskScore!!, 0.0)
+            assertEquals("TEXT", result.sourceType)
+            assertEquals(true, result.textNeedsReview)
+            assertEquals(listOf("LOW_CONFIDENCE"), result.textReasonCodes)
+            assertEquals(false, result.textOcrUsed)
+            assertNull(result.normalizedRiskLevel)
+            assertEquals("/api/analysis/$id", server.takeRequest().path)
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
     @Test fun currentDetailSchemaMapsGuidesAndFetchesSeparateSummary() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {

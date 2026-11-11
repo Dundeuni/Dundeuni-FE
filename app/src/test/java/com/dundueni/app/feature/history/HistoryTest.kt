@@ -19,6 +19,22 @@ class HistoryTest {
 
     @Before fun reset() { preferences.edit().clear().commit() }
 
+    @Test fun serverTextHistoryUsesResultIdAndPreservesQuality() {
+        val item = com.google.gson.Gson().fromJson("""{
+            "id":"history-id","type":"TEXT","status":"COMPLETED","createdAt":"2026-11-11T00:00:00Z",
+            "textResult":{"decision":"normal","riskScore":null,"sourceType":"SCREEN_CROP",
+                "quality":{"needsReview":false,"reasonCodes":[],"ocrUsed":true}}
+        }""", com.dundueni.app.data.remote.api.HistoryEntryDto::class.java).toHistoryRecord()
+        assertEquals("history-id", item.id)
+        assertEquals(HistoryType.TEXT, item.type)
+        assertEquals("normal", item.textDecision)
+        assertNull(item.textRiskScore)
+        assertEquals("SCREEN_CROP", item.textSourceType)
+        assertEquals(false, item.textNeedsReview)
+        assertEquals(emptyList<String>(), item.textReasonCodes)
+        assertEquals(true, item.textOcrUsed)
+    }
+
     @Test fun readsExistingPb05RecordsWithoutInventingMissingContent() {
         preferences.edit().putString("results", """[{"id":"old","riskLevel":"SAFE","savedAt":100,"fraudScore":12}]""").commit()
         val item = store.read().single()

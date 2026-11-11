@@ -79,4 +79,21 @@ class AnalysisResultMappingPipelineTest {
             assertNull(result.aiScore)
         }
     }
+
+    @Test fun textPostMapsScoreAndQualityWithoutDerivingFraudRisk() {
+        val domain = gson.fromJson("""{"result":{"analysisId":"text-id","type":"TEXT","status":"COMPLETED",
+            "textResult":{"decision":"phishing","riskScore":0.87,"sourceType":"TEXT",
+                "quality":{"needsReview":true,"reasonCodes":["LOW_CONFIDENCE"],"ocrUsed":false}}}}""",
+            TextAnalysisResponse::class.java).result!!.toDomain()
+        val presented = domain.toTextResult()
+        assertEquals("phishing", domain.textDecision)
+        assertEquals(0.87, domain.riskScore!!, 0.0)
+        assertEquals("TEXT", domain.sourceType)
+        assertEquals(true, presented.textNeedsReview)
+        assertEquals(listOf("LOW_CONFIDENCE"), presented.textReasonCodes)
+        assertEquals(false, presented.textOcrUsed)
+        assertEquals(0.87, presented.textRiskScore!!, 0.0)
+        assertEquals(RiskLevel.UNKNOWN, presented.riskLevel)
+        assertNull(presented.fraudScore)
+    }
 }

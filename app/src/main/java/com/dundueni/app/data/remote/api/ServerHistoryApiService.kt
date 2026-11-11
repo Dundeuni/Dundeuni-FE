@@ -1,6 +1,7 @@
 package com.dundueni.app.data.remote.api
 
 import com.dundueni.app.data.remote.network.BearerAuthInterceptor
+import com.dundueni.app.data.remote.dto.TextAnalysisTextResultDto
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Headers
@@ -35,11 +36,9 @@ data class HistoryEntryDto(
     val expiresAt: String? = null,
     val errorCode: String? = null,
     val textPreview: String? = null,
-    val textResult: HistoryTextResultDto? = null,
+    val textResult: TextAnalysisTextResultDto? = null,
     val phoneResult: HistoryPhoneResultDto? = null,
 )
-
-data class HistoryTextResultDto(val decision: String? = null)
 
 data class HistoryPhoneResultDto(
     val phoneNumber: String? = null,

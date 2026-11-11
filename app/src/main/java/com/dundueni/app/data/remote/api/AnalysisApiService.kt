@@ -17,6 +17,7 @@ import retrofit2.http.Path
 import retrofit2.http.DELETE
 import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisSummaryResponseDto
+import com.dundueni.app.data.remote.dto.TextAnalysisTextResultDto
 
 /**
  * 분석 서버에 어떤 방식으로 이미지를 보낼지 정의하는 API 계약이다.
@@ -115,10 +116,5 @@ data class TextAnalysisResponseResult(
     val analysisId: String? = null,
     val type: String? = null,
     val status: String? = null,
-    val textResult: TextAnalysisTextResult? = null,
-)
-
-data class TextAnalysisTextResult(
-    val decision: String? = null,
-    val sourceType: String? = null,
+    val textResult: TextAnalysisTextResultDto? = null,
 )

@@ -12,6 +12,7 @@ data class AnalysisDetailDto(
     val analysisId: String? = null,
     val type: String? = null,
     val sourceType: String? = null,
+    val textResult: TextAnalysisTextResultDto? = null,
     val status: String? = null,
     val aiGenerationScore: Double? = null,
     val aiRiskLevel: String? = null,

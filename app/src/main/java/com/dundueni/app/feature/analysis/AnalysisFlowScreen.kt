@@ -199,6 +199,12 @@ internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: His
             summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
             evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
             guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
+            textDecision = textPresented?.textDecision,
+            textRiskScore = textPresented?.textRiskScore,
+            textSourceType = textPresented?.textSourceType,
+            textNeedsReview = textPresented?.textNeedsReview,
+            textReasonCodes = textPresented?.textReasonCodes,
+            textOcrUsed = textPresented?.textOcrUsed,
             targetLabel = "캡처 화면",
         )
     }

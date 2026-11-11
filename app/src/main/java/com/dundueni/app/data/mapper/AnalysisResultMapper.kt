@@ -27,6 +27,7 @@ fun AnalysisResponseResultDto.toDomain(): AnalysisResult = AnalysisResult(
 /** GET uses the documented outer fields; older normalized results remain readable. */
 fun AnalysisDetailDto.toDomain(): AnalysisResult {
     val normalized = result
+    val text = textResult.takeIf { type == "TEXT" }
     return AnalysisResult(
         analysisId = analysisId,
         type = type,
@@ -44,9 +45,12 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
             .filterNotNull().filter { it.isNotBlank() },
         summary = normalized?.summary,
         normalizedRiskLevel = normalized?.riskLevel,
-        textDecision = normalized?.textDecision,
-        riskScore = normalized?.riskScore,
-        sourceType = sourceType,
+        textDecision = text?.decision ?: normalized?.textDecision,
+        riskScore = if (text != null) text.riskScore else normalized?.riskScore,
+        sourceType = text?.sourceType ?: sourceType,
+        textNeedsReview = text?.quality?.needsReview,
+        textReasonCodes = text?.quality?.reasonCodes,
+        textOcrUsed = text?.quality?.ocrUsed,
         imageOverallDecisionLabel = if (type == "IMAGE") overallResult?.decisionLabel else null,
         imageGenerationDecision = if (type == "IMAGE") models?.generation?.decision else null,
         imageGenerationDisplayScore = if (type == "IMAGE") models?.generation?.displayScore else null,
@@ -61,5 +65,9 @@ fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(
     aiGenerationScore = null, aiRiskLevel = null, reasons = emptyList(),
     modelVersion = null, errorCode = null, createdAt = null, completedAt = null, expiresAt = null,
     textDecision = textResult?.decision,
+    riskScore = textResult?.riskScore,
     sourceType = textResult?.sourceType,
+    textNeedsReview = textResult?.quality?.needsReview,
+    textReasonCodes = textResult?.quality?.reasonCodes,
+    textOcrUsed = textResult?.quality?.ocrUsed,
 )

@@ -34,6 +34,12 @@ internal fun HistoryEntryDto.toHistoryRecord(): HistoryRecord {
         preview = preview,
         status = status,
         evidence = phoneResult?.reasons.orEmpty().filter { it.isNotBlank() },
+        textDecision = if (kind == HistoryType.TEXT) textResult?.decision else null,
+        textRiskScore = if (kind == HistoryType.TEXT) textResult?.riskScore else null,
+        textSourceType = if (kind == HistoryType.TEXT) textResult?.sourceType else null,
+        textNeedsReview = if (kind == HistoryType.TEXT) textResult?.quality?.needsReview else null,
+        textReasonCodes = if (kind == HistoryType.TEXT) textResult?.quality?.reasonCodes else null,
+        textOcrUsed = if (kind == HistoryType.TEXT) textResult?.quality?.ocrUsed else null,
     )
 }
 

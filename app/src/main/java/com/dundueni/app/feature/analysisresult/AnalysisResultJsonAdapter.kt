@@ -41,6 +41,14 @@ object AnalysisResultJsonAdapter {
             imageGenerationDisplayScore = value.optionalScore("imageGenerationDisplayScore"),
             imageManipulationDecision = value.optionalText("imageManipulationDecision"),
             imageManipulationDisplayScore = value.optionalScore("imageManipulationDisplayScore"),
+            textDecision = value.optionalText("textDecision"),
+            textRiskScore = value.optionalUnitScore("textRiskScore"),
+            textSourceType = value.optionalText("textSourceType"),
+            textNeedsReview = value.optionalBoolean("textNeedsReview"),
+            textReasonCodes = value.optJSONArray("textReasonCodes")?.let { items ->
+                List(items.length()) { items.getString(it) }
+            },
+            textOcrUsed = value.optionalBoolean("textOcrUsed"),
         )
     }
 
@@ -64,5 +72,17 @@ object AnalysisResultJsonAdapter {
         return value.toDouble().also {
             require(it.isFinite() && it in 0.0..100.0) { "$key 범위를 확인하세요." }
         }
+    }
+
+    private fun JSONObject.optionalUnitScore(key: String): Double? {
+        if (!has(key) || isNull(key)) return null
+        val value = get(key)
+        require(value is Number) { "$key must be a number" }
+        return value.toDouble().also { require(it.isFinite() && it in 0.0..1.0) { "$key must be between 0 and 1" } }
+    }
+
+    private fun JSONObject.optionalBoolean(key: String): Boolean? {
+        if (!has(key) || isNull(key)) return null
+        return (get(key) as? Boolean) ?: throw IllegalArgumentException("$key must be a boolean")
     }
 }
