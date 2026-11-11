@@ -11,6 +11,7 @@ data class FloatingButtonPreferences(
 ) {
     companion object {
         const val PREFERENCES_NAME = "dundueni_settings"
+        const val KEY_ENABLED = "floating_button_enabled"
         const val KEY_SIZE = "button_size"
         const val KEY_OPACITY = "button_opacity"
         const val KEY_FONT_SCALE = "font_scale"

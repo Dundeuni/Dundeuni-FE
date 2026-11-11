@@ -60,12 +60,14 @@ class AnalysisActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
             FloatingButtonManager.suspendForActivity(overlayOwner)
         }
+        android.util.Log.d("FloatingButtonService", "AnalysisActivity.onStart ${FloatingButtonService.debugState(this)}")
     }
 
     override fun onStop() {
         if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
             FloatingButtonManager.resumeForActivity(overlayOwner)
         }
+        android.util.Log.d("FloatingButtonService", "AnalysisActivity.onStop ${FloatingButtonService.debugState(this)}")
         super.onStop()
     }
 

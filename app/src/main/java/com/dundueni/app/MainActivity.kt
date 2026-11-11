@@ -178,7 +178,11 @@ class MainActivity : ComponentActivity() {
             redirectToLogin()
             return
         }
-        if (pendingOverlayAction == null) syncFloatingButtonState()
+        if (pendingOverlayAction == null) {
+            syncFloatingButtonState()
+            if (floatingButtonEnabled) FloatingButtonManager.restoreIfEnabled(this)
+            android.util.Log.d("FloatingButtonService", "MainActivity.onResume toggle=$floatingButtonEnabled ${com.dundueni.app.feature.floatingbutton.FloatingButtonService.debugState(this)}")
+        }
     }
 
     private val onboardingOverlayPermissionLauncher = registerForActivityResult(
@@ -307,7 +311,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun syncFloatingButtonState() {
-        floatingButtonEnabled = FloatingButtonManager.isRunning()
+        floatingButtonEnabled = FloatingButtonManager.isUserEnabled(this)
     }
 
     private fun openPhotoPicker() {

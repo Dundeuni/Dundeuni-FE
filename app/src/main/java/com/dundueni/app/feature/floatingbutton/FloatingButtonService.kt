@@ -129,6 +129,7 @@ class FloatingButtonService : Service() {
         fun prepareCompletionOverlay(context: Context) {
             if (!Settings.canDrawOverlays(context) || activeInstance != null) return
             try {
+                Log.d("FloatingButtonService", "ACTION_PREPARE_COMPLETION requested ${debugState(context)}")
                 ContextCompat.startForegroundService(context,
                     Intent(context, FloatingButtonService::class.java).setAction(ACTION_PREPARE_COMPLETION))
             } catch (error: RuntimeException) {
@@ -148,9 +149,40 @@ class FloatingButtonService : Service() {
         private const val NOTIFICATION_ID = 1001
         const val ACTION_SCREEN_SCAN = "com.dundueni.app.action.SCREEN_SCAN"
         private var activeInstance: FloatingButtonService? = null
+        private val pendingOverlaySuspensions = mutableSetOf<String>()
         val isServiceActive: Boolean get() = activeInstance?.let { Settings.canDrawOverlays(it) } == true
-        fun suspendForActivity(owner: String) { activeInstance?.suspendOverlay(owner) }
-        fun resumeForActivity(owner: String) { activeInstance?.resumeOverlay(owner) }
+        fun debugState(context: Context): String {
+            val instance = activeInstance
+            val enabled = context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .getBoolean(FloatingButtonPreferences.KEY_ENABLED, false)
+            return "enabled=$enabled active=${instance != null} view=${instance?.floatingButton != null} " +
+                "attached=${instance?.floatingButton?.isAttachedToWindow == true} visible=$isFloatingButtonVisible " +
+                "suspended=${instance?.overlaySuspensions} pending=$pendingOverlaySuspensions"
+        }
+        fun restoreIfEnabled(context: Context) {
+            if (!context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+                    .getBoolean(FloatingButtonPreferences.KEY_ENABLED, false) || !Settings.canDrawOverlays(context)) return
+            val instance = activeInstance
+            if (instance != null) {
+                instance.restoreButton()
+            } else {
+                try {
+                    ContextCompat.startForegroundService(context, Intent(context, FloatingButtonService::class.java))
+                } catch (error: RuntimeException) {
+                    Log.w("FloatingButtonService", "플로팅 버튼 서비스 복원 요청 실패", error)
+                }
+            }
+        }
+        fun suspendForActivity(owner: String) {
+            pendingOverlaySuspensions.add(owner)
+            activeInstance?.suspendOverlay(owner)
+            Log.d("FloatingButtonService", "suspend($owner) active=${activeInstance != null} pending=$pendingOverlaySuspensions")
+        }
+        fun resumeForActivity(owner: String) {
+            pendingOverlaySuspensions.remove(owner)
+            activeInstance?.resumeOverlay(owner)
+            Log.d("FloatingButtonService", "resume($owner) active=${activeInstance != null} pending=$pendingOverlaySuspensions")
+        }
         @Volatile
         var isFloatingButtonVisible: Boolean = false
             private set
@@ -245,18 +277,31 @@ class FloatingButtonService : Service() {
 
         // 4. WindowManager 가져오기
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        overlaySuspensions.addAll(pendingOverlaySuspensions)
         activeInstance = this
+        Log.d("FloatingButtonService", "onCreate ${debugState(this)}")
         settingsPreferences.registerOnSharedPreferenceChangeListener(settingsListener)
         settingsListenerRegistered = true
 
     }
 
     // 실제 Floating Button 생성 + 화면에 추가
+    private fun isButtonEnabled(): Boolean = settingsPreferences.getBoolean(FloatingButtonPreferences.KEY_ENABLED, false)
+
+    private fun restoreButton() {
+        if (destroyed || !::windowManager.isInitialized || scanInProgress || !Settings.canDrawOverlays(this)) return
+        try {
+            showFloatingButton()
+        } catch (error: RuntimeException) {
+            Log.w("FloatingButtonService", "플로팅 버튼 Overlay 생성 실패 ${debugState(this)}", error)
+        }
+    }
+
     private fun showFloatingButton() {
 
-        if (floatingButton != null || overlaySuspensions.isNotEmpty()) return
+        if (!isButtonEnabled() || floatingButton != null || overlaySuspensions.isNotEmpty()) return
         // View는 클릭만 전달하고, 메뉴 전환과 검사 중 입력 제한은 서비스가 결정한다.
-        floatingButton = FloatingButtonView.create(
+        val button = FloatingButtonView.create(
             context = this,
             hapticsEnabled = { FloatingButtonPreferences.read(this).hapticsEnabled },
         ) {
@@ -267,7 +312,7 @@ class FloatingButtonService : Service() {
 
         val preferences = FloatingButtonPreferences.read(this)
         val buttonSize = (preferences.sizeDp * resources.displayMetrics.density).toInt()
-        floatingButton?.alpha = preferences.opacity
+        button.alpha = preferences.opacity
 
         // 앱 밖에 표시할 창으로 설정하고, 키보드 입력 포커스는 가져오지 않는다.
         val params = WindowManager.LayoutParams(
@@ -286,10 +331,11 @@ class FloatingButtonService : Service() {
             y = floatingButtonY
         }
 
-        installDragHandling(floatingButton!!, params, buttonSize)
+        installDragHandling(button, params, buttonSize)
 
         // 생성한 버튼을 창에 등록해야 다른 앱 위에서도 실제로 보인다.
-        windowManager.addView(floatingButton, params)
+        windowManager.addView(button, params)
+        floatingButton = button
         isFloatingButtonVisible = true
     }
 
@@ -429,9 +475,7 @@ class FloatingButtonService : Service() {
 
     private fun resumeOverlay(owner: String) {
         if (!overlaySuspensions.remove(owner)) return
-        if (overlaySuspensions.isEmpty() && !scanInProgress && Settings.canDrawOverlays(this)) {
-            showFloatingButton()
-        }
+        if (overlaySuspensions.isEmpty()) restoreButton()
     }
 
     private fun showFloatingMenu() {
@@ -923,7 +967,10 @@ class FloatingButtonService : Service() {
         startId: Int
     ): Int {
 
-        if (intent?.action == ACTION_PREPARE_COMPLETION) return START_NOT_STICKY
+        if (intent?.action == ACTION_PREPARE_COMPLETION) {
+            Log.d("FloatingButtonService", "ACTION_PREPARE_COMPLETION started ${debugState(this)}")
+            return START_NOT_STICKY
+        }
 
         // 시스템이 Service를 종료했을 경우 가능한 범위에서 재생성 요청
         if (intent?.action == ACTION_SCREEN_SCAN) {
@@ -932,7 +979,7 @@ class FloatingButtonService : Service() {
             startScreenScan()
             return if (temporaryScan) START_NOT_STICKY else START_STICKY
         }
-        if (Settings.canDrawOverlays(this)) showFloatingButton()
+        restoreButton()
         return START_STICKY
     }
 

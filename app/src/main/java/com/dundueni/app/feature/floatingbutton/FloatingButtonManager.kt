@@ -40,14 +40,20 @@ object FloatingButtonManager {
         )
 
         // 알림과 함께 동작하는 서비스의 시작을 요청하고, 실제 알림 등록은 서비스가 맡는다.
-        ContextCompat.startForegroundService(
-            context,
-            intent
-        )
+        val preferences = context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+        preferences.edit().putBoolean(FloatingButtonPreferences.KEY_ENABLED, true).apply()
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (error: RuntimeException) {
+            preferences.edit().putBoolean(FloatingButtonPreferences.KEY_ENABLED, false).apply()
+            throw error
+        }
     }
 
     // Floating Button Foreground Service 종료
     fun stop(context: Context) {
+        context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(FloatingButtonPreferences.KEY_ENABLED, false).apply()
         val intent = Intent(
             context,
             FloatingButtonService::class.java
@@ -56,8 +62,13 @@ object FloatingButtonManager {
         context.stopService(intent)
     }
 
-    fun isRunning(): Boolean {
-        return FloatingButtonService.isServiceActive
+    fun isUserEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .getBoolean(FloatingButtonPreferences.KEY_ENABLED, false)
+    }
+
+    fun restoreIfEnabled(context: Context) {
+        FloatingButtonService.restoreIfEnabled(context)
     }
 
     fun suspendForActivity(owner: String) {
