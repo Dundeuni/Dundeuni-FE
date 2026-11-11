@@ -1,7 +1,6 @@
 package com.dundueni.app.feature.phone
 
 import android.os.Bundle
-import android.content.Intent
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
@@ -17,7 +16,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.analysisresult.RiskEvidence
@@ -35,7 +33,6 @@ import java.util.UUID
 class PhoneInputActivity : ComponentActivity() {
     private val overlayOwner = "phone-input:${UUID.randomUUID()}"
     private lateinit var viewModel: PhoneInspectionViewModel
-    private var redirectingToLogin = false
 
     override fun onStart() {
         super.onStart()
@@ -90,7 +87,6 @@ class PhoneInputActivity : ComponentActivity() {
                 }
                 LaunchedEffect(state) {
                     when (val current = state) {
-                        PhoneInspectionUiState.LoginRequired -> redirectToLogin()
                         is PhoneInspectionUiState.Success -> {
                             val id = current.response.analysisId ?: return@LaunchedEffect
                             if (BasicInspectionQuota(this@PhoneInputActivity).recordCompleted(id)) {
@@ -110,16 +106,6 @@ class PhoneInputActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    private fun redirectToLogin() {
-        if (redirectingToLogin || isFinishing) return
-        redirectingToLogin = true
-        FloatingButtonManager.stop(this)
-        startActivity(Intent(this, LoginActivity::class.java).addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
-        ))
-        finishAffinity()
     }
 
     private fun showMockResult(phone: String) {

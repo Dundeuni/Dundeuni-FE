@@ -3,8 +3,6 @@ package com.dundueni.app.feature.phone
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.dundueni.app.data.auth.AuthSessionRuntime
-import com.dundueni.app.data.auth.AuthSessionSource
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.PhoneAnalysisRequestDto
 import com.dundueni.app.data.remote.api.PhoneAnalysisResponseDto
@@ -26,7 +24,6 @@ sealed interface PhoneInspectionUiState {
     data object Loading : PhoneInspectionUiState
     data class Success(val response: PhoneAnalysisResponseDto, val result: AnalysisResult = response.toPb05Result()) : PhoneInspectionUiState
     data class Error(val message: String) : PhoneInspectionUiState
-    data object LoginRequired : PhoneInspectionUiState
 }
 
 class PhoneInspectionViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,12 +40,6 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
         viewModelScope.launch {
             try {
                 val context = getApplication<Application>()
-                val session = AuthSessionRuntime.store(context).read()
-                if (session?.source != AuthSessionSource.BACKEND || !session.isValid()) {
-                    if (session?.source == AuthSessionSource.BACKEND) AuthSessionRuntime.onExpired(session)
-                    mutableUiState.value = PhoneInspectionUiState.LoginRequired
-                    return@launch
-                }
                 val response = AnalysisFlowDependencies.createPhoneApiService(context)
                     .analyzePhone(PhoneAnalysisRequestDto(phone))
                 val serverCode = if (response.code() != 201) response.errorBody()?.use { body ->
@@ -66,7 +57,7 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
                         else PhoneInspectionUiState.Error("서버 응답에 올바른 분석 ID 또는 완료 상태가 없어요.")
                     }
                     400 -> PhoneInspectionUiState.Error("전화번호 형식을 확인해 주세요.")
-                    401 -> PhoneInspectionUiState.LoginRequired
+                    401 -> PhoneInspectionUiState.Error("전화번호 검사 서버 인증 오류 (HTTP 401). 잠시 후 다시 시도해 주세요.")
                     500 -> PhoneInspectionUiState.Error(if (serverCode == "APICK_CONFIGURATION_ERROR")
                         "전화번호 검사 서버 설정을 확인해 주세요." else "서버 오류로 검사를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.")
                     503 -> PhoneInspectionUiState.Error(when (serverCode) {
