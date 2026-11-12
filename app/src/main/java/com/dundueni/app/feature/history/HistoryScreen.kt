@@ -58,12 +58,16 @@ import com.dundueni.app.feature.home.HomeBottomNavigation
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.ui.theme.BrandInk
 import com.dundueni.app.ui.theme.CautionInk
+import com.dundueni.app.ui.theme.Caution
 import com.dundueni.app.ui.theme.Danger
 import com.dundueni.app.ui.theme.PageBackground
 import com.dundueni.app.ui.theme.ProtectiveBlue
 import com.dundueni.app.ui.theme.Safe
 import com.dundueni.app.ui.theme.SafeInk
 import com.dundueni.app.ui.theme.SecondaryInk
+import com.dundueni.app.ui.theme.SoftCaution
+import com.dundueni.app.ui.theme.SoftDanger
+import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.ui.theme.SoftBlue
 import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 import com.dundueni.app.ui.theme.LocalEasyMode
@@ -122,11 +126,11 @@ fun HistoryScreen(
         }
     }
     val selected = records.firstOrNull { it.id == selectedId }
-    val filter = HistoryType.entries.firstOrNull { it.name == filterName }
-    val visible = remember(records, filterName, query.text) {
-        filterHistory(records, filter, query.text).filter {
-            filterName != "TEXT_LINK" || it.type == HistoryType.TEXT || it.type == HistoryType.LINK
-        }
+    val displayRecords = remember(records) { records.filterNot { it.type == HistoryType.LINK } }
+    val searchableRecords = remember(displayRecords, query.text) { filterHistory(displayRecords, null, query.text) }
+    val activeFilter = HistoryType.entries.firstOrNull { it.name == filterName && it != HistoryType.LINK }
+    val visible = remember(searchableRecords, activeFilter) {
+        searchableRecords.filter { activeFilter == null || it.type == activeFilter }
     }
     LaunchedEffect(records, loading) {
         if (!loading && selectedId != null && selected == null && initialRecordId == null) selectedId = null
@@ -189,7 +193,7 @@ fun HistoryScreen(
                             Text("검사 기록", color = Ink, fontSize = if (easy) 26.sp else 24.sp, fontWeight = FontWeight.Medium)
                             Spacer(Modifier.width(8.dp))
                             Surface(color = Color(0xFFE9EFFF), shape = CircleShape) {
-                                Text("${records.size}건", Modifier.padding(horizontal = 7.dp, vertical = 2.dp), color = Blue, fontSize = 11.sp)
+                                Text("${displayRecords.size}건", Modifier.padding(horizontal = 7.dp, vertical = 2.dp), color = Blue, fontSize = 11.sp)
                             }
                             Spacer(Modifier.weight(1f))
                             IconButton(onClick = { searching = !searching; if (!searching) query = TextFieldValue() },
@@ -201,17 +205,9 @@ fun HistoryScreen(
                         }
                     }
                     if (isDemo) item { Notice("디자인 미리보기 · 샘플 기록", easy = easy) }
-                    item { if (easy) EasyPrivacyNotice() else Notice("검사 기록은 이 기기에 보관돼요. 원문과 링크는 저장하지 않으며, 언제든 삭제할 수 있어요.") }
+                    item { EmptyNotice(easy) }
                     if (searching) item { HistorySearchField(query, onValueChange = { query = it }) }
-                    item {
-                        if (easy) EasyHistoryFilters(filterName, records) { filterName = it } else Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            HistoryFilter("전체 ${records.size}", filterName == "ALL") { filterName = "ALL" }
-                            HistoryType.entries.forEach { type ->
-                                val count = records.count { it.type == type }
-                                if (type != HistoryType.UNKNOWN || count > 0) HistoryFilter("${type.label} $count", filter == type) { filterName = type.name }
-                            }
-                        }
-                    }
+                    item { HistoryFilters(filterName, searchableRecords, easy) { filterName = it } }
                     when {
                         loading -> item {
                             Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -220,7 +216,7 @@ fun HistoryScreen(
                             }
                         }
                         error != null -> item { EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy) }
-                        records.isEmpty() -> item { EmptyPanel("아직 검사 기록이 없어요", "검사를 진행하고 결과를 보관하면\n이곳에서 다시 확인할 수 있어요.", "홈으로 돌아가기", onHome, easy) }
+                        displayRecords.isEmpty() -> item { EmptyPanel("아직 검사 기록이 없어요", "검사를 진행하고 결과를 보관하면\n이곳에서 다시 확인할 수 있어요.", "홈으로 돌아가기", onHome, easy) }
                         visible.isEmpty() -> item { EmptyPanel("조건에 맞는 기록이 없어요", "다른 검사 유형을 선택하거나\n검색어를 바꿔보세요.", "전체 기록 보기", { query = TextFieldValue(); filterName = "ALL" }, easy) }
                         else -> {
                             val today = LocalDate.now()
@@ -246,11 +242,10 @@ fun HistoryScreen(
                                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                                 group.forEach { record -> key(record.id) { HistoryCard(record, true) { selectedId = record.id; onSelect(record.id) } } }
                                             }
-                                        } else Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                                            Column {
-                                                group.forEachIndexed { index, record ->
-                                                    key(record.id) { HistoryCard(record, easy) { selectedId = record.id; onSelect(record.id) } }
-                                                    if (index < group.lastIndex) HorizontalDivider(Modifier.padding(start = 64.dp, end = 12.dp), color = Outline)
+                                        } else {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                group.forEach { record ->
+                                                    key(record.id) { HistoryCard(record, false) { selectedId = record.id; onSelect(record.id) } }
                                                 }
                                             }
                                         }
@@ -306,11 +301,61 @@ fun HistoryScreen(
 }
 
 @Composable
-private fun HistoryFilter(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label, fontSize = 11.sp) },
-        modifier = Modifier.heightIn(min = 48.dp), shape = CircleShape,
-        border = null, colors = FilterChipDefaults.filterChipColors(containerColor = Color(0xFFEDF0FA), labelColor = Muted,
-            selectedContainerColor = Ink, selectedLabelColor = Color.White))
+private fun HistoryFilters(selected: String, records: List<HistoryRecord>, easy: Boolean, onSelect: (String) -> Unit) {
+    val types = listOf(HistoryType.SCREEN, HistoryType.TEXT, HistoryType.IMAGE, HistoryType.PHONE, HistoryType.UNKNOWN)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = selected == "ALL" || selected == "LINK" || selected == "TEXT_LINK",
+            onClick = { onSelect("ALL") }, label = { Text("전체 ${records.size}", fontSize = if (easy) 16.sp else 12.sp) },
+            modifier = Modifier.heightIn(min = if (easy) 52.dp else 48.dp), shape = CircleShape,
+            colors = FilterChipDefaults.filterChipColors(containerColor = Color.White, labelColor = Ink,
+                selectedContainerColor = Blue, selectedLabelColor = Color.White))
+        types.forEach { type ->
+            val count = records.count { it.type == type }
+            if (type != HistoryType.UNKNOWN || count > 0) {
+                val label = when (type) {
+                    HistoryType.SCREEN -> "화면 검사"
+                    HistoryType.TEXT -> "문자 검사"
+                    HistoryType.IMAGE -> "사진 검사"
+                    HistoryType.PHONE -> "전화번호 검사"
+                    HistoryType.UNKNOWN -> "기타 검사"
+                    HistoryType.LINK -> ""
+                }
+                FilterChip(selected = selected == type.name, onClick = { onSelect(type.name) },
+                    label = { Text("$label $count", fontSize = if (easy) 16.sp else 12.sp) },
+                    modifier = Modifier.heightIn(min = if (easy) 52.dp else 48.dp), shape = CircleShape,
+                    colors = FilterChipDefaults.filterChipColors(containerColor = Color.White, labelColor = Ink,
+                        selectedContainerColor = Blue, selectedLabelColor = Color.White))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyNotice(easy: Boolean) {
+    Surface(color = if (easy) Color.White else PaleBlue, shape = RoundedCornerShape(if (easy) 16.dp else 14.dp),
+        modifier = Modifier.fillMaxWidth().height(if (easy) 112.dp else 72.dp)) {}
+}
+
+@Composable
+private fun CardRiskBadge(level: RiskLevel, easy: Boolean) {
+    val tint = riskColor(level)
+    val background = when (level) {
+        RiskLevel.DANGER -> SoftDanger
+        RiskLevel.CAUTION -> SoftCaution
+        RiskLevel.SAFE -> SoftSafe
+        RiskLevel.UNKNOWN -> Color(0xFFEDF0FA)
+    }
+    Surface(color = background, shape = CircleShape) {
+        Text(level.label, Modifier.padding(horizontal = if (easy) 12.dp else 8.dp, vertical = if (easy) 7.dp else 4.dp),
+            color = tint, fontSize = if (easy) 16.sp else 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+private fun cardBorder(level: RiskLevel): Color = when (level) {
+    RiskLevel.DANGER -> Red
+    RiskLevel.CAUTION -> Caution
+    RiskLevel.SAFE -> Green
+    RiskLevel.UNKNOWN -> Outline
 }
 
 private fun recordColor(record: HistoryRecord): Color = when {
@@ -322,62 +367,19 @@ private fun recordColor(record: HistoryRecord): Color = when {
 }
 
 @Composable
-private fun EasyPrivacyNotice() {
-    Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(40.dp).background(PaleBlue, CircleShape), contentAlignment = Alignment.Center) {
-                HistoryGlyph(HistoryIcon.LOCK, Blue, 21.dp)
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("안심 개인정보 보호", color = Blue, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Box(Modifier.size(4.dp).background(Blue, CircleShape))
-                }
-                Text("검사 기록은 이 기기에 보관돼요.\n원문과 링크는 저장하지 않아요.\n필요 없는 기록은 언제든 지울 수 있어요.", color = Ink, fontSize = 18.sp, lineHeight = 22.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun EasyHistoryFilters(selected: String, records: List<HistoryRecord>, onSelect: (String) -> Unit) {
-    val options = listOf("ALL" to "전체 보기", "SCREEN" to "화면 검사", "TEXT_LINK" to "문자·링크", "IMAGE" to "사진 검사", "PHONE" to "전화번호") +
-        if (records.any { it.type == HistoryType.UNKNOWN }) listOf("UNKNOWN" to "기타 검사") else emptyList()
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { (name, label) ->
-            FilterChip(selected = selected == name, onClick = { onSelect(name) }, label = { Text(label, fontSize = 18.sp) },
-                modifier = Modifier.heightIn(min = 48.dp),
-                shape = CircleShape, border = null,
-                colors = FilterChipDefaults.filterChipColors(containerColor = Color(0xFFE8EDFA), labelColor = Ink,
-                    selectedContainerColor = Ink, selectedLabelColor = Color.White))
-        }
-    }
-}
-
-@Composable
 private fun EasyHistoryCard(record: HistoryRecord, onClick: () -> Unit) {
     val danger = record.riskLevel == RiskLevel.DANGER
     val tint = riskColor(record.riskLevel)
     Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = Color.White,
+        border = BorderStroke(1.5.dp, cardBorder(record.riskLevel)),
         modifier = Modifier.fillMaxWidth().testTag("easy-record-${record.id}")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(color = if (danger) Color(0xFFFFDEDF) else Color(0xFFE3E9FC), shape = CircleShape) {
-                    Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        ResultGlyph(if (record.riskLevel == RiskLevel.SAFE) ResultIcon.SHIELD else ResultIcon.WARNING, tint, 12.dp)
-                        Text(when (record.riskLevel) {
-                            RiskLevel.DANGER -> "위험 가능성"
-                            RiskLevel.CAUTION -> "주의 경고"
-                            RiskLevel.SAFE -> "안전으로 분석"
-                            RiskLevel.UNKNOWN -> "판정 미확정"
-                        }, color = tint, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(timeLabel(record.savedAt), Modifier.weight(1f), color = Muted, fontSize = 16.sp)
+                CardRiskBadge(record.riskLevel, easy = true)
             }
             Text(record.title, Modifier.fillMaxWidth(), color = Ink, fontSize = 20.sp, lineHeight = 28.sp,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(timeLabel(record.savedAt), color = Muted, fontSize = 16.sp)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(record.preview ?: "${record.riskLevel.label} 판정 · 저장한 분석 지표 확인", color = Ink,
@@ -404,7 +406,9 @@ private fun HistoryCard(record: HistoryRecord, easy: Boolean, onClick: () -> Uni
         EasyHistoryCard(record, onClick)
         return
     }
-    Surface(onClick = onClick, color = Color.White, modifier = Modifier.fillMaxWidth().testTag("record-${record.id}")) {
+    Surface(onClick = onClick, color = Color.White, shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, cardBorder(record.riskLevel)),
+        modifier = Modifier.fillMaxWidth().testTag("record-${record.id}")) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             RecordTypeIcon(record, 40.dp)
@@ -416,7 +420,7 @@ private fun HistoryCard(record: HistoryRecord, easy: Boolean, onClick: () -> Uni
                 Text(record.preview ?: "${record.riskLevel.label} 판정 · 저장한 분석 지표 확인", color = Ink, fontSize = 11.sp,
                     lineHeight = 17.sp, maxLines = if (record.type == HistoryType.IMAGE) 2 else 1, overflow = TextOverflow.Ellipsis)
             }
-            RiskBadge(record)
+            CardRiskBadge(record.riskLevel, easy = false)
             Text("›", color = Muted, fontSize = 22.sp)
         }
     }
@@ -547,12 +551,16 @@ private fun Notice(message: String, easy: Boolean = false) {
 
 @Composable
 private fun EmptyPanel(title: String, message: String, action: String, onAction: () -> Unit, easy: Boolean) {
-    Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 36.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.size(64.dp).background(PaleBlue, CircleShape), contentAlignment = Alignment.Center) { HistoryGlyph(HistoryIcon.HISTORY, Blue, 30.dp) }
-            Text(title, color = Ink, fontSize = if (easy) 22.sp else 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-            Text(message, color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp, textAlign = TextAlign.Center)
-            Button(onClick = onAction, shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Blue)) { Text(action) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = if (easy) 72.dp else 60.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (easy) 20.dp else 16.dp)) {
+        Box(Modifier.size(if (easy) 88.dp else 72.dp).background(PaleBlue, CircleShape), contentAlignment = Alignment.Center) {
+            HistoryGlyph(HistoryIcon.HISTORY, Blue, if (easy) 38.dp else 32.dp)
+        }
+        Text(title, color = Ink, fontSize = if (easy) 22.sp else 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        Text(message, color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = if (easy) 25.sp else 22.sp, textAlign = TextAlign.Center)
+        Button(onClick = onAction, modifier = (if (easy) Modifier.fillMaxWidth() else Modifier.widthIn(min = 192.dp)).heightIn(min = if (easy) 56.dp else 48.dp),
+            shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+            Text(action, fontSize = if (easy) 16.sp else 14.sp)
         }
     }
 }
