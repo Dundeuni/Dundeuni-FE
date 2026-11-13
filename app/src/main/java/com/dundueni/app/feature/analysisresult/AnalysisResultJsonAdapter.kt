@@ -16,7 +16,7 @@ object AnalysisResultJsonAdapter {
             id = value.requiredText("id"),
             historyType = historyType,
             riskLevel = if (riskLevel == "UNKNOWN") RiskLevel.UNKNOWN else RiskLevel.fromWireValue(riskLevel),
-            summary = value.requiredText("summary"),
+            summary = value.optionalText("summary").orEmpty(),
             keyFinding = value.optionalText("keyFinding"),
             guidance = value.optJSONArray("guidance")?.let { items ->
                 List(items.length()) { items.getString(it) }.filter { it.isNotBlank() }
@@ -49,6 +49,9 @@ object AnalysisResultJsonAdapter {
                 List(items.length()) { items.getString(it) }
             },
             textOcrUsed = value.optionalBoolean("textOcrUsed"),
+            textLimitations = value.optJSONArray("textLimitations")?.let { items ->
+                List(items.length()) { items.getString(it) }.filter { it.isNotBlank() }
+            }.orEmpty(),
         )
     }
 

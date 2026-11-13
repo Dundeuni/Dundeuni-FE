@@ -117,7 +117,7 @@ fun AnalysisFlowScreen(
             }
             AnalysisResultRoute(
                 presented, onReturn = onClose, onHome = onHome, isDemo = isDemo,
-                screenCropDecision = screen?.text?.let { "${it.label}\n위험 수준: ${textPresented?.riskLevel?.label}" },
+                screenCropDecision = screen?.text?.let { textPresented?.keyFinding ?: it.label },
                 imageAnalysisError = screen?.imageError?.message,
                 screenCropError = screen?.textError?.message,
             )
@@ -298,14 +298,18 @@ private fun SelectionOption(
 
 @Composable
 fun AnalysisResultContent(result: AnalysisResult) {
-    Text("최종 위험 판정 미확정")
-    Text("AI 생성·변조 정보만 제공되어 사기 위험의 안전·주의·위험 판정은 표시하지 않습니다.")
-    val score = result.aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 }
-    Text("AI 생성·변조 점수: ${score?.let { "$it%" } ?: "정보 없음"}")
-    Text("서버 AI 위험 수준: ${result.aiRiskLevel?.takeIf { it.isNotBlank() } ?: "정보 없음"}")
-    Text("판단 근거")
+    if (result.type == "IMAGE") {
+        result.imageOverallDecisionLabel?.takeIf { it.isNotBlank() }?.let { Text(it) }
+        result.imageGenerationDecision?.let { Text("AI 생성 판정: $it") }
+        result.imageGenerationDisplayScore?.let { Text("AI 생성 표시 점수: $it/100") }
+        result.imageManipulationDecision?.let { Text("이미지 변조 판정: $it") }
+        result.imageManipulationDisplayScore?.let { Text("이미지 변조 표시 점수: $it/100") }
+    } else if (result.type == "TEXT") {
+        result.textDecision?.let { Text("텍스트 판정: $it") }
+        result.textEvidence.forEach { Text(it) }
+        result.textLimitations.forEach { Text("분석 주의사항: $it") }
+    }
     result.reasons.forEach { Text(it) }
-    if (result.reasons.isEmpty()) Text("근거 정보 없음")
     if (result.recommendedActions.isNotEmpty()) {
         Text("대응 행동")
         result.recommendedActions.forEach { Text(it) }
@@ -321,8 +325,10 @@ internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: His
     val screenPresented = (imagePresented ?: textPresented)?.let { primary ->
         primary.copy(
             historyType = HistoryType.SCREEN,
-            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
-            evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
+            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary)
+                .filter { it.isNotBlank() }.joinToString("\n"),
+            evidence = imagePresented?.evidence.orEmpty().map { it.copy(title = "이미지 · ${it.title}") } +
+                textPresented?.evidence.orEmpty().map { it.copy(title = "화면 문자 · ${it.title}") },
             guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
             textDecision = textPresented?.textDecision,
             textRiskScore = textPresented?.textRiskScore,
@@ -330,6 +336,7 @@ internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: His
             textNeedsReview = textPresented?.textNeedsReview,
             textReasonCodes = textPresented?.textReasonCodes,
             textOcrUsed = textPresented?.textOcrUsed,
+            textLimitations = textPresented?.textLimitations.orEmpty(),
             targetLabel = "캡처 화면",
         )
     }

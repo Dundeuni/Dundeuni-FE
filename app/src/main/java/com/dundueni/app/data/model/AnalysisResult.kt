@@ -23,6 +23,8 @@ data class AnalysisResult(
     val textNeedsReview: Boolean? = null,
     val textReasonCodes: List<String>? = null,
     val textOcrUsed: Boolean? = null,
+    val textEvidence: List<String> = emptyList(),
+    val textLimitations: List<String> = emptyList(),
     val imageOverallDecisionLabel: String? = null,
     val imageGenerationDecision: String? = null,
     val imageGenerationDisplayScore: Double? = null,

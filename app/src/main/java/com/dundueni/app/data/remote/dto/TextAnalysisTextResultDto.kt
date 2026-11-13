@@ -6,6 +6,9 @@ data class TextAnalysisTextResultDto(
     val riskScore: Double? = null,
     val sourceType: String? = null,
     val quality: TextAnalysisQualityDto? = null,
+    val evidence: List<String>? = null,
+    val limitations: List<String>? = null,
+    val summary: String? = null,
 )
 
 data class TextAnalysisQualityDto(

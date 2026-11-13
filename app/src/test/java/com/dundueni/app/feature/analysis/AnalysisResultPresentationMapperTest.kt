@@ -31,14 +31,14 @@ class AnalysisResultPresentationMapperTest {
         for (risk in listOf("SAFE", "CAUTION", "DANGER", "LOW", "MOCK_SAFE", "MOCK_DANGER", null)) {
             val mapped = checkNotNull(result.copy(aiRiskLevel = risk).toPb05Result(false))
             assertEquals(RiskLevel.UNKNOWN, mapped.riskLevel)
-            assertEquals(risk?.trim()?.take(60), mapped.aiRiskLabel)
+            assertNull(mapped.aiRiskLabel)
             assertNull(mapped.fraudLevel)
             assertNull(mapped.fraudScore)
         }
     }
 
     @Test fun realAiLikelihoodOnlyMapsKnownLikelihoodValues() {
-        assertEquals(AiLikelihood.HIGH, result.copy(aiRiskLevel = "HIGH").toPb05Result(false)?.aiLikelihood)
+        assertEquals(AiLikelihood.UNKNOWN, result.copy(aiRiskLevel = "HIGH").toPb05Result(false)?.aiLikelihood)
         assertEquals(AiLikelihood.UNKNOWN, result.copy(aiRiskLevel = "SERVER_RISK").toPb05Result(false)?.aiLikelihood)
     }
 
@@ -74,17 +74,20 @@ class AnalysisResultPresentationMapperTest {
     }
     @Test fun textDetailPreservesServerFindingsAndUnknownWithoutInventingScores() {
         val detail = result.copy(type = "TEXT", normalizedRiskLevel = "CAUTION", textDecision = "phishing",
-            summary = "GET summary", reasons = listOf("GET reason"), recommendedActions = listOf("GET guidance"), riskScore = 0.9)
+            summary = "GET summary", textEvidence = listOf("GET evidence"),
+            textLimitations = listOf("GET limitation"), recommendedActions = listOf("GET guidance"), riskScore = 0.9)
         val mapped = detail.toTextResult("original https://example.com")
         assertEquals(RiskLevel.CAUTION, mapped.riskLevel)
         assertEquals("피싱 의심", mapped.keyFinding)
         assertEquals("GET summary", mapped.summary)
         assertEquals("original https://example.com", mapped.sourceText)
-        assertEquals("GET reason", mapped.evidence.single().description)
+        assertEquals("GET evidence", mapped.evidence.single().description)
+        assertEquals(listOf("GET limitation"), mapped.textLimitations)
         assertEquals(listOf("GET guidance"), mapped.guidance)
         assertNull(mapped.fraudScore)
         for (risk in listOf(null, "UNKNOWN", "FUTURE")) {
             val absent = detail.copy(normalizedRiskLevel = risk, textDecision = null, summary = null,
+                textEvidence = emptyList(), textLimitations = emptyList(),
                 reasons = emptyList(), recommendedActions = emptyList(), riskScore = null).toTextResult()
             assertEquals(RiskLevel.UNKNOWN, absent.riskLevel)
             assertNull(absent.keyFinding)

@@ -43,7 +43,7 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
         expiresAt = expiresAt,
         recommendedActions = (guides ?: normalized?.guidance).orEmpty()
             .filterNotNull().filter { it.isNotBlank() },
-        summary = normalized?.summary,
+        summary = text?.summary ?: normalized?.summary,
         normalizedRiskLevel = normalized?.riskLevel,
         textDecision = text?.decision ?: normalized?.textDecision,
         riskScore = if (text != null) text.riskScore else normalized?.riskScore,
@@ -51,6 +51,8 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
         textNeedsReview = text?.quality?.needsReview,
         textReasonCodes = text?.quality?.reasonCodes,
         textOcrUsed = text?.quality?.ocrUsed,
+        textEvidence = text?.evidence.orEmpty().filter { it.isNotBlank() },
+        textLimitations = text?.limitations.orEmpty().filter { it.isNotBlank() },
         imageOverallDecisionLabel = if (type == "IMAGE") overallResult?.decisionLabel else null,
         imageGenerationDecision = if (type == "IMAGE") models?.generation?.decision else null,
         imageGenerationDisplayScore = if (type == "IMAGE") models?.generation?.displayScore else null,
@@ -70,4 +72,7 @@ fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(
     textNeedsReview = textResult?.quality?.needsReview,
     textReasonCodes = textResult?.quality?.reasonCodes,
     textOcrUsed = textResult?.quality?.ocrUsed,
+    summary = textResult?.summary,
+    textEvidence = textResult?.evidence.orEmpty().filter { it.isNotBlank() },
+    textLimitations = textResult?.limitations.orEmpty().filter { it.isNotBlank() },
 )

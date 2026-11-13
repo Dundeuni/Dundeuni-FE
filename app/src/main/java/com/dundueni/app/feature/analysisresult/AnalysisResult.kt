@@ -53,10 +53,10 @@ data class AnalysisResult(
     val textNeedsReview: Boolean? = null,
     val textReasonCodes: List<String>? = null,
     val textOcrUsed: Boolean? = null,
+    val textLimitations: List<String> = emptyList(),
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }
-        require(summary.isNotBlank()) { "분석 요약이 필요합니다." }
         require(fraudScore == null || fraudScore.isFinite() && fraudScore in 0.0..100.0)
         require(aiScore == null || aiScore.isFinite() && aiScore in 0.0..100.0)
         require(imageGenerationDisplayScore == null || imageGenerationDisplayScore.isFinite() && imageGenerationDisplayScore in 0.0..100.0)
