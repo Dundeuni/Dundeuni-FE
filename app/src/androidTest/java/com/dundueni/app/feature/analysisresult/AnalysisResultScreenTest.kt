@@ -59,7 +59,7 @@ class AnalysisResultScreenTest {
         compose.setContent { DundueniFETheme {
             AnalysisResultScreen(AnalysisResult("empty", RiskLevel.CAUTION, "추가 확인 필요"), onAction = {})
         } }
-        compose.onNodeWithText("세부 근거가 제공되지 않았어요. 요약과 대응 행동을 확인해주세요.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("세부 근거가 제공되지 않았어요. 요약과 대응 행동을 확인해주세요.").assertDoesNotExist()
         compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").performScrollTo().assertIsNotEnabled()
     }
 
@@ -78,7 +78,7 @@ class AnalysisResultScreenTest {
         compose.setContent { DundueniFETheme {
             AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.UNKNOWN).copy(aiRiskLabel = "SAFE", aiScore = 87.0), onAction = { dispatched = it })
         } }
-        compose.onNodeWithText("최종 위험 판정 미확정").assertIsDisplayed()
+        compose.onNodeWithText("최종 위험 판정 미확정").assertDoesNotExist()
         compose.onNodeWithText("SAFE").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("현재는 안전해 보여요").assertDoesNotExist()
         compose.onNodeWithText("지금은 절대 돈을 보내지 마세요!").assertDoesNotExist()

@@ -11,6 +11,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AnalysisResultTransportTest {
+    @Test fun textMetadataSurvivesResultActivityJsonTransport() {
+        val source = AnalysisResult("text-id", RiskLevel.UNKNOWN, "summary", historyType = HistoryType.TEXT,
+            textDecision = "defer", textRiskScore = 0.37, textSourceType = "SCREEN_CROP",
+            textNeedsReview = true, textReasonCodes = listOf("LOW_CONFIDENCE"), textOcrUsed = true)
+        assertEquals(source, AnalysisResultJsonAdapter.decode(Gson().toJson(source)))
+    }
+
     @Test fun pb05ActivityTransportPreservesKnownAndUnknownRiskAndServerContent() {
         for (type in listOf(HistoryType.IMAGE, HistoryType.TEXT, HistoryType.SCREEN, HistoryType.PHONE)) {
             for (risk in RiskLevel.entries) {

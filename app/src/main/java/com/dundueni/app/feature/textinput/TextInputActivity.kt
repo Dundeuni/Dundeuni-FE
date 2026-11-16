@@ -24,8 +24,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
-import com.dundueni.app.feature.payment.BasicInspectionQuota
-import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.google.gson.JsonParser
 import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
@@ -65,10 +63,6 @@ class TextInputActivity : ComponentActivity() {
                         val key = "text:$id"
                         val foreground = visibility == Lifecycle.State.RESUMED
                         if (!foreground && !viewModel.completionDelivery.claim(key)) return@collect
-                        if (!BasicInspectionQuota(this@TextInputActivity).recordCompleted(id)) {
-                            if (foreground) showLimitIfExhausted(this@TextInputActivity)
-                            return@collect
-                        }
                         val destination = AnalysisResultActivity.createIntent(this@TextInputActivity,
                             success.resultJson,
                             isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
@@ -96,12 +90,12 @@ class TextInputActivity : ComponentActivity() {
                         textInput = inputText,
                         onTextChange = viewModel::updateInputText,
                         onInspect = { text ->
-                            if (showLimitIfExhausted(this@TextInputActivity)) return@TextInputScreen
                             loadingPopupDismissed = false
                             viewModel.inspect(text)
                         },
                         onClose = ::finish,
                         isInspecting = state == TextInspectionUiState.Loading || state is TextInspectionUiState.Pending,
+                        showLengthError = state == TextInspectionUiState.InvalidInput,
                     )
                 }
                 when (state) {
@@ -113,7 +107,6 @@ class TextInputActivity : ComponentActivity() {
                             "결과를 조회하지 못했어요. 다시 시도하면 같은 분석 ID로 확인합니다."
                         else "텍스트 검사를 완료하지 못했어요. 다시 시도하면 같은 텍스트로 검사합니다.",
                         onRetry = {
-                            if (!viewModel.hasResultPendingOpen && showLimitIfExhausted(this@TextInputActivity)) return@InspectionErrorDialog
                             loadingPopupDismissed = false
                             viewModel.retry()
                         },

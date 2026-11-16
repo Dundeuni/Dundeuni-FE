@@ -1,16 +1,21 @@
 package com.dundueni.app.feature.textinput
 
 import android.app.Application
+import android.util.Log
 import androidx.annotation.MainThread
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.remote.api.AnalysisHttpException
+import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
 import com.dundueni.app.feature.analysis.completedTextAnalysisId
 import com.dundueni.app.feature.analysis.toTextResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
+import com.dundueni.app.data.repository.AnalysisFailedException
+import java.io.IOException
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskEvidence
@@ -29,6 +34,7 @@ import kotlinx.coroutines.withContext
 
 sealed interface TextInspectionUiState {
     data object Idle : TextInspectionUiState
+    data object InvalidInput : TextInspectionUiState
     data object Loading : TextInspectionUiState
     data class Success(val resultJson: String) : TextInspectionUiState
     data class Pending(val analysisId: String) : TextInspectionUiState
@@ -61,15 +67,24 @@ class TextInspectionViewModel @JvmOverloads constructor(
     @MainThread
     fun updateInputText(text: String) {
         if (mutableUiState.value != TextInspectionUiState.Loading &&
-            mutableUiState.value !is TextInspectionUiState.Pending) savedStateHandle[INPUT_TEXT_KEY] = text
+            mutableUiState.value !is TextInspectionUiState.Pending) {
+            savedStateHandle[INPUT_TEXT_KEY] = text
+            if (mutableUiState.value == TextInspectionUiState.InvalidInput)
+                mutableUiState.value = TextInspectionUiState.Idle
+        }
     }
 
     @MainThread
     fun inspect(text: String) {
-        if (text.isBlank() || requestJob?.isActive == true ||
+        if (requestJob?.isActive == true ||
             mutableUiState.value is TextInspectionUiState.Pending) return
-        submittedText = text
-        startInspection(text)
+        val normalized = text.trim()
+        if (normalized.codePointCount(0, normalized.length) !in 5..3_000) {
+            mutableUiState.value = TextInspectionUiState.InvalidInput
+            return
+        }
+        submittedText = normalized
+        startInspection(normalized)
     }
 
     @MainThread
@@ -132,7 +147,8 @@ class TextInspectionViewModel @JvmOverloads constructor(
             } catch (cancelled: CancellationException) {
                 mutableUiState.value = TextInspectionUiState.Idle
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                logInspectionFailure(error)
                 mutableUiState.value = TextInspectionUiState.Error
             }
         }
@@ -170,7 +186,8 @@ class TextInspectionViewModel @JvmOverloads constructor(
             } catch (cancelled: CancellationException) {
                 mutableUiState.value = TextInspectionUiState.Idle
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                logInspectionFailure(error)
                 mutableUiState.value = TextInspectionUiState.Error
             }
         }
@@ -192,7 +209,24 @@ class TextInspectionViewModel @JvmOverloads constructor(
         targetLabel = "입력한 텍스트 내용",
     )
 
+    private fun logInspectionFailure(error: Exception) {
+        val causes = generateSequence(error as Throwable?) { it.cause }.toList()
+        val httpError = causes.filterIsInstance<AnalysisHttpException>().firstOrNull()
+        val protocolError = causes.filterIsInstance<AnalysisProtocolException>().firstOrNull()
+        val analysisError = causes.filterIsInstance<AnalysisFailedException>().firstOrNull()
+        val ioError = causes.filterIsInstance<IOException>().firstOrNull()
+        val detail = when {
+            httpError != null -> "HTTP ${httpError.httpStatus}, code=${httpError.code ?: "unknown"}"
+            protocolError != null -> "API protocol error, status=${protocolError.serverStatus ?: "unknown"}"
+            analysisError != null -> "Analysis status=FAILED, code=${analysisError.errorCode ?: "unknown"}"
+            ioError != null -> "I/O or network error (${ioError.javaClass.simpleName})"
+            else -> "Unexpected error (${error.javaClass.simpleName})"
+        }
+        Log.e(TAG, "Text inspection failed: $detail", error)
+    }
+
     private companion object {
+        const val TAG = "TextInspection"
         const val INPUT_TEXT_KEY = "inputText"
     }
 }

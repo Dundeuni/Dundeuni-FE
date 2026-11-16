@@ -73,7 +73,8 @@
             android:name=".feature.analysis.AnalysisActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:taskAffinity="" />
+            android:taskAffinity=""
+            android:theme="@style/Theme.DundueniFE.PhotoPickerHost" />
 
         <activity
             android:name=".feature.photopicker.PhotoPickerActivity"

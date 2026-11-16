@@ -1,5 +1,7 @@
 package com.dundueni.app.feature.history
 
+import com.dundueni.app.BuildConfig
+import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -22,6 +24,8 @@ fun HistoryRoute(
 ) {
     val context = LocalContext.current
     val store = remember(context) { HistoryStore(context) }
+    val real = BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true)
+    val remote = remember(context, real) { if (real) runCatching { AnalysisFlowDependencies.createHistoryRepository(context) }.getOrNull() else null }
     val scope = rememberCoroutineScope()
     var records by remember { mutableStateOf<List<HistoryRecord>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -37,16 +41,41 @@ fun HistoryRoute(
     }
     LaunchedEffect(revision) {
         loading = true
-        val loaded = withContext(Dispatchers.IO) { runCatching { store.read() } }
+        val loaded = withContext(Dispatchers.IO) { runCatching {
+            if (real) checkNotNull(remote).list().map { it.toHistoryRecord() }
+            else store.read()
+        } }
         loaded.onSuccess { records = it; error = null }
             .onFailure { error = "기록을 불러오지 못했어요. 다시 시도해주세요." }
         loading = false
+    }
+    LaunchedEffect(initialRecordId, revision, loading) {
+        if (real && !loading && initialRecordId != null) {
+            withContext(Dispatchers.IO) { runCatching { checkNotNull(remote).detail(initialRecordId).toHistoryRecord().let { record ->
+                if (record.type == HistoryType.IMAGE && record.status == "COMPLETED")
+                    runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findResult(initialRecordId)) }.getOrDefault(record)
+                else record
+            } } }
+                .onSuccess { detail -> records = listOf(detail) + records.filterNot { it.id == detail.id } }
+                .onFailure { error = "기록 상세를 불러오지 못했어요. 다시 시도해주세요." }
+        }
     }
     HistoryScreen(
         initialRecordId = initialRecordId, onCloseDetail = if (initialRecordId != null) onHome else null,
         onNavigationSelected = onNavigationSelected,
         records = records, loading = loading, error = error, onHome = onHome,
         onRetry = { revision++ }, onDelete = { pendingDelete = it }, onClear = { pendingDelete = "*" },
+        allowDelete = !real, onSelect = { id ->
+            if (real) scope.launch {
+                val detail = withContext(Dispatchers.IO) { runCatching { checkNotNull(remote).detail(id).toHistoryRecord().let { record ->
+                    if (record.type == HistoryType.IMAGE && record.status == "COMPLETED")
+                        runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findResult(id)) }.getOrDefault(record)
+                    else record
+                } } }
+                detail.onSuccess { record -> records = records.map { if (it.id == id) record else it }; error = null }
+                    .onFailure { error = "기록 상세를 불러오지 못했어요. 다시 시도해주세요." }
+            }
+        },
     )
     pendingDelete?.let { target ->
         AlertDialog(

@@ -39,6 +39,9 @@ class AnalysisRepositoryTest {
             }
         }
         val query = object : com.dundueni.app.data.remote.api.AnalysisQueryApiService {
+            override suspend fun getSummary(analysisId: String) =
+                Response.error<com.dundueni.app.data.remote.dto.AnalysisSummaryResponseDto>(
+                    404, "".toResponseBody())
             override suspend fun getAnalysis(analysisId: String) = Response.success(
                 com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto(true, "ANALYSIS200", result =
                     com.dundueni.app.data.remote.dto.AnalysisDetailDto(

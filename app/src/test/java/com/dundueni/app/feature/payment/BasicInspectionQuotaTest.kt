@@ -43,6 +43,15 @@ class BasicInspectionQuotaTest {
         assertEquals(4, firstInstance.remaining())
     }
 
+    @Test fun debugManualResetRestoresAllUses() {
+        val quota = BasicInspectionQuota(context)
+        assertTrue(quota.recordCompleted("result-1"))
+        assertEquals(4, quota.remaining())
+
+        assertTrue(quota.resetForDebug())
+        assertEquals(5, BasicInspectionQuota(context).remaining())
+    }
+
     @Test fun concurrentCompletionsCannotExceedFiveUses() {
         val appContext = context
         val pool = Executors.newFixedThreadPool(8)

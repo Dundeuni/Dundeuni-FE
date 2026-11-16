@@ -39,6 +39,7 @@ fun TextInputScreen(
     onInspect: (String) -> Unit,
     onClose: () -> Unit,
     isInspecting: Boolean = false,
+    showLengthError: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -122,12 +123,20 @@ fun TextInputScreen(
             ),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    if (textInput.isNotBlank() && !isInspecting) {
+                    if (!isInspecting) {
                         onInspect(textInput)
                     }
                 }
             )
         )
+
+        if (showLengthError) {
+            Text(
+                text = "텍스트는 앞뒤 공백을 제외하고 5~3,000자로 입력해 주세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
 
         // 하단 액션 버튼들
         Row(
@@ -149,7 +158,7 @@ fun TextInputScreen(
             DundueniButton(
                 text = if (isInspecting) "검사 중..." else "검사하기",
                 onClick = { onInspect(textInput) },
-                enabled = textInput.isNotBlank() && !isInspecting,
+                enabled = !isInspecting,
                 modifier = Modifier.weight(if (textInput.isNotEmpty()) 1f else 2f)
             )
         }

@@ -43,6 +43,26 @@ class ImageUploadPreprocessorTest {
         assertDimensions(result, bitmap.width, bitmap.height)
     }
 
+    @Test fun captureBelowMinimumResolutionIsRejectedBeforeEncoding() {
+        val bitmap = Bitmap.createBitmap(31, 32, Bitmap.Config.ARGB_8888)
+        try {
+            assertThrows(ImageResolutionException::class.java) {
+                processor().prepare(PreprocessedImage.ScreenCapture(bitmap))
+            }
+            assertTrue(calls.isEmpty())
+        } finally { bitmap.recycle() }
+    }
+
+    @Test fun resolutionPixelLimitIncludesBoundary() {
+        ImageUploadPreprocessor.validateResolution(4_000, 4_000)
+        assertThrows(ImageResolutionException::class.java) {
+            ImageUploadPreprocessor.validateResolution(4_000, 4_001)
+        }
+        assertThrows(ImageResolutionException::class.java) {
+            ImageUploadPreprocessor.validateResolution(8_193, 32)
+        }
+    }
+
     @Test fun oversizedCapturePngUsesJpeg90() = withBitmap { bitmap ->
         val result = processor(setOf(Bitmap.CompressFormat.PNG to 100))
             .prepare(PreprocessedImage.ScreenCapture(bitmap))
@@ -203,7 +223,7 @@ class ImageUploadPreprocessorTest {
 
     private fun photo(file: File) = PreprocessedImage.PhotoPicker(Uri.fromFile(file), null, "photo.dat", 1L)
     private fun withBitmap(block: (Bitmap) -> Unit) {
-        val bitmap = Bitmap.createBitmap(3, 2, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(32, 40, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.RED)
         try { block(bitmap) } finally { bitmap.recycle() }
     }

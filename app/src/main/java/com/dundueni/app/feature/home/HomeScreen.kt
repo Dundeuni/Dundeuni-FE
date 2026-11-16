@@ -38,10 +38,12 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,6 +69,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dundueni.app.R
+import com.dundueni.app.BuildConfig
+import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.Instant
 import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
@@ -100,7 +107,6 @@ fun HomeScreen(
     onScreenScan: () -> Unit,
     onImageScan: () -> Unit,
     onTextScan: () -> Unit,
-    onUrlScan: () -> Unit,
     onPhoneScan: () -> Unit,
     onNotifications: () -> Unit,
     onMembership: () -> Unit,
@@ -111,12 +117,31 @@ fun HomeScreen(
     val context = LocalContext.current
     val easy = LocalEasyMode.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var recentRecords by remember(context) { mutableStateOf(loadRecentRecords(context)) }
+    val realHistory = BuildConfig.ANALYSIS_API_MODE.equals("REAL", ignoreCase = true)
+    var recentRecords by remember(context) { mutableStateOf(if (realHistory) emptyList() else loadRecentRecords(context)) }
+    var recentRevision by remember { mutableIntStateOf(0) }
+    LaunchedEffect(realHistory, recentRevision) {
+        if (realHistory) {
+            val fetched = withContext(Dispatchers.IO) { runCatching {
+                AnalysisFlowDependencies.createHistoryRepository(context).list(2).mapNotNull { item ->
+                    val id = item.id ?: return@mapNotNull null
+                    val savedAt = item.createdAt?.let { Instant.parse(it).toEpochMilli() } ?: return@mapNotNull null
+                    HomeRecentRecord(id, if (item.type == "PHONE" && item.status == "COMPLETED")
+                        item.phoneResult?.riskLevel ?: "UNKNOWN" else "UNKNOWN", savedAt, null, item.status)
+                }
+            } }
+            fetched.onSuccess { recentRecords = it }.onFailure { recentRecords = emptyList() }
+        }
+    }
     var remainingInspections by remember(context) { mutableStateOf(BasicInspectionQuota(context).remaining()) }
+    val quotaResetRevision by BasicInspectionQuota.resetRevision.collectAsState()
+    LaunchedEffect(quotaResetRevision) {
+        remainingInspections = BasicInspectionQuota(context).remaining()
+    }
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                recentRecords = loadRecentRecords(context)
+                if (realHistory) recentRevision++ else recentRecords = loadRecentRecords(context)
                 remainingInspections = BasicInspectionQuota(context).remaining()
             }
         }
@@ -131,10 +156,15 @@ fun HomeScreen(
         Column(
             modifier = Modifier.fillMaxSize().padding(contentPadding),
         ) {
-            HomeHeader(easy) {
-                context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
-                    .edit().putBoolean(FloatingButtonPreferences.KEY_EASY_MODE, !easy).apply()
-            }
+            HomeHeader(
+                easy = easy,
+                onToggleMode = {
+                    context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+                        .edit().putBoolean(FloatingButtonPreferences.KEY_EASY_MODE, !easy).apply()
+                },
+                onNotifications = onNotifications,
+                onSettings = { onNavigationSelected(HomeDestination.SETTINGS) },
+            )
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                     .padding(horizontal = 22.dp).padding(top = 14.dp, bottom = 22.dp),
@@ -142,27 +172,22 @@ fun HomeScreen(
                 if (easy) {
                     EasyHomeContent(
                         floatingButtonEnabled, onFloatingButtonChange,
-                        onScreenScan, onUrlScan, onImageScan, onTextScan, onPhoneScan,
+                        onScreenScan, onImageScan, onTextScan, onPhoneScan,
                         onViewAllHistory, recentRecords, onRecentHistory,
                         remainingInspections, onMembership, { onNavigationSelected(HomeDestination.CONSULTATION) },
                     )
                 } else {
                 FloatingHeroCard(floatingButtonEnabled, onFloatingButtonChange)
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(24.dp))
                 SectionTitle("빠른 검사")
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     QuickScanCard("screen", "AI 화면\n검사", Modifier.weight(1f), onScreenScan)
                     QuickScanCard("image", "이미지\n검사", Modifier.weight(1f), onImageScan)
-                    QuickScanCard("text", "텍스트\n검사", Modifier.weight(1f), onTextScan)
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuickScanCard("link", "링크(URL)\n검사", Modifier.weight(1f), onUrlScan)
+                    QuickScanCard("text", "문자\n검사", Modifier.weight(1f), onTextScan)
                     QuickScanCard("phone", "전화번호\n검사", Modifier.weight(1f), onPhoneScan)
-                    Spacer(Modifier.weight(1f))
                 }
-                Spacer(Modifier.height(25.dp))
+                Spacer(Modifier.height(24.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SectionTitle("최근 검사", Modifier.weight(1f))
                     Surface(onClick = onViewAllHistory, color = Color.Transparent) {
@@ -175,15 +200,18 @@ fun HomeScreen(
                 SectionTitle("남은 검사 횟수")
                 Spacer(Modifier.height(10.dp))
                 Surface(shape = RoundedCornerShape(16.dp), color = Color.White, shadowElevation = 1.dp) {
-                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("베이직", modifier = Modifier.weight(1f), color = HomeInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("$remainingInspections/${BasicInspectionQuota.LIMIT}회", color = HomeBlue, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("베이직", modifier = Modifier.weight(1f), color = HomeInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("$remainingInspections/${BasicInspectionQuota.LIMIT}회", color = HomeBlue, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth())
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth(), type = DundueniButtonType.SECONDARY)
-                Spacer(Modifier.height(24.dp))
                 SafetyTipCard()
+                Spacer(Modifier.height(18.dp))
                 }
             }
         }
@@ -193,9 +221,14 @@ fun HomeScreen(
 enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS }
 
 @Composable
-private fun HomeHeader(easy: Boolean, onToggleMode: () -> Unit) {
+private fun HomeHeader(
+    easy: Boolean,
+    onToggleMode: () -> Unit,
+    onNotifications: () -> Unit,
+    onSettings: () -> Unit,
+) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(66.dp).background(Color.White),
+        modifier = Modifier.fillMaxWidth().height(72.dp).background(Color.White),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -204,21 +237,23 @@ private fun HomeHeader(easy: Boolean, onToggleMode: () -> Unit) {
             modifier = Modifier.width(93.dp).height(56.dp),
             contentScale = ContentScale.Fit,
         )
+        TextButton(
+            onClick = onToggleMode,
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp).heightIn(min = 48.dp).semantics {
+                contentDescription = if (easy) "현재 쉬운 모드, 기본 모드로 전환" else "현재 기본 모드, 쉬운 모드로 전환"
+            },
+            contentPadding = PaddingValues(horizontal = 8.dp),
+        ) {
+            Text(if (easy) "기본 모드 ⇄" else "쉬운 모드 ⇄", color = HomeBlue,
+                fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
         Row(
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 22.dp),
-            horizontalArrangement = Arrangement.spacedBy(15.dp),
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(
-                onClick = onToggleMode,
-                modifier = Modifier.heightIn(min = 48.dp).semantics {
-                    contentDescription = if (easy) "현재 쉬운 모드, 기본 모드로 전환" else "현재 기본 모드, 쉬운 모드로 전환"
-                },
-                contentPadding = PaddingValues(horizontal = 12.dp),
-            ) {
-                Text(if (easy) "쉬운 모드 ⇄" else "기본 모드 ⇄", color = HomeBlue,
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+            HeaderAction("알림", "notification", onNotifications)
+            HeaderAction("설정", "settings", onSettings)
         }
     }
 }
@@ -229,7 +264,7 @@ private fun HeaderAction(label: String, icon: String, onClick: () -> Unit) {
         onClick = onClick,
         color = Color.Transparent,
         shape = CircleShape,
-        modifier = Modifier.size(DundueniDimens.MinTouchSize),
+        modifier = Modifier.size(DundueniDimens.MinTouchSize).semantics { contentDescription = label },
     ) {
         Box(contentAlignment = Alignment.Center) { HomeGlyph(icon, HomeInk, Modifier.size(25.dp)) }
     }
@@ -238,28 +273,28 @@ private fun HeaderAction(label: String, icon: String, onClick: () -> Unit) {
 @Composable
 private fun FloatingHeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().background(
-                androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.White, Color(0xFFF0F3FF))),
-            ).padding(horizontal = 25.dp, vertical = 18.dp),
+                androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color.White, Color(0xFFEAF0FF), Color.White)),
+            ).padding(horizontal = 22.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
                 painter = painterResource(R.drawable.dundeuni_mascot_wink),
                 contentDescription = "윙크하는 든든이 캐릭터",
-                modifier = Modifier.size(112.dp),
+                modifier = Modifier.size(118.dp),
                 contentScale = ContentScale.Fit,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 if (enabled) "든든이가 켜져 있어요" else "든든이가 꺼져 있어요",
-                color = HomeInk,
-                fontSize = 22.sp,
-                lineHeight = 28.sp,
+                color = HomeBlue,
+                fontSize = 23.sp,
+                lineHeight = 29.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
@@ -271,23 +306,25 @@ private fun FloatingHeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Uni
                 lineHeight = 20.sp,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(17.dp))
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFE7EBF8)).padding(horizontal = 14.dp, vertical = 10.dp),
+                    .background(Color.White).padding(horizontal = 13.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    if (enabled) "화면 위 플로팅 버튼 숨기기" else "화면 위 플로팅 버튼 띄우기",
-                    modifier = Modifier.weight(1f),
-                    color = HomeInk,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Box(Modifier.size(32.dp).clip(CircleShape).background(HomePaleBlue), contentAlignment = Alignment.Center) {
+                    HomeGlyph("protect", HomeInk, Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("화면 위 플로팅 버튼", color = HomeInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (enabled) "항상 화면 우측에 고정됨" else "필요할 때 다시 켤 수 있어요", color = HomeMuted, fontSize = 10.sp)
+                }
                 Switch(
                     checked = enabled,
                     onCheckedChange = onEnabledChange,
                     colors = SwitchDefaults.colors(checkedTrackColor = ProtectiveBlue),
+                    modifier = Modifier.semantics { contentDescription = if (enabled) "화면 위 플로팅 버튼 숨기기" else "화면 위 플로팅 버튼 띄우기" },
                 )
             }
         }
@@ -296,32 +333,32 @@ private fun FloatingHeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Uni
 
 @Composable
 private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier = modifier, color = HomeInk, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+    Text(text, modifier = modifier, color = HomeInk, fontSize = if (LocalEasyMode.current) 19.sp else 16.sp, fontWeight = FontWeight.Bold)
 }
 
 @Composable
 internal fun QuickScanCard(icon: String, label: String, modifier: Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(104.dp),
+        modifier = modifier.height(108.dp),
         shape = RoundedCornerShape(16.dp),
         color = Color.White,
         shadowElevation = 1.dp,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Box(
-                modifier = Modifier.size(52.dp).clip(CircleShape).background(HomePaleBlue),
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(HomePaleBlue),
                 contentAlignment = Alignment.Center,
             ) {
-                HomeGlyph(icon, HomeInk, Modifier.size(25.dp))
+                HomeGlyph(icon, HomeBlue, Modifier.size(22.dp))
             }
-            Spacer(Modifier.height(6.dp))
-            Text(label, color = HomeInk, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+            Text(label, color = HomeInk, fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
         }
     }
 }
 
-private data class HomeRecentRecord(val id: String, val risk: String, val savedAt: Long, val aiScore: Int?)
+private data class HomeRecentRecord(val id: String, val risk: String, val savedAt: Long, val aiScore: Int?, val status: String? = null)
 
 private fun loadRecentRecords(context: Context): List<HomeRecentRecord> = runCatching {
     val saved = context.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE)
@@ -343,7 +380,7 @@ private fun loadRecentRecords(context: Context): List<HomeRecentRecord> = runCat
 private fun RecentHistoryCard(records: List<HomeRecentRecord>, onRecord: (String) -> Unit) {
     Surface(shape = RoundedCornerShape(17.dp), color = Color.White, shadowElevation = 1.dp) {
         if (records.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().height(92.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().height(if (LocalEasyMode.current) 92.dp else 64.dp), contentAlignment = Alignment.Center) {
                 Text("아직 저장된 검사 기록이 없어요", color = HomeMuted, fontSize = if (LocalEasyMode.current) 18.sp else 13.sp)
             }
         } else {
@@ -363,7 +400,11 @@ private fun RecentHistoryRow(record: HomeRecentRecord, onRecord: (String) -> Uni
         "DANGER" -> "위험"
         "CAUTION" -> "주의"
         "SAFE" -> "안전"
-        else -> record.aiScore?.let { "AI 생성 $it%" } ?: "분석 완료"
+        else -> when (record.status) {
+            "QUEUED", "ANALYZING" -> "분석 중"
+            "FAILED" -> "분석 실패"
+            else -> record.aiScore?.let { "AI 생성 $it%" } ?: "판정 미확정"
+        }
     }
     val badgeColor = when (record.risk.uppercase()) {
         "DANGER" -> SoftDanger
@@ -422,10 +463,9 @@ fun HomeBottomNavigation(
         Triple(HomeDestination.SETTINGS, "settings", "쉬운설정"),
     ) else listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
-        Triple(HomeDestination.REPORT, "report", "리포트"),
-        Triple(HomeDestination.CONSULTATION, "chat", "맞춤 상담"),
-        Triple(HomeDestination.MY_SHELTER, "profile", "My 쉼터"),
-        Triple(HomeDestination.SETTINGS, "settings", "설정"),
+        Triple(HomeDestination.REPORT, "report", "검사 기록"),
+        Triple(HomeDestination.CONSULTATION, "chat", "가족 공유"),
+        Triple(HomeDestination.MY_SHELTER, "profile", "마이페이지"),
     )
     LaunchedEffect(easy, selectedDestination) {
         if (easy && items.none { it.first == selectedDestination }) {
@@ -597,7 +637,7 @@ private fun HomeGlyph(name: String, color: Color, modifier: Modifier = Modifier)
 @Composable
 private fun EasyHomeContent(
     enabled: Boolean, onEnabledChange: (Boolean) -> Unit,
-    onScreen: () -> Unit, onUrl: () -> Unit, onImage: () -> Unit,
+    onScreen: () -> Unit, onImage: () -> Unit,
     onText: () -> Unit, onPhone: () -> Unit, onHistory: () -> Unit,
     records: List<HomeRecentRecord>, onRecord: (String) -> Unit,
     remaining: Int, onMembership: () -> Unit, onEasyConsultation: () -> Unit,
@@ -631,15 +671,13 @@ private fun EasyHomeContent(
     Spacer(Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         EasyScanCard("screen", "화면 즉시 검사", "보고 있는 화면 분석", Modifier.weight(1f), onScreen)
-        EasyScanCard("link", "링크(주소) 검사", "문자 속 주소 확인", Modifier.weight(1f), onUrl)
+        EasyScanCard("image", "사진·이미지 검사", "받은 사진 확인", Modifier.weight(1f), onImage)
     }
     Spacer(Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        EasyScanCard("image", "사진·이미지 검사", "받은 사진 확인", Modifier.weight(1f), onImage)
         EasyScanCard("text", "문자·글 검사", "의심 문구 붙여넣기", Modifier.weight(1f), onText)
+        EasyScanCard("phone", "전화번호 검사", "모르는 전화번호 확인", Modifier.weight(1f), onPhone)
     }
-    Spacer(Modifier.height(12.dp))
-    EasyScanCard("phone", "전화번호 검사", "모르는 전화번호 확인", Modifier.fillMaxWidth(), onPhone)
     Spacer(Modifier.height(20.dp))
     Surface(color = HomePaleBlue, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -29,7 +29,6 @@ import com.dundueni.app.feature.floatingbutton.FloatingButtonPreferences
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.history.HistoryStore
 import com.dundueni.app.feature.home.HomeDestination
-import com.dundueni.app.feature.home.HomeBottomNavigation
 import com.dundueni.app.ui.theme.BrandInk
 import com.dundueni.app.ui.theme.PageBackground
 import com.dundueni.app.ui.theme.ProtectiveBlue
@@ -139,7 +138,6 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     val density = LocalDensity.current
     Scaffold(
         containerColor = Bg,
-        bottomBar = { HomeBottomNavigation(HomeDestination.SETTINGS, onNavigationSelected) },
     ) { padding ->
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * if (easy) 1.2f else 1f)) {
         Column(Modifier.fillMaxSize().padding(padding)) {

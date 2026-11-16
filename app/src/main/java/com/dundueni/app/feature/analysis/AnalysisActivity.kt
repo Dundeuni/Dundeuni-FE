@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import com.dundueni.app.feature.history.HistoryType
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -60,12 +61,14 @@ class AnalysisActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
             FloatingButtonManager.suspendForActivity(overlayOwner)
         }
+        android.util.Log.d("FloatingButtonService", "AnalysisActivity.onStart ${FloatingButtonService.debugState(this)}")
     }
 
     override fun onStop() {
         if (intent.getBooleanExtra(EXTRA_SUSPEND_FLOATING_BUTTON, false)) {
             FloatingButtonManager.resumeForActivity(overlayOwner)
         }
+        android.util.Log.d("FloatingButtonService", "AnalysisActivity.onStop ${FloatingButtonService.debugState(this)}")
         super.onStop()
     }
 
@@ -88,9 +91,12 @@ class AnalysisActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass == AnalysisViewModel::class.java)
                 @Suppress("UNCHECKED_CAST")
+                val results = AnalysisFlowDependencies.createRepository(applicationContext)
                 return AnalysisViewModel(
-                    AnalysisFlowDependencies.createRepository(applicationContext),
+                    results,
                     screenCropApi = { AnalysisFlowDependencies.createTextApiService(applicationContext) },
+                    photoSelectionProvider = if (BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true))
+                        ({ AnalysisFlowDependencies.createPhotoSelectionRepository(applicationContext, results) }) else null,
                 ) as T
             }
         })[AnalysisViewModel::class.java]
@@ -131,9 +137,10 @@ class AnalysisActivity : ComponentActivity() {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val visibility by lifecycle.currentStateFlow.collectAsState()
                 var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
-                val success = state is AnalysisUiState.Success || state is AnalysisUiState.ScreenSuccess
-                // Fake transport reuses its server analysis ID; each completed request uses its own local attempt ID.
-                val resultId = if (success) viewModel.attemptId else null
+                val isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true)
+                val resultId = if (state.toPresentedResult(isDemo,
+                        if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE) != null)
+                    viewModel.attemptId else null
                 LaunchedEffect(resultId, visibility) {
                     if (visibility != Lifecycle.State.RESUMED) return@LaunchedEffect
                     if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
@@ -146,9 +153,9 @@ class AnalysisActivity : ComponentActivity() {
                 }
                 Box(Modifier.safeDrawingPadding()) {
                     if (resultId == null || allowedResultId == resultId) {
-                        AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::finish, onHome = ::returnToHome,
+                        AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::closeAnalysis, onHome = ::returnToHome,
                             historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE,
-                            onRefresh = viewModel::refreshPending)
+                            onRefresh = viewModel::refreshPending, onChoosePhoto = viewModel::choosePhoto)
                     }
                 }
             }
@@ -161,11 +168,30 @@ class AnalysisActivity : ComponentActivity() {
         val file = captureFile
         val uri = intent.data
         // 최초 실행과 재시도 모두 입력 준비부터 시작해 준비 실패도 검사 상태에 포함한다.
-        viewModel.analyzePrepared(screenCrop = file != null &&
-            BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true)) {
+        val real = BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true)
+        if (real) viewModel.uploadPrepared(screenCrop = file != null) {
+            if (file != null) processor.prepareCaptureUpload(file)
+            else processor.preparePhotoUpload(ImageInput.PhotoPicker(requireNotNull(uri)))
+        } else viewModel.analyzePrepared {
             if (file != null) processor.prepareCaptureFile(file)
             else processor.prepare(ImageInput.PhotoPicker(requireNotNull(uri)))
         }
+    }
+
+    private fun closeAnalysis() {
+        lifecycleScope.launch {
+            try {
+                if (!viewModel.cancelUpload())
+                    Toast.makeText(this@AnalysisActivity, "이미지 업로드 취소를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
+            } finally {
+                finish()
+            }
+        }
+    }
+
+    @Deprecated("Uses the Activity back callback for upload cleanup")
+    override fun onBackPressed() {
+        closeAnalysis()
     }
 
     private fun redirectToLogin() {

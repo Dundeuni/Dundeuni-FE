@@ -48,7 +48,21 @@ class InspectionCompletionDeliveryTest {
         assertEquals(HistoryType.SCREEN, destination.historyType)
         assertEquals("image-id", destination.id)
         assertEquals(listOf(image.toPb05Result(false)?.summary, text.toTextResult().summary).joinToString("\n"), destination.summary)
-        assertEquals(image.toPb05Result(false)?.evidence.orEmpty() + text.toTextResult().evidence, destination.evidence)
+        assertEquals(image.toPb05Result(false)?.evidence.orEmpty().map { it.copy(title = "이미지 · ${it.title}") } +
+            text.toTextResult().evidence.map { it.copy(title = "화면 문자 · ${it.title}") }, destination.evidence)
+    }
+
+    @Test fun screenWithNoTextSummaryKeepsOnlyTheImageSummaryAndTextEvidence() {
+        val image = detail("image-id")
+        val text = detail("ocr-id", "TEXT").copy(summary = null,
+            textDecision = "phishing", textEvidence = listOf("문자에 수상한 링크가 있습니다."),
+            textLimitations = listOf("OCR 일부를 읽지 못했습니다."))
+        val state = AnalysisUiState.ScreenSuccess(image, ScreenCropAnalysis("ocr-id", "phishing", text), null, null)
+        val destination = checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN))
+        assertEquals("서버 요약 image-id", destination.summary)
+        assertEquals(listOf("이미지 · 분석 근거 1", "화면 문자 · 분석 근거 1"),
+            destination.evidence.map { it.title })
+        assertEquals(listOf("OCR 일부를 읽지 못했습니다."), destination.textLimitations)
     }
 
     @Test fun textOnlyCaptureUsesTheActualOcrResultAndLoadingHasNoDestination() {
@@ -57,7 +71,7 @@ class InspectionCompletionDeliveryTest {
         val destination = checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN))
         assertEquals("ocr-only-id", destination.id)
         assertEquals(HistoryType.SCREEN, destination.historyType)
-        assertEquals(text.toTextResult().evidence, destination.evidence)
+        assertEquals(text.toTextResult().evidence.map { it.copy(title = "화면 문자 · ${it.title}") }, destination.evidence)
         assertNull(AnalysisUiState.Loading.toPresentedResult(false, HistoryType.IMAGE))
         assertNull(AnalysisUiState.Error().toPresentedResult(false, HistoryType.IMAGE))
     }

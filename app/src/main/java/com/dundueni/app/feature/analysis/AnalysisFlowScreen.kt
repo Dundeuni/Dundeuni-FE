@@ -1,21 +1,44 @@
 package com.dundueni.app.feature.analysis
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.history.HistoryType
@@ -27,7 +50,13 @@ import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
+import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.CanvasSubLayer
 import com.dundueni.app.ui.theme.PageBackground
+import com.dundueni.app.ui.theme.ProtectiveBlue
+import com.dundueni.app.ui.theme.SecondaryInk
+import com.dundueni.app.ui.theme.SoftBlue
+import com.dundueni.app.ui.theme.SurfaceLight
 
 /**
  * 전달받은 검사 상태에 맞춰 준비·로딩·결과·실패 안내를 보여 주는 화면이다.
@@ -45,9 +74,39 @@ fun AnalysisFlowScreen(
     isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
     historyType: HistoryType = HistoryType.IMAGE,
     onRefresh: () -> Unit = {},
+    onChoosePhoto: (String) -> Unit = {},
 ) {
     // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
     var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
+    // The host window is translucent: render only the dialog over the screen that launched inspection.
+    when (state) {
+        AnalysisUiState.Idle -> return
+        AnalysisUiState.Loading -> {
+            if (!loadingPopupDismissed) InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+            return
+        }
+        is AnalysisUiState.Error -> {
+            val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
+            InspectionErrorDialog(
+                message = buildString {
+                    append(state.message)
+                    state.httpStatus?.let { append("\nHTTP 상태: $it") }
+                    if (canRetry) append(if (state.pendingAnalysisId != null)
+                        "\n다시 시도하면 같은 분석 ID로 결과를 조회합니다."
+                    else if (isDemo) "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다."
+                    else "\n다시 시도하면 이미지를 다시 업로드합니다.")
+                },
+                onRetry = {
+                    loadingPopupDismissed = false
+                    if (state.pendingAnalysisId != null) onRefresh() else onRetry()
+                },
+                onCancelInspection = onClose,
+                showRetry = canRetry,
+            )
+            return
+        }
+        else -> Unit
+    }
     val screen = state as? AnalysisUiState.ScreenSuccess
     val textPresented = screen?.text?.detail?.toTextResult()
     val presented = state.toPresentedResult(isDemo, historyType)
@@ -58,11 +117,15 @@ fun AnalysisFlowScreen(
             }
             AnalysisResultRoute(
                 presented, onReturn = onClose, onHome = onHome, isDemo = isDemo,
-                screenCropDecision = screen?.text?.let { "${it.label}\n위험 수준: ${textPresented?.riskLevel?.label}" },
+                screenCropDecision = screen?.text?.let { textPresented?.keyFinding ?: it.label },
                 imageAnalysisError = screen?.imageError?.message,
                 screenCropError = screen?.textError?.message,
             )
         }
+        return
+    }
+    if (state is AnalysisUiState.Selection) {
+        AnalysisSelectionScreen(state, onClose, onChoosePhoto, isDemo)
         return
     }
     Column(Modifier.fillMaxSize().background(PageBackground).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -72,6 +135,7 @@ fun AnalysisFlowScreen(
         when (state) {
             AnalysisUiState.Idle -> Text("검사 준비 중")
             AnalysisUiState.Loading -> Text("검사가 진행 중이에요. 완료되면 결과가 표시됩니다.")
+            is AnalysisUiState.Selection -> Unit
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
             is AnalysisUiState.ScreenSuccess -> Unit
             is AnalysisUiState.Pending -> Text("분석 요청이 접수되었으며 서버에서 처리 중입니다.")
@@ -85,42 +149,167 @@ fun AnalysisFlowScreen(
                 Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
         }
     }
-    when (state) {
-        AnalysisUiState.Loading -> if (!loadingPopupDismissed) {
-            InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+}
+
+@Composable
+private fun AnalysisSelectionScreen(
+    state: AnalysisUiState.Selection,
+    onClose: () -> Unit,
+    onChoosePhoto: (String) -> Unit,
+    isDemo: Boolean,
+) {
+    val upload = state.upload
+    val image = checkNotNull(upload.image)
+    val original = checkNotNull(upload.original)
+    var selected by rememberSaveable(upload.uploadId) { mutableStateOf<String?>(null) }
+    val selectedLabel = when (selected) {
+        null -> "아직 선택하지 않았어요"
+        original.elementId -> "전체 이미지"
+        else -> upload.elements.orEmpty().indexOfFirst { it.elementId == selected }
+            .takeIf { it >= 0 }?.let { "사진 후보 ${it + 1}" } ?: "사진 영역"
+    }
+
+    Scaffold(containerColor = PageBackground, bottomBar = {
+        Surface(color = SurfaceLight, border = BorderStroke(1.dp, Color(0xFFE9EEFB))) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("현재 선택", style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
+                    Spacer(Modifier.weight(1f))
+                    Text(selectedLabel, style = MaterialTheme.typography.titleMedium,
+                        color = if (selected == null) SecondaryInk else ProtectiveBlue)
+                }
+                if (selected != null) DundueniButton("선택한 대상 분석", { onChoosePhoto(checkNotNull(selected)) },
+                    Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
+                TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("닫기", style = MaterialTheme.typography.bodyLarge, color = SecondaryInk)
+                }
+            }
         }
-        is AnalysisUiState.Error -> {
-            val canRetry = state.kind != AnalysisErrorKind.CONFIGURATION
-            InspectionErrorDialog(
-                message = buildString {
-                    append(state.message)
-                    state.httpStatus?.let { append("\nHTTP 상태: $it") }
-                    if (canRetry) append(if (state.pendingAnalysisId != null)
-                        "\n다시 시도하면 같은 분석 ID로 결과를 조회합니다."
-                    else "\n다시 시도하면 같은 이미지로 분석을 새로 요청합니다.")
-                },
-                onRetry = {
-                    loadingPopupDismissed = false
-                    if (state.pendingAnalysisId != null) onRefresh() else onRetry()
-                },
-                onCancelInspection = onClose,
-                showRetry = canRetry,
-            )
+    }) { contentPadding ->
+        Column(Modifier.fillMaxSize().padding(contentPadding).verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("검사 대상 선택", style = MaterialTheme.typography.headlineSmall, color = BrandInk)
+                Text(if (upload.elements.isNullOrEmpty())
+                    "사진 영역을 찾지 못했어요. 전체 이미지를 분석할까요?"
+                else "전체 이미지 또는 표시된 사진 영역을 선택해 주세요.",
+                    style = MaterialTheme.typography.bodyLarge, color = SecondaryInk)
+                if (isDemo) Text("Mock 검사 — 실제 이미지 분석 결과가 아닙니다.")
+            }
+            Surface(color = SurfaceLight, shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("검사할 이미지", style = MaterialTheme.typography.titleMedium, color = BrandInk)
+                        Spacer(Modifier.weight(1f))
+                        if (!upload.elements.isNullOrEmpty()) {
+                            Surface(color = SoftBlue, shape = CircleShape) {
+                                Text("사진 후보 ${upload.elements.size}개", Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelLarge, color = ProtectiveBlue)
+                            }
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().aspectRatio(state.preview.width.toFloat() / state.preview.height)
+                        .border(1.dp, Color(0xFFD1D5DB))) {
+                        Image(state.preview.asImageBitmap(), contentDescription = "업로드한 이미지",
+                            modifier = Modifier.fillMaxSize())
+                        Canvas(Modifier.fillMaxSize().pointerInput(upload.uploadId, selected) {
+                            detectTapGestures { tap ->
+                                val x = tap.x * image.width / size.width
+                                val y = tap.y * image.height / size.height
+                                selected = upload.elements.orEmpty().lastOrNull { candidate ->
+                                    val box = candidate.bbox ?: return@lastOrNull false
+                                    x >= box.left && x <= box.left + box.width &&
+                                        y >= box.top && y <= box.top + box.height
+                                }?.elementId ?: original.elementId
+                            }
+                        }) {
+                            upload.elements.orEmpty().forEach { candidate ->
+                                val box = candidate.bbox ?: return@forEach
+                                val color = if (selected == candidate.elementId) Color(0xFF1463D6) else Color(0xFFFFC107)
+                                drawRect(color, Offset(box.left * size.width / image.width,
+                                    box.top * size.height / image.height),
+                                    Size(box.width * size.width / image.width,
+                                        box.height * size.height / image.height),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
+                            }
+                        }
+                    }
+                    Text("표시된 영역을 누르거나 아래에서 대상을 선택하세요.",
+                        style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
+                }
+            }
+            Surface(color = SurfaceLight, shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("분석할 대상", style = MaterialTheme.typography.titleMedium, color = BrandInk)
+                    SelectionOption("전체 이미지", "이미지 전체를 검사해요", "전체",
+                        selected == original.elementId) { selected = original.elementId }
+                    upload.elements.orEmpty().forEachIndexed { index, candidate ->
+                        SelectionOption("사진 후보 ${index + 1}", "표시된 사진 영역을 검사해요", "${index + 1}",
+                            selected == candidate.elementId) { selected = candidate.elementId }
+                    }
+                }
+            }
+            Surface(color = SoftBlue, shape = MaterialTheme.shapes.medium) {
+                Text("업로드는 10분 후 만료됩니다. 만료되면 이미지를 다시 업로드해 주세요.",
+                    Modifier.fillMaxWidth().padding(14.dp), style = MaterialTheme.typography.bodyMedium,
+                    color = SecondaryInk)
+            }
         }
-        else -> Unit
+    }
+}
+
+@Composable
+private fun SelectionOption(
+    title: String,
+    description: String,
+    badge: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+        color = if (selected) SoftBlue else PageBackground,
+        border = BorderStroke(1.dp, if (selected) ProtectiveBlue else CanvasSubLayer)) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).background(if (selected) ProtectiveBlue else CanvasSubLayer, CircleShape),
+                contentAlignment = Alignment.Center) {
+                Text(badge, style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) SurfaceLight else BrandInk)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = BrandInk)
+                Text(description, style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
+            }
+            Box(Modifier.size(24.dp).border(1.dp,
+                if (selected) ProtectiveBlue else Color(0xFFD1D5DB), CircleShape)
+                .background(if (selected) ProtectiveBlue else SurfaceLight, CircleShape),
+                contentAlignment = Alignment.Center) {
+                if (selected) Text("✓", style = MaterialTheme.typography.labelLarge, color = SurfaceLight)
+            }
+        }
     }
 }
 
 @Composable
 fun AnalysisResultContent(result: AnalysisResult) {
-    Text("최종 위험 판정 미확정")
-    Text("AI 생성·변조 정보만 제공되어 사기 위험의 안전·주의·위험 판정은 표시하지 않습니다.")
-    val score = result.aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 }
-    Text("AI 생성·변조 점수: ${score?.let { "$it%" } ?: "정보 없음"}")
-    Text("서버 AI 위험 수준: ${result.aiRiskLevel?.takeIf { it.isNotBlank() } ?: "정보 없음"}")
-    Text("판단 근거")
+    if (result.type == "IMAGE") {
+        result.imageOverallDecisionLabel?.takeIf { it.isNotBlank() }?.let { Text(it) }
+        result.imageGenerationDecision?.let { Text("AI 생성 판정: $it") }
+        result.imageGenerationDisplayScore?.let { Text("AI 생성 표시 점수: $it/100") }
+        result.imageManipulationDecision?.let { Text("이미지 변조 판정: $it") }
+        result.imageManipulationDisplayScore?.let { Text("이미지 변조 표시 점수: $it/100") }
+    } else if (result.type == "TEXT") {
+        result.textDecision?.let { Text("텍스트 판정: $it") }
+        result.textEvidence.forEach { Text(it) }
+        result.textLimitations.forEach { Text("분석 주의사항: $it") }
+    }
     result.reasons.forEach { Text(it) }
-    if (result.reasons.isEmpty()) Text("근거 정보 없음")
     if (result.recommendedActions.isNotEmpty()) {
         Text("대응 행동")
         result.recommendedActions.forEach { Text(it) }
@@ -136,9 +325,18 @@ internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: His
     val screenPresented = (imagePresented ?: textPresented)?.let { primary ->
         primary.copy(
             historyType = HistoryType.SCREEN,
-            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary).joinToString("\n"),
-            evidence = imagePresented?.evidence.orEmpty() + textPresented?.evidence.orEmpty(),
+            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary)
+                .filter { it.isNotBlank() }.joinToString("\n"),
+            evidence = imagePresented?.evidence.orEmpty().map { it.copy(title = "이미지 · ${it.title}") } +
+                textPresented?.evidence.orEmpty().map { it.copy(title = "화면 문자 · ${it.title}") },
             guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
+            textDecision = textPresented?.textDecision,
+            textRiskScore = textPresented?.textRiskScore,
+            textSourceType = textPresented?.textSourceType,
+            textNeedsReview = textPresented?.textNeedsReview,
+            textReasonCodes = textPresented?.textReasonCodes,
+            textOcrUsed = textPresented?.textOcrUsed,
+            textLimitations = textPresented?.textLimitations.orEmpty(),
             targetLabel = "캡처 화면",
         )
     }
