@@ -11,6 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,11 +144,13 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
         CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * if (easy) 1.2f else 1f)) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             Row(Modifier.fillMaxWidth().height(58.dp).background(Color.White).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (easy) "쉬운설정" else "설정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(Modifier.weight(1f))
                 TextButton(onClick = { onNavigationSelected(HomeDestination.HOME) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = Blue, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text("홈 화면으로 돌아가기", color = Blue, fontSize = 14.sp)
                 }
+                Spacer(Modifier.weight(1f))
+                Text(if (easy) "쉬운설정" else "설정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                 SettingsSection("플로팅 버튼 설정") {
@@ -192,7 +196,15 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                                 }
                             }
                         }
-                        SettingToggle("촉각 햅틱 경고 진동", "버튼 조작과 주의·위험 검사 결과에 진동을 적용합니다", haptics) { haptics = it }
+                        Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("촉각 햅틱 경고 진동", Modifier.weight(1f), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Spacer(Modifier.width(12.dp))
+                                Switch(haptics, { haptics = it }, colors = SwitchDefaults.colors(checkedTrackColor = Blue))
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text("버튼 조작과 주의, 위험 검사 결과에\n진동을 적용합니다", color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                        }
                     }
                 }
                 SettingsSection("개인정보 및 데이터 보안") {
