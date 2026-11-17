@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                     onScreenScan = ::requestScreenScan,
                     onImageScan = ::openPhotoPicker,
                     onTextScan = { startActivity(Intent(this@MainActivity, TextInputActivity::class.java)) },
-                    onPhoneScan = { if (!showLimitIfExhausted(this@MainActivity)) startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
+                    onPhoneScan = { startActivity(Intent(this@MainActivity, PhoneInputActivity::class.java)) },
                     onNotifications = { showMessage("준비 중인 기능입니다") },
                     onMembership = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
                     onRecentHistory = { id -> startActivity(HistoryActivity.createIntent(this@MainActivity, id)) },

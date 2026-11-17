@@ -6,7 +6,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
 import com.dundueni.app.feature.floatingbutton.FloatingButtonService
-import com.dundueni.app.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -65,7 +64,7 @@ class TextInputActivity : ComponentActivity() {
                         if (!foreground && !viewModel.completionDelivery.claim(key)) return@collect
                         val destination = AnalysisResultActivity.createIntent(this@TextInputActivity,
                             success.resultJson,
-                            isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
+                            isDemo = false,
                             suspendFloatingButton = true)
                         if (foreground) {
                             FloatingButtonService.dismissInspectionCompleted(key)

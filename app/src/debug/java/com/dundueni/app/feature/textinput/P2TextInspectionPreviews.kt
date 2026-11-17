@@ -23,6 +23,14 @@ private fun TextInspectionPreview(loading: Boolean = false, errorMessage: String
     }
 }
 
+@Preview(name = "문자 검사 · 기본 입력", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+private fun TextInspectionInputPreview() {
+    DundueniFETheme {
+        TextInputScreen(textInput = "", onTextChange = {}, onInspect = {}, onClose = {})
+    }
+}
+
 @Preview(name = "P2 텍스트 검사 · 요청 중", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun TextInspectionLoadingPreview() = TextInspectionPreview(loading = true)

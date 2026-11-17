@@ -19,13 +19,6 @@ class AnalysisApiModeTest {
     )
 
     @Test
-    fun explicitFakeModeWorksWithoutAnyServerConfiguration() = runBlocking {
-        val result = AnalysisFlowDependencies.createRepository("FAKE").analyzeResult(image)
-        assertEquals("mock-analysis-id", result.analysisId)
-        assertEquals("MOCK_CAUTION", result.aiRiskLevel)
-    }
-
-    @Test
     fun realModeUsesRetrofitAndPreservesMultipartAndResponseFlow() = runBlocking {
         val server = MockWebServer()
         server.start()
@@ -110,13 +103,13 @@ class AnalysisApiModeTest {
     }
 
     @Test
-    fun invalidModeDoesNotSilentlySelectFake() {
+    fun invalidModeReportsRealRequirement() {
         val error = assertThrows(AnalysisApiConfigurationException::class.java) {
             runBlocking {
                 AnalysisFlowDependencies.createRepository("UNKNOWN", "https://example.com/").analyzeResult(image)
             }
         }
-        assertTrue(error.message!!.contains("FAKE or REAL"))
+        assertTrue(error.message!!.contains("Set it to REAL"))
     }
 
     @Test
