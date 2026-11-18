@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultRoute
@@ -71,7 +70,7 @@ fun AnalysisFlowScreen(
     onRetry: () -> Unit,
     onClose: () -> Unit,
     onHome: () -> Unit,
-    isDemo: Boolean = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true),
+    isDemo: Boolean = false,
     historyType: HistoryType = HistoryType.IMAGE,
     onRefresh: () -> Unit = {},
     onChoosePhoto: (String) -> Unit = {},

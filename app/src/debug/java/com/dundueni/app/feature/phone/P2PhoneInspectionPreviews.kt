@@ -19,6 +19,10 @@ private fun PhoneInspectionPreview(loading: Boolean = false, errorMessage: Strin
     }
 }
 
+@Preview(name = "전화번호 검사 · 기본 입력", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+private fun PhoneInspectionInputPreview() = PhoneInspectionPreview()
+
 // POST inspection and the subsequent detail GET both use PhoneInspectionUiState.Loading.
 @Preview(name = "P2 전화번호 검사 · 요청 및 상세 조회 중", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable

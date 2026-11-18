@@ -534,7 +534,6 @@ class FloatingButtonService : Service() {
                 }
             },
             onPhoneScanClick = {
-                if (showLimitIfExhausted(this)) { hideFloatingMenu(); return@create }
                 if (isMenuOpen) {
                     hideFloatingMenu()
                     startActivity(

@@ -18,7 +18,6 @@ val analysisApiBaseUrl = "https://suitable-overblown-umbrella.ngrok-free.dev/"
 // TODO(BE_CONTRACT): enable HTTP only after the draft contract and deployment URL are confirmed.
 val authApiMode = localApiConfig.getProperty("auth.api.mode", "UNCONNECTED").trim()
 val authApiBaseUrl = localApiConfig.getProperty("auth.api.baseUrl", "").trim()
-val analysisApiMockResults = false
 
 android {
     namespace = "com.dundueni.app"
@@ -37,7 +36,6 @@ android {
         buildConfigField("String", "AUTH_API_MODE", buildConfigString(authApiMode))
         buildConfigField("String", "AUTH_API_BASE_URL", buildConfigString(authApiBaseUrl))
         buildConfigField("String", "ANALYSIS_API_BASE_URL", buildConfigString(analysisApiBaseUrl))
-        buildConfigField("boolean", "ANALYSIS_API_MOCK_RESULTS", analysisApiMockResults.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

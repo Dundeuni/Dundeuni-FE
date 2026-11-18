@@ -5,7 +5,6 @@ import com.dundueni.app.data.auth.AuthSessionRuntime
 import com.dundueni.app.data.auth.AuthSessionStore
 import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.remote.api.AnalysisApiService
-import com.dundueni.app.data.remote.api.FakeAnalysisApiService
 import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.remote.api.PhoneAnalysisApiService
 import com.dundueni.app.data.repository.ServerHistoryRepository
@@ -22,7 +21,7 @@ import retrofit2.Response
 
 /** One API mode shared by the same Repository, Domain, and ViewModel pipeline. */
 object AnalysisFlowDependencies {
-    /** Uses local.properties values generated into BuildConfig; unset configuration defaults to Fake. */
+    /** Uses the current REAL BuildConfig settings. */
     fun createRepository(): AnalysisResultRepository =
         createRepository(BuildConfig.ANALYSIS_API_MODE, BuildConfig.ANALYSIS_API_BASE_URL)
 
@@ -67,12 +66,11 @@ object AnalysisFlowDependencies {
     ): AnalysisResultRepository {
         return try {
             when (mode.trim().uppercase()) {
-                FAKE_MODE -> AnalysisRepository(FakeAnalysisApiService(), demoMode = true)
                 REAL_MODE -> RetrofitClient(validateBaseUrl(baseUrl), sessionStore, onUnauthorized).let { client ->
                     AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)
                 }
                 else -> throw AnalysisApiConfigurationException(
-                    "Unknown analysis.api.mode '$mode'. Set it to FAKE or REAL in local.properties."
+                    "Unknown analysis.api.mode '$mode'. Set it to REAL in local.properties."
                 )
             }
         } catch (error: AnalysisApiConfigurationException) {
@@ -116,7 +114,6 @@ object AnalysisFlowDependencies {
     private fun String.toHttpUrlOrNullCompat(): HttpUrl? =
         runCatching { toHttpUrl() }.getOrNull()
 
-    private const val FAKE_MODE = "FAKE"
     private const val REAL_MODE = "REAL"
     private val SUPPORTED_SCHEMES = setOf("http", "https")
 }

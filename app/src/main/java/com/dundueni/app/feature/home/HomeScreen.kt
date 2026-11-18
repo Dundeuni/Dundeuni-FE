@@ -5,6 +5,7 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +26,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +78,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import com.dundueni.app.feature.payment.BasicInspectionQuota
+import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.ProtectiveBlue
 import com.dundueni.app.ui.theme.BrandInk
@@ -206,7 +210,17 @@ fun HomeScreen(
                             Text("$remainingInspections/${BasicInspectionQuota.LIMIT}회", color = HomeBlue, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(Modifier.height(14.dp))
-                        DundueniButton(text = "업그레이드", onClick = onMembership, modifier = Modifier.fillMaxWidth())
+                        Button(
+                            onClick = onMembership,
+                            modifier = Modifier.fillMaxWidth().height(DundueniDimens.ButtonHeight),
+                            shape = DundueniDefaultShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = HomeBlue,
+                                contentColor = MaterialTheme.colorScheme.onSecondary,
+                            ),
+                        ) {
+                            Text("업그레이드", style = MaterialTheme.typography.bodyLarge)
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -309,17 +323,14 @@ private fun FloatingHeroCard(enabled: Boolean, onEnabledChange: (Boolean) -> Uni
             Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                    .background(Color.White).padding(horizontal = 13.dp, vertical = 9.dp),
+                    .background(Color.White)
+                    .border(1.dp, HomeBorder, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 13.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(32.dp).clip(CircleShape).background(HomePaleBlue), contentAlignment = Alignment.Center) {
-                    HomeGlyph("protect", HomeInk, Modifier.size(18.dp))
-                }
-                Spacer(Modifier.width(9.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("화면 위 플로팅 버튼", color = HomeInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (enabled) "항상 화면 우측에 고정됨" else "필요할 때 다시 켤 수 있어요", color = HomeMuted, fontSize = 10.sp)
-                }
+                Text("화면 위 플로팅 버튼", modifier = Modifier.weight(1f),
+                    color = HomeInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(8.dp))
                 Switch(
                     checked = enabled,
                     onCheckedChange = onEnabledChange,

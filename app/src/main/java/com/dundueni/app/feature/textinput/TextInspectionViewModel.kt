@@ -6,7 +6,6 @@ import androidx.annotation.MainThread
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.dundueni.app.BuildConfig
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
@@ -16,13 +15,8 @@ import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import com.dundueni.app.data.repository.AnalysisFailedException
 import java.io.IOException
-import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.AnalysisResult
-import com.dundueni.app.feature.analysisresult.RiskEvidence
-import com.dundueni.app.feature.analysisresult.RiskLevel
-import com.dundueni.app.feature.history.HistoryType
 import com.google.gson.Gson
-import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 sealed interface TextInspectionUiState {
     data object Idle : TextInspectionUiState
@@ -45,7 +38,6 @@ sealed interface TextInspectionUiState {
 class TextInspectionViewModel @JvmOverloads constructor(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
-    private val apiMode: String = BuildConfig.ANALYSIS_API_MODE,
     private val textApi: () -> com.dundueni.app.data.remote.api.TextAnalysisApiService = {
         AnalysisFlowDependencies.createTextApiService(application)
     },
@@ -133,11 +125,7 @@ class TextInspectionViewModel @JvmOverloads constructor(
         mutableUiState.value = TextInspectionUiState.Loading
         requestJob = viewModelScope.launch {
             try {
-                val result = when (apiMode.trim().uppercase()) {
-                    "FAKE" -> withContext(Dispatchers.Default) { createMockResult(text) }
-                    "REAL" -> inspectWithApi(text)
-                    else -> error("Unknown analysis API mode")
-                }
+                val result = inspectWithApi(text)
                 val json = Gson().toJson(result)
                 resultPendingOpen = json
                 mutableUiState.value = TextInspectionUiState.Success(json)
@@ -192,22 +180,6 @@ class TextInspectionViewModel @JvmOverloads constructor(
             }
         }
     }
-
-    private fun createMockResult(text: String) = AnalysisResult(
-        historyType = HistoryType.TEXT,
-        id = "text-scan-${UUID.randomUUID()}",
-        riskLevel = RiskLevel.CAUTION,
-        summary = "입력하신 텍스트에 대한 분석 결과입니다 (Mock 데이터).",
-        keyFinding = "작성하신 내용에서 주의가 필요한 표현이 감지되었습니다.",
-        fraudScore = 50.0,
-        aiLikelihood = AiLikelihood.MEDIUM,
-        sourceText = text,
-        evidence = listOf(
-            RiskEvidence("입력 텍스트 점검 (Mock)", "사용자가 직접 입력한 텍스트 내용을 기반으로 사기 및 피싱 위험도를 가상 분석했습니다."),
-            RiskEvidence("주의 필요 표현", "금전 요구나 개인정보 요청 문구가 있는지 주의 깊게 확인하세요."),
-        ),
-        targetLabel = "입력한 텍스트 내용",
-    )
 
     private fun logInspectionFailure(error: Exception) {
         val causes = generateSequence(error as Throwable?) { it.cause }.toList()

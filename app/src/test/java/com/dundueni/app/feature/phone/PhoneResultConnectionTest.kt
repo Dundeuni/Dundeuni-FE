@@ -10,6 +10,7 @@ import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.dundueni.app.feature.analysisresult.AnalysisResultJsonAdapter
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.history.HistoryType
+import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.*
@@ -41,28 +42,34 @@ class PhoneResultConnectionTest {
         assertNull(decoded.aiScore)
     }
 
-    @Test fun realSuccessOpensExistingPb05ActivityOnceAndConsumesSuccess() {
+    @Test fun realSuccessOpensResultWithoutConsumingQuotaAtFiveOrZero() {
         val context = RuntimeEnvironment.getApplication()
-        context.getSharedPreferences("basic_inspection_quota", Context.MODE_PRIVATE).edit().clear().commit()
-        ActivityScenario.launch<PhoneInputActivity>(Intent(context, PhoneInputActivity::class.java)).use { scenario ->
-            scenario.onActivity { activity ->
-                val vm = ViewModelProvider(activity)[PhoneInspectionViewModel::class.java]
-                val field = PhoneInspectionViewModel::class.java.getDeclaredField("mutableUiState").apply { isAccessible = true }
-                @Suppress("UNCHECKED_CAST")
-                val state = field.get(vm) as MutableStateFlow<PhoneInspectionUiState>
-                state.value = PhoneInspectionUiState.Success(response)
+        for (used in listOf(0, BasicInspectionQuota.LIMIT)) {
+            context.getSharedPreferences("basic_inspection_quota", Context.MODE_PRIVATE).edit().clear().commit()
+            val quota = BasicInspectionQuota(context)
+            repeat(used) { assertTrue(quota.recordCompleted("image-$it")) }
+            val remainingBefore = quota.remaining()
+            ActivityScenario.launch<PhoneInputActivity>(Intent(context, PhoneInputActivity::class.java)).use { scenario ->
+                scenario.onActivity { activity ->
+                    val vm = ViewModelProvider(activity)[PhoneInspectionViewModel::class.java]
+                    val field = PhoneInspectionViewModel::class.java.getDeclaredField("mutableUiState").apply { isAccessible = true }
+                    @Suppress("UNCHECKED_CAST")
+                    val state = field.get(vm) as MutableStateFlow<PhoneInspectionUiState>
+                    state.value = PhoneInspectionUiState.Success(response)
+                }
+                compose.waitForIdle()
+                scenario.onActivity { activity ->
+                    val intent = shadowOf(activity).nextStartedActivity
+                    assertEquals(AnalysisResultActivity::class.java.name, intent.component!!.className)
+                    assertFalse(intent.getBooleanExtra(AnalysisResultActivity.EXTRA_IS_DEMO, true))
+                    val result = AnalysisResultJsonAdapter.decode(intent.getStringExtra(AnalysisResultActivity.EXTRA_RESULT_JSON)!!)
+                    assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
+                    assertEquals(HistoryType.PHONE, result.historyType)
+                    assertEquals(PhoneInspectionUiState.Idle, ViewModelProvider(activity)[PhoneInspectionViewModel::class.java].uiState.value)
+                    assertNull(shadowOf(activity).nextStartedActivity)
+                }
             }
-            compose.waitForIdle()
-            scenario.onActivity { activity ->
-                val intent = shadowOf(activity).nextStartedActivity
-                assertEquals(AnalysisResultActivity::class.java.name, intent.component!!.className)
-                assertFalse(intent.getBooleanExtra(AnalysisResultActivity.EXTRA_IS_DEMO, true))
-                val result = AnalysisResultJsonAdapter.decode(intent.getStringExtra(AnalysisResultActivity.EXTRA_RESULT_JSON)!!)
-                assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
-                assertEquals(HistoryType.PHONE, result.historyType)
-                assertEquals(PhoneInspectionUiState.Idle, ViewModelProvider(activity)[PhoneInspectionViewModel::class.java].uiState.value)
-                assertNull(shadowOf(activity).nextStartedActivity)
-            }
+            assertEquals(remainingBefore, quota.remaining())
         }
     }
 

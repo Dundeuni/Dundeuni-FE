@@ -25,7 +25,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.data.auth.AuthSessionRuntime
-import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.data.model.ImageInput
@@ -95,8 +94,7 @@ class AnalysisActivity : ComponentActivity() {
                 return AnalysisViewModel(
                     results,
                     screenCropApi = { AnalysisFlowDependencies.createTextApiService(applicationContext) },
-                    photoSelectionProvider = if (BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true))
-                        ({ AnalysisFlowDependencies.createPhotoSelectionRepository(applicationContext, results) }) else null,
+                    photoSelectionProvider = { AnalysisFlowDependencies.createPhotoSelectionRepository(applicationContext, results) },
                 ) as T
             }
         })[AnalysisViewModel::class.java]
@@ -109,8 +107,7 @@ class AnalysisActivity : ComponentActivity() {
         lifecycleScope.launch {
             combine(viewModel.uiState, lifecycle.currentStateFlow) { state, visibility -> state to visibility }
                 .collect { (state, visibility) ->
-                    val isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true)
-                    val result = state.toPresentedResult(isDemo,
+                    val result = state.toPresentedResult(false,
                         if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE) ?: return@collect
                     val key = "image:${viewModel.attemptId}"
                     if (visibility == Lifecycle.State.RESUMED) {
@@ -121,7 +118,7 @@ class AnalysisActivity : ComponentActivity() {
                         if (!BasicInspectionQuota(this@AnalysisActivity).recordCompleted(viewModel.attemptId)) return@collect
                         val screen = state as? AnalysisUiState.ScreenSuccess
                         val destination = AnalysisResultActivity.createIntent(this@AnalysisActivity,
-                            Gson().toJson(result), isDemo, suspendFloatingButton = true)
+                            Gson().toJson(result), false, suspendFloatingButton = true)
                             .putExtra(AnalysisResultActivity.EXTRA_SCREEN_CROP_DECISION,
                                 screen?.text?.let { "${it.label}\n위험 수준: ${it.detail.toTextResult().riskLevel.label}" })
                             .putExtra(AnalysisResultActivity.EXTRA_IMAGE_ERROR, screen?.imageError?.message)
@@ -137,8 +134,7 @@ class AnalysisActivity : ComponentActivity() {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val visibility by lifecycle.currentStateFlow.collectAsState()
                 var allowedResultId by rememberSaveable { mutableStateOf<String?>(null) }
-                val isDemo = BuildConfig.ANALYSIS_API_MODE.trim().equals("FAKE", ignoreCase = true)
-                val resultId = if (state.toPresentedResult(isDemo,
+                val resultId = if (state.toPresentedResult(false,
                         if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE) != null)
                     viewModel.attemptId else null
                 LaunchedEffect(resultId, visibility) {
@@ -168,13 +164,9 @@ class AnalysisActivity : ComponentActivity() {
         val file = captureFile
         val uri = intent.data
         // 최초 실행과 재시도 모두 입력 준비부터 시작해 준비 실패도 검사 상태에 포함한다.
-        val real = BuildConfig.ANALYSIS_API_MODE.trim().equals("REAL", ignoreCase = true)
-        if (real) viewModel.uploadPrepared(screenCrop = file != null) {
+        viewModel.uploadPrepared(screenCrop = file != null) {
             if (file != null) processor.prepareCaptureUpload(file)
             else processor.preparePhotoUpload(ImageInput.PhotoPicker(requireNotNull(uri)))
-        } else viewModel.analyzePrepared {
-            if (file != null) processor.prepareCaptureFile(file)
-            else processor.prepare(ImageInput.PhotoPicker(requireNotNull(uri)))
         }
     }
 

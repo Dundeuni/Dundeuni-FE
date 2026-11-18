@@ -25,7 +25,6 @@ import retrofit2.Response
 class AnalysisRepository(
     private val apiService: AnalysisApiService,
     private val queryApiService: AnalysisQueryApiService? = null,
-    private val demoMode: Boolean = false,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AnalysisResultRepository {
     private val summaryRequests = mutableMapOf<String, CompletableDeferred<String?>>()
@@ -74,12 +73,9 @@ class AnalysisRepository(
     override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult =
         when (val outcome = analyzeResponse(image)) {
             is AnalysisRequestOutcome.Completed -> {
-                if (demoMode) outcome.response.toDomain()
-                else {
-                    val id = outcome.response.result?.analysisId?.takeIf { it.isNotBlank() }
-                        ?: throw AnalysisProtocolException("Analysis ID is missing")
-                    findResultForDisplay(id)
-                }
+                val id = outcome.response.result?.analysisId?.takeIf { it.isNotBlank() }
+                    ?: throw AnalysisProtocolException("Analysis ID is missing")
+                findResultForDisplay(id)
             }
             is AnalysisRequestOutcome.Failed -> {
                 val result = outcome.response.result

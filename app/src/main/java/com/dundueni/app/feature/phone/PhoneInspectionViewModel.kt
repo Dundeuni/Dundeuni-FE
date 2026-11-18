@@ -105,10 +105,6 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
-    fun showInvalidMode() {
-        mutableUiState.value = PhoneInspectionUiState.Error("검사 API 모드 설정을 확인해 주세요.")
-    }
-
     fun dismiss() {
         if (mutableUiState.value != PhoneInspectionUiState.Loading) mutableUiState.value = PhoneInspectionUiState.Idle
     }
