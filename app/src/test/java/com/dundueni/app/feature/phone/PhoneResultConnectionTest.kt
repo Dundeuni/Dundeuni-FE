@@ -57,12 +57,18 @@ class PhoneResultConnectionTest {
                     val state = field.get(vm) as MutableStateFlow<PhoneInspectionUiState>
                     state.value = PhoneInspectionUiState.Success(response)
                 }
-                compose.waitForIdle()
+                compose.waitUntil(timeoutMillis = 5_000) {
+                    var started = false
+                    scenario.onActivity { started = shadowOf(it).peekNextStartedActivity() != null }
+                    started
+                }
                 scenario.onActivity { activity ->
                     val intent = shadowOf(activity).nextStartedActivity
                     assertEquals(AnalysisResultActivity::class.java.name, intent.component!!.className)
                     assertFalse(intent.getBooleanExtra(AnalysisResultActivity.EXTRA_IS_DEMO, true))
-                    val result = AnalysisResultJsonAdapter.decode(intent.getStringExtra(AnalysisResultActivity.EXTRA_RESULT_JSON)!!)
+                    assertFalse(intent.hasExtra(AnalysisResultActivity.EXTRA_RESULT_JSON))
+                    val json = requireNotNull(AnalysisResultActivity.readDelivery(activity, intent)?.resultJson)
+                    val result = AnalysisResultJsonAdapter.decode(json)
                     assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
                     assertEquals(HistoryType.PHONE, result.historyType)
                     assertEquals(PhoneInspectionUiState.Idle, ViewModelProvider(activity)[PhoneInspectionViewModel::class.java].uiState.value)

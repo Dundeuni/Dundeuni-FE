@@ -3,6 +3,9 @@ package com.dundueni.app.feature.textinput
 import android.os.Bundle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
 import com.dundueni.app.feature.floatingbutton.FloatingButtonService
@@ -62,17 +65,22 @@ class TextInputActivity : ComponentActivity() {
                         val key = "text:$id"
                         val foreground = visibility == Lifecycle.State.RESUMED
                         if (!foreground && !viewModel.completionDelivery.claim(key)) return@collect
-                        val destination = AnalysisResultActivity.createIntent(this@TextInputActivity,
-                            success.resultJson,
-                            isDemo = false,
-                            suspendFloatingButton = true)
-                        if (foreground) {
+                        val destination = withContext(Dispatchers.IO) {
+                            AnalysisResultActivity.createIntent(applicationContext, success.resultJson,
+                                isDemo = false, suspendFloatingButton = true)
+                        }
+                        val currentVisibility = lifecycle.currentState
+                        if (isFinishing || currentVisibility == Lifecycle.State.DESTROYED) return@collect
+                        if (currentVisibility == Lifecycle.State.RESUMED) {
                             FloatingButtonService.dismissInspectionCompleted(key)
                             startActivity(destination)
                             viewModel.onResultOpened()
                         } else {
+                            if (foreground && !viewModel.completionDelivery.claim(key)) return@collect
                             FloatingButtonService.showInspectionCompleted(key, destination, viewModel::onResultOpened)
                         }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (_: Exception) {
                         viewModel.onResultOpenFailure()
                     }

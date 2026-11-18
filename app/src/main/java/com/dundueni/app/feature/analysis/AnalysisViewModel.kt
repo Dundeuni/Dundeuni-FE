@@ -235,6 +235,7 @@ class AnalysisViewModel(
     }
 
     private fun Throwable.lookupId(): String? = when (this) {
+        is RestoredScreenError -> state.pendingAnalysisId
         is AnalysisLookupException -> analysisId
         is AnalysisNotCompletedException -> analysisId
         else -> null
@@ -242,6 +243,19 @@ class AnalysisViewModel(
 
     private fun screenHasLookup(): Boolean =
         screenImage?.exceptionOrNull()?.lookupId() != null || screenText?.exceptionOrNull()?.lookupId() != null
+
+    /** Continue a previously displayed partial result without restarting either analysis. */
+    @MainThread
+    internal fun restoreScreenResult(result: AnalysisUiState.ScreenSuccess) {
+        if (mutableUiState.value != AnalysisUiState.Idle) return
+        screenImage = result.image?.let { Result.success(it) }
+            ?: Result.failure(RestoredScreenError(result.imageError ?: AnalysisUiState.Error()))
+        screenText = result.text?.let { Result.success(it) }
+            ?: Result.failure(RestoredScreenError(result.textError ?: AnalysisUiState.Error()))
+        mutableUiState.value = result
+    }
+
+    private class RestoredScreenError(val state: AnalysisUiState.Error) : Exception()
 
     /** Recheck only unfinished IDs and keep an already successful side intact. */
     private fun refreshScreen() {
@@ -303,6 +317,7 @@ class AnalysisViewModel(
         }
 
     private fun Exception.toUiState(): AnalysisUiState = when (this) {
+        is RestoredScreenError -> state
         is AnalysisLookupException -> when (val state = (cause as Exception).toUiState()) {
             is AnalysisUiState.Error -> state.copy(pendingAnalysisId = analysisId)
             else -> state

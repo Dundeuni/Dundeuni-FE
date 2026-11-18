@@ -1,174 +1,227 @@
 package com.dundueni.app.data.repository
 
-import androidx.lifecycle.ViewModelStore
-import com.dundueni.app.data.remote.api.AnalysisApiService
-import com.dundueni.app.data.remote.api.AnalysisQueryApiService
+import com.dundueni.app.data.mapper.toDomain
+import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.data.remote.dto.AnalysisDetailDto
-import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
-import com.dundueni.app.data.remote.dto.AnalysisSummaryDto
-import com.dundueni.app.data.remote.dto.AnalysisSummaryResponseDto
-import com.dundueni.app.data.remote.dto.NormalizedAnalysisResultDto
+import com.dundueni.app.data.remote.dto.AnalysisImageModelsDto
+import com.dundueni.app.data.remote.dto.AnalysisModelResultDto
+import com.dundueni.app.data.remote.dto.AnalysisReasonDto
+import com.dundueni.app.data.remote.dto.TextAnalysisTextResultDto
 import com.dundueni.app.feature.analysis.AnalysisUiState
-import com.dundueni.app.feature.analysis.AnalysisViewModel
-import java.io.IOException
-import kotlinx.coroutines.Dispatchers
+import com.dundueni.app.feature.analysis.toPresentedResult
+import com.dundueni.app.feature.analysis.toScreenCropAnalysis
+import com.dundueni.app.feature.analysisresult.ImageSummaryViewModel
+import com.dundueni.app.feature.analysisresult.imageSummaryLookupId
+import com.dundueni.app.feature.history.HistoryType
+import java.util.UUID
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.ResponseBody
 import org.junit.Assert.*
 import org.junit.Test
-import retrofit2.Response
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnalysisSummaryPollingTest {
-    private val id = "9dca5a1c-9736-43b1-9b7c-fad6b9ce7e72"
+    private val analysisId = UUID.randomUUID().toString()
 
-    @Test fun pendingCompletesAfterTwoSecondsWithoutAnotherAnalysisRequest() = runTest {
-        val api = SummaryApi { if (it == 1) "PENDING" else "COMPLETED" }
-        val repository = repository(api)
-        val result = async { repository.findResult(id) }
+    @Test fun unregisteredThenPendingThenCompletedPublishesSummaryAndStops() = runTest {
+        val repository = SummaryRepository {
+            when (it) {
+                1, 2 -> ImageSummaryResult.Unavailable
+                3 -> ImageSummaryResult.Pending
+                else -> completed
+            }
+        }
+        val model = ImageSummaryViewModel.forResult(analysisId, repository)
+        val visible = launch { model.refreshWhileVisible() }
         runCurrent()
-        assertEquals(1, api.summaryCalls)
-        advanceTimeBy(1_999)
+        assertEquals(ImageSummaryResult.Unavailable, model.uiState.value.result)
+        assertFalse(model.uiState.value.showRetry)
+        advanceTimeBy(14_999)
         runCurrent()
-        assertEquals(1, api.summaryCalls)
+        assertEquals(3, repository.ids.size)
+        assertEquals(ImageSummaryResult.Pending, model.uiState.value.result)
         advanceTimeBy(1)
         runCurrent()
-        assertPreserved(result.await(), "Gemini 요약")
-        advanceUntilIdle()
-        assertEquals(2, api.summaryCalls)
-        assertEquals(1, api.detailCalls)
-        assertEquals(0, api.postCalls)
+        assertEquals(completed, model.uiState.value.result)
+        assertTrue(visible.isCompleted)
+        advanceTimeBy(60_000)
+        assertEquals(List(4) { analysisId }, repository.ids)
     }
 
-    @Test fun pendingThenFailedKeepsAnalysisAndStops() = runTest {
-        val api = SummaryApi { if (it == 1) "PENDING" else "FAILED" }
-        val result = async { repository(api).findResult(id) }
-        advanceUntilIdle()
-        assertPreserved(result.await(), null)
-        assertEquals(2, api.summaryCalls)
+    @Test fun unregisteredStopsAfterTwelveAndOffersManualLookup() = runTest {
+        assertExhaustionAndManualLookup(ImageSummaryResult.Unavailable)
     }
 
-    @Test fun pendingStopsAfterFiveRetries() = runTest {
-        val api = SummaryApi { "PENDING" }
-        val result = async { repository(api).findResult(id) }
-        advanceUntilIdle()
-        assertPreserved(result.await(), null)
-        assertEquals(6, api.summaryCalls)
-        assertEquals(10_000L, testScheduler.currentTime)
-        assertEquals(1, api.detailCalls)
-        assertEquals(0, api.postCalls)
+    @Test fun pendingStopsAfterTwelveAndOffersManualLookup() = runTest {
+        assertExhaustionAndManualLookup(ImageSummaryResult.Pending)
     }
 
-    @Test fun networkFailureDuringRetryKeepsAnalysisAndStops() = runTest {
-        val api = SummaryApi { if (it == 1) "PENDING" else throw IOException("offline") }
-        val result = async { repository(api).findResult(id) }
-        advanceUntilIdle()
-        assertPreserved(result.await(), null)
-        assertEquals(2, api.summaryCalls)
-    }
-
-    @Test fun concurrentSameIdSharesPollingAndCancellingWaiterKeepsOwnerAlive() = runTest {
-        val api = SummaryApi { if (it == 1) "PENDING" else "COMPLETED" }
-        val repository = repository(api)
-        val owner = async { repository.findResult(id) }
+    private suspend fun TestScope.assertExhaustionAndManualLookup(waiting: ImageSummaryResult) {
+        val repository = SummaryRepository {
+            when (it) {
+                13 -> { delay(1_000); ImageSummaryResult.Unavailable }
+                14 -> { delay(1_000); completed }
+                else -> waiting
+            }
+        }
+        val model = ImageSummaryViewModel.forResult(analysisId, repository)
+        val visible = launch { model.refreshWhileVisible() }
+        advanceTimeBy(55_000)
         runCurrent()
-        val waiter = async { repository.findResult(id) }
-        val otherWaiter = async { repository.findResult(id) }
+        assertEquals(12, repository.ids.size)
+        assertEquals(waiting, model.uiState.value.result)
+        assertTrue(model.uiState.value.showRetry)
+        assertFalse(model.uiState.value.checking)
+        advanceTimeBy(60_000)
+        assertEquals(12, repository.ids.size)
+
+        model.checkAgain()
+        model.checkAgain()
         runCurrent()
-        assertEquals(1, api.summaryCalls)
-        waiter.cancel()
-        advanceUntilIdle()
-        assertPreserved(owner.await(), "Gemini 요약")
-        assertEquals(owner.await(), otherWaiter.await())
-        assertEquals(2, api.summaryCalls)
-        assertEquals(0, api.postCalls)
-    }
-
-    @Test fun cancellationStopsPollingAndReleasesSameId() = runTest {
-        val api = SummaryApi { if (it == 1) "PENDING" else "COMPLETED" }
-        val repository = repository(api)
-        val request = async { repository.findResult(id) }
+        assertTrue(model.uiState.value.checking)
+        assertEquals(13, repository.ids.size)
+        advanceTimeBy(1_000)
         runCurrent()
-        request.cancel()
-        advanceUntilIdle()
-        assertTrue(request.isCancelled)
-        assertEquals(1, api.summaryCalls)
-        assertPreserved(repository.findResult(id), "Gemini 요약")
-        assertEquals(2, api.summaryCalls)
+        assertTrue(model.uiState.value.showRetry)
+        assertFalse(model.uiState.value.checking)
+        advanceTimeBy(60_000)
+        assertEquals(13, repository.ids.size)
+
+        model.checkAgain()
+        runCurrent()
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(completed, model.uiState.value.result)
+        assertFalse(model.uiState.value.showRetry)
+        assertTrue(visible.isCompleted)
+        assertEquals(14, repository.ids.size)
     }
 
-    @Test fun clearingViewModelCancelsPendingSummary() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val store = ViewModelStore()
-        try {
-            val api = SummaryApi { "PENDING" }
-            val repository = repository(api)
-            val vm = AnalysisViewModel(AnalysisResultRepository { repository.findResult(id) })
-            store.put("analysis", vm)
-            vm.analyze(MultipartBody.Part.createFormData("file", "image.png", byteArrayOf(1).toRequestBody()))
-            runCurrent()
-            assertEquals(1, api.summaryCalls)
-            store.clear()
-            advanceUntilIdle()
-            assertEquals(1, api.summaryCalls)
-            assertFalse(vm.uiState.value is AnalysisUiState.Error)
-            assertEquals(0, api.postCalls)
-        } finally {
-            store.clear()
-            Dispatchers.resetMain()
+    @Test fun leavingResultCancelsAnInFlightLookupAndResumeKeepsSpentAttempts() = runTest {
+        var cancelled = false
+        val repository = SummaryRepository {
+            if (it == 2) {
+                try {
+                    delay(60_000)
+                } finally {
+                    cancelled = true
+                }
+            }
+            if (it < 4) ImageSummaryResult.Unavailable else ImageSummaryResult.Pending
+        }
+        val model = ImageSummaryViewModel.forResult(analysisId, repository)
+        val firstVisit = launch { model.refreshWhileVisible() }
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(2, repository.ids.size)
+        firstVisit.cancel()
+        runCurrent()
+        assertTrue(cancelled)
+        advanceTimeBy(60_000)
+        assertEquals(2, repository.ids.size)
+        val reopened = ImageSummaryViewModel.forResult(analysisId, repository)
+        val resumed = launch { reopened.refreshWhileVisible() }
+        advanceTimeBy(50_000)
+        runCurrent()
+        assertEquals(12, repository.ids.size)
+        assertTrue(reopened.uiState.value.showRetry)
+        resumed.cancel()
+        runCurrent()
+        val afterExhaustion = ImageSummaryViewModel.forResult(analysisId, repository)
+        val reentered = launch { afterExhaustion.refreshWhileVisible() }
+        advanceTimeBy(60_000)
+        assertEquals(12, repository.ids.size)
+        assertTrue(afterExhaustion.uiState.value.showRetry)
+        reentered.cancel()
+    }
+
+    @Test fun failureIsTerminalAndDoesNotOfferRetry() = runTest {
+        val repository = SummaryRepository { ImageSummaryResult.Failed }
+        val model = ImageSummaryViewModel.forResult(analysisId, repository)
+        val visible = launch { model.refreshWhileVisible() }
+        runCurrent()
+        assertEquals(ImageSummaryResult.Failed, model.uiState.value.result)
+        assertFalse(model.uiState.value.showRetry)
+        assertTrue(visible.isCompleted)
+        model.checkAgain()
+        advanceTimeBy(60_000)
+        assertEquals(1, repository.ids.size)
+    }
+
+    @Test fun failedLookupAfterConfirmedPendingStopsAutoAndAllowsManualRecovery() = runTest {
+        val repository = SummaryRepository {
+            when (it) {
+                1 -> ImageSummaryResult.Pending
+                2 -> ImageSummaryResult.LookupError
+                else -> completed
+            }
+        }
+        val model = ImageSummaryViewModel.forResult(analysisId, repository)
+        val visible = launch { model.refreshWhileVisible() }
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertTrue(model.uiState.value.lookupFailed)
+        assertTrue(model.uiState.value.showRetry)
+        advanceTimeBy(60_000)
+        assertEquals(2, repository.ids.size)
+        model.checkAgain()
+        runCurrent()
+        assertEquals(completed, model.uiState.value.result)
+        assertTrue(visible.isCompleted)
+    }
+
+    @Test fun imageAndScreenUseImageIdAndNeverUseOcrResultId() {
+        val image = AnalysisDetailDto(
+            analysisId = "image-id", type = "IMAGE", status = "COMPLETED",
+            models = AnalysisImageModelsDto(generation = AnalysisModelResultDto(
+                status = "SUCCEEDED", decision = "AI_GENERATED_SUSPECTED", displayScore = 80.0,
+                reasons = listOf(AnalysisReasonDto("이미지 근거")), limitations = listOf("이미지 한계"),
+            )),
+        ).toDomain()
+        val text = AnalysisDetailDto(
+            analysisId = "ocr-id", type = "TEXT", status = "COMPLETED",
+            textResult = TextAnalysisTextResultDto(
+                sourceType = "SCREEN_CROP", decision = "phishing", riskScore = 0.87,
+                evidence = listOf("OCR 근거"), limitations = listOf("OCR 한계"),
+            ),
+        ).toDomain().toScreenCropAnalysis()
+        val imageResult = checkNotNull(AnalysisUiState.Success(image).toPresentedResult(false, HistoryType.IMAGE))
+        val withImage = AnalysisUiState.ScreenSuccess(image, text, null, null)
+        val withoutImage = withImage.copy(image = null)
+        assertEquals("image-id", imageResult.imageSummaryLookupId())
+        val screenResult = checkNotNull(withImage.toPresentedResult(false, HistoryType.SCREEN))
+        assertEquals("image-id", screenResult.imageSummaryLookupId())
+        for (result in listOf(imageResult, screenResult)) {
+            assertEquals("AI_GENERATED_SUSPECTED", result.imageGenerationDecision)
+            assertEquals(80.0, result.imageGenerationDisplayScore!!, 0.0)
+            assertEquals(listOf("이미지 근거"), result.imageGenerationDetails?.reasons)
+            assertEquals(listOf("이미지 한계"), result.imageGenerationDetails?.limitations)
+        }
+        assertEquals("phishing", screenResult.textDecision)
+        assertEquals(0.87, screenResult.textRiskScore!!, 0.0)
+        assertEquals(listOf("OCR 근거"), screenResult.screenTextEvidence.map { it.description })
+        assertEquals(listOf("OCR 한계"), screenResult.textLimitations)
+        assertNull(withoutImage.toPresentedResult(false, HistoryType.SCREEN)?.imageSummaryLookupId())
+        assertNull(imageResult.copy(summary = "이미 있는 요약").imageSummaryLookupId())
+        assertNull(imageResult.copy(historyType = HistoryType.PHONE).imageSummaryLookupId())
+    }
+
+    private class SummaryRepository(private val response: suspend (Int) -> ImageSummaryResult) : AnalysisResultRepository {
+        val ids = mutableListOf<String>()
+
+        override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult =
+            error("Checking the summary must not start a new analysis")
+
+        override suspend fun findImageSummary(analysisId: String): ImageSummaryResult {
+            ids += analysisId
+            return response(ids.size)
         }
     }
 
-    private fun TestScope.repository(api: SummaryApi) = AnalysisRepository(
-        api, api, ioDispatcher = StandardTestDispatcher(testScheduler),
-    )
-
-    private fun assertPreserved(result: com.dundueni.app.data.model.AnalysisResult, summary: String?) {
-        assertEquals(id, result.analysisId)
-        assertEquals("COMPLETED", result.status)
-        assertEquals("UNKNOWN", result.normalizedRiskLevel)
-        assertEquals(listOf("기존 근거"), result.reasons)
-        assertEquals(listOf("기존 안내"), result.recommendedActions)
-        assertEquals(82.0, result.aiGenerationScore!!, 0.0)
-        assertEquals(summary, result.summary)
-    }
-
-    private inner class SummaryApi(private val status: (Int) -> String) : AnalysisApiService, AnalysisQueryApiService {
-        var summaryCalls = 0
-        var detailCalls = 0
-        var postCalls = 0
-
-        override suspend fun analyzeImage(image: MultipartBody.Part, type: RequestBody): Response<ResponseBody> {
-            postCalls++
-            error("Summary polling must not submit analysis")
-        }
-
-        override suspend fun getAnalysis(analysisId: String): Response<AnalysisDetailResponseDto> {
-            detailCalls++
-            return Response.success(AnalysisDetailResponseDto(
-                isSuccess = true, code = "ANALYSIS200",
-                result = AnalysisDetailDto(
-                    analysisId = analysisId, type = "IMAGE", status = "COMPLETED", aiGenerationScore = 82.0,
-                    result = NormalizedAnalysisResultDto(
-                        riskLevel = "UNKNOWN", reasons = listOf("기존 근거"), guidance = listOf("기존 안내"),
-                    ),
-                ),
-            ))
-        }
-
-        override suspend fun getSummary(analysisId: String): Response<AnalysisSummaryResponseDto> {
-            summaryCalls++
-            return Response.success(AnalysisSummaryResponseDto(
-                isSuccess = true, code = "ANALYSIS200",
-                result = AnalysisSummaryDto(
-                    analysisId = analysisId, summaryStatus = status(summaryCalls), summary = "Gemini 요약",
-                ),
-            ))
-        }
+    private companion object {
+        val completed = ImageSummaryResult.Completed("Gemini 요약")
     }
 }

@@ -107,19 +107,12 @@ fun AnalysisFlowScreen(
         else -> Unit
     }
     val screen = state as? AnalysisUiState.ScreenSuccess
-    val textPresented = screen?.text?.detail?.toTextResult()
     val presented = state.toPresentedResult(isDemo, historyType)
     if (presented != null) {
-        Column {
-            if (screen?.imageError?.pendingAnalysisId != null || screen?.textError?.pendingAnalysisId != null) {
-                DundueniButton("결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
-            }
-            AnalysisResultRoute(
-                presented, onReturn = onClose, onHome = onHome, isDemo = isDemo,
-                screenCropDecision = screen?.text?.let { textPresented?.keyFinding ?: it.label },
-                imageAnalysisError = screen?.imageError?.message,
-                screenCropError = screen?.textError?.message,
-            )
+        if (screen != null) {
+            ScreenInspectionResult(screen, presented, onClose, onHome, onRefresh)
+        } else {
+            AnalysisResultRoute(presented, onReturn = onClose, onHome = onHome, isDemo = isDemo)
         }
         return
     }
@@ -147,6 +140,30 @@ fun AnalysisFlowScreen(
             DundueniButton(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기", onClose,
                 Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
         }
+    }
+}
+
+@Composable
+internal fun ScreenInspectionResult(
+    state: AnalysisUiState.ScreenSuccess,
+    result: PresentedResult,
+    onReturn: () -> Unit,
+    onHome: () -> Unit,
+    onRefresh: () -> Unit,
+    refreshing: Boolean = false,
+) {
+    Column {
+        if (state.imageError?.pendingAnalysisId != null || state.textError?.pendingAnalysisId != null) {
+            DundueniButton(
+                "결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY,
+                enabled = !refreshing,
+            )
+        }
+        AnalysisResultRoute(
+            result, onReturn = onReturn, onHome = onHome,
+            imageAnalysisError = state.imageError?.message,
+            screenCropError = state.textError?.message,
+        )
     }
 }
 
@@ -324,11 +341,11 @@ internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: His
     val screenPresented = (imagePresented ?: textPresented)?.let { primary ->
         primary.copy(
             historyType = HistoryType.SCREEN,
-            summary = listOfNotNull(imagePresented?.summary, textPresented?.summary)
-                .filter { it.isNotBlank() }.joinToString("\n"),
-            evidence = imagePresented?.evidence.orEmpty().map { it.copy(title = "이미지 · ${it.title}") } +
-                textPresented?.evidence.orEmpty().map { it.copy(title = "화면 문자 · ${it.title}") },
-            guidance = imagePresented?.guidance.orEmpty() + textPresented?.guidance.orEmpty(),
+            summary = imagePresented?.summary.orEmpty(),
+            evidence = imagePresented?.evidence.orEmpty(),
+            screenTextEvidence = textPresented?.evidence.orEmpty(),
+            guidance = imagePresented?.guidance.orEmpty(),
+            keyFinding = textPresented?.keyFinding,
             textDecision = textPresented?.textDecision,
             textRiskScore = textPresented?.textRiskScore,
             textSourceType = textPresented?.textSourceType,

@@ -30,7 +30,16 @@ data class AnalysisResult(
     val imageGenerationDisplayScore: Double? = null,
     val imageManipulationDecision: String? = null,
     val imageManipulationDisplayScore: Double? = null,
+    val imageGenerationDetails: ImageModelDetails? = null,
+    val imageManipulationDetails: ImageModelDetails? = null,
+    val hasImageModels: Boolean = false,
 ) {
     /** Compatibility accessor for the existing result screen; only the normalized final verdict is exposed. */
     val riskLevel: String? get() = normalizedRiskLevel
 }
+
+data class ImageModelDetails(
+    val status: String? = null,
+    val reasons: List<String> = emptyList(),
+    val limitations: List<String> = emptyList(),
+)

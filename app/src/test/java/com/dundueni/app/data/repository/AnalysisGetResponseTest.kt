@@ -39,7 +39,7 @@ class AnalysisGetResponseTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun currentDetailSchemaMapsGuidesAndFetchesSeparateSummary() = runBlocking {
+    @Test fun currentDetailSchemaMapsGuidesWithoutWaitingForSummary() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {
             server.enqueue(MockResponse().setResponseCode(200).setBody("""{
@@ -59,12 +59,15 @@ class AnalysisGetResponseTest {
                     "analysisId":"$id","summaryStatus":"COMPLETED","summary":"Gemini summary"
                 }
             }"""))
-            val result = repository(server).findResult(id)
+            val repository = repository(server)
+            val result = repository.findResult(id)
             assertEquals(listOf("server reason"), result.reasons)
             assertEquals(listOf("server guide"), result.recommendedActions)
-            assertEquals("Gemini summary", result.summary)
+            assertNull(result.summary)
             assertNull(result.normalizedRiskLevel)
             assertEquals("/api/analysis/$id", server.takeRequest().path)
+            assertEquals(1, server.requestCount)
+            assertEquals(ImageSummaryResult.Completed("Gemini summary"), repository.findImageSummary(id))
             assertEquals("/api/analysis/$id/summary", server.takeRequest().path)
         } finally { server.shutdown() }
     }
@@ -118,7 +121,6 @@ class AnalysisGetResponseTest {
                     "result":{"riskLevel":"UNKNOWN","reasons":[],"guidance":[],"summary":null}
                 }
             }"""))
-            server.enqueue(MockResponse().setResponseCode(200).setBody(summary(null)))
             val result = repository(server).findResult(id)
             assertNull(result.summary)
             assertNull(result.aiGenerationScore)
@@ -173,13 +175,13 @@ class AnalysisGetResponseTest {
         Unit
     }
 
-    @Test fun completedGeminiSummaryReachesExistingPresentation() = runBlocking {
+    @Test fun historyImageKeepsItsExistingSummaryLookup() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {
             server.enqueue(MockResponse().setResponseCode(200)
                 .setBody(detail("COMPLETED").replace("\"저장된 요약\"", "null")))
             server.enqueue(MockResponse().setResponseCode(200).setBody(summary("COMPLETED")))
-            val result = repository(server).findResult(id)
+            val result = repository(server).findHistoryImageResult(id)
             assertEquals("Gemini 요약", result.summary)
             assertEquals(listOf("저장된 모델 근거"), result.reasons)
             assertEquals("UNKNOWN", result.normalizedRiskLevel)
@@ -191,33 +193,27 @@ class AnalysisGetResponseTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun unavailablePendingFailedAndInvalidSummariesPreserveAnalysis() = runBlocking {
+    @Test fun summaryLookupDistinguishesPendingFailedUnavailableAndLookupErrors() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {
+            val repository = repository(server)
             val responses = listOf(
-                MockResponse().setResponseCode(404).setBody("{}"),
-                MockResponse().setResponseCode(500).setBody("{}"),
-                MockResponse().setResponseCode(200).setBody(summary("PENDING")),
-                MockResponse().setResponseCode(200).setBody(summary("FAILED")),
-                MockResponse().setResponseCode(200).setBody(summary(null)),
-                MockResponse().setResponseCode(200).setBody(summary("COMPLETED").replace(id, "other-id")),
-                MockResponse().setResponseCode(200).setBody(summary("COMPLETED").replace("ANALYSIS200", "OTHER")),
-                MockResponse().setResponseCode(200).setBody("invalid json"),
+                MockResponse().setResponseCode(404).setBody("{}") to ImageSummaryResult.LookupError,
+                MockResponse().setResponseCode(500).setBody("{}") to ImageSummaryResult.LookupError,
+                MockResponse().setBody(summary("PENDING")) to ImageSummaryResult.Pending,
+                MockResponse().setBody(summary("FAILED")) to ImageSummaryResult.Failed,
+                MockResponse().setBody(summary(null)) to ImageSummaryResult.Unavailable,
+                MockResponse().setBody(summary("DISABLED")) to ImageSummaryResult.Unavailable,
+                MockResponse().setBody(summary("COMPLETED").replace(id, "other-id")) to ImageSummaryResult.LookupError,
+                MockResponse().setBody(summary("COMPLETED").replace("ANALYSIS200", "OTHER")) to ImageSummaryResult.LookupError,
+                MockResponse().setBody("invalid json") to ImageSummaryResult.LookupError,
             )
-            for (summaryResponse in responses) {
-                server.enqueue(MockResponse().setResponseCode(200)
-                    .setBody(detail("COMPLETED").replace("\"저장된 요약\"", "null")))
-                server.enqueue(summaryResponse)
-                // A PENDING response now permits five further summary-only lookups.
-                if (responses.indexOf(summaryResponse) == 2) repeat(5) {
-                    server.enqueue(MockResponse().setResponseCode(200).setBody(summary("PENDING")))
-                }
-                val result = repository(server).findResult(id)
-                assertNull(result.summary)
-                assertEquals("COMPLETED", result.status)
-                assertEquals(listOf("저장된 모델 근거"), result.reasons)
-                assertEquals(82.0, result.aiGenerationScore!!, 0.0)
+            for ((response, expected) in responses) {
+                server.enqueue(response)
+                assertEquals(expected, repository.findImageSummary(id))
+                assertEquals("/api/analysis/$id/summary", server.takeRequest().path)
             }
+            assertEquals(responses.size, server.requestCount)
         } finally { server.shutdown() }
     }
 

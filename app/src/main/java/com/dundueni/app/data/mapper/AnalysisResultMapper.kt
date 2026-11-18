@@ -1,10 +1,12 @@
 package com.dundueni.app.data.mapper
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.ImageModelDetails
 import com.dundueni.app.data.remote.api.TextAnalysisResponseResult
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisResponseResultDto
 import com.dundueni.app.data.remote.dto.AnalysisDetailDto
+import com.dundueni.app.data.remote.dto.AnalysisModelResultDto
 
 /** Maps the BE result payload while preserving its values and treating absent collections as empty. */
 fun AnalysisResponseDto.toDomain(): AnalysisResult =
@@ -58,8 +60,17 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
         imageGenerationDisplayScore = if (type == "IMAGE") models?.generation?.displayScore else null,
         imageManipulationDecision = if (type == "IMAGE") models?.manipulation?.decision else null,
         imageManipulationDisplayScore = if (type == "IMAGE") models?.manipulation?.displayScore else null,
+        imageGenerationDetails = if (type == "IMAGE") models?.generation?.toDetails() else null,
+        imageManipulationDetails = if (type == "IMAGE") models?.manipulation?.toDetails() else null,
+        hasImageModels = type == "IMAGE" && models != null,
     )
 }
+
+private fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
+    status = status,
+    reasons = reasons.orEmpty().mapNotNull { it?.description?.takeIf(String::isNotBlank) },
+    limitations = limitations.orEmpty().filterNotNull().filter(String::isNotBlank),
+)
 
 /** Text POST contains a classifier decision, not a normalized final fraud verdict. */
 fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(

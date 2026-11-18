@@ -105,6 +105,10 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
+    fun onResultOpenFailure() {
+        mutableUiState.value = PhoneInspectionUiState.Error("결과를 임시 보관하지 못했어요. 다시 시도해 주세요.")
+    }
+
     fun dismiss() {
         if (mutableUiState.value != PhoneInspectionUiState.Loading) mutableUiState.value = PhoneInspectionUiState.Idle
     }
@@ -138,10 +142,10 @@ internal fun HistoryEntryDto.toPhoneResult(): AnalysisResult {
         id = requireNotNull(id),
         historyType = HistoryType.PHONE,
         riskLevel = risk,
-        summary = reasons.firstOrNull() ?: "전화번호 분석 결과를 조회했어요. 판단 근거는 제공되지 않았어요.",
+        summary = "",
         keyFinding = listOfNotNull(phone.spamType?.takeIf { it.isNotBlank() }?.let { "스팸 유형: $it" },
             phone.reportCount?.let { "신고 건수: ${it}건" }).joinToString(" · ").ifBlank { null },
         evidence = reasons.map { RiskEvidence("전화번호 분석 근거", it) },
-        targetLabel = phone.phoneNumber ?: "검사한 전화번호",
+        targetLabel = phone.phoneNumber.orEmpty(),
     )
 }

@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.history
 
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.repository.findHistoryImageResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,7 +54,7 @@ fun HistoryRoute(
         if (real && !loading && initialRecordId != null) {
             withContext(Dispatchers.IO) { runCatching { checkNotNull(remote).detail(initialRecordId).toHistoryRecord().let { record ->
                 if (record.type == HistoryType.IMAGE && record.status == "COMPLETED")
-                    runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findResult(initialRecordId)) }.getOrDefault(record)
+                    runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findHistoryImageResult(initialRecordId)) }.getOrDefault(record)
                 else record
             } } }
                 .onSuccess { detail -> records = listOf(detail) + records.filterNot { it.id == detail.id } }
@@ -69,7 +70,7 @@ fun HistoryRoute(
             if (real) scope.launch {
                 val detail = withContext(Dispatchers.IO) { runCatching { checkNotNull(remote).detail(id).toHistoryRecord().let { record ->
                     if (record.type == HistoryType.IMAGE && record.status == "COMPLETED")
-                        runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findResult(id)) }.getOrDefault(record)
+                        runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findHistoryImageResult(id)) }.getOrDefault(record)
                     else record
                 } } }
                 detail.onSuccess { record -> records = records.map { if (it.id == id) record else it }; error = null }
