@@ -49,6 +49,7 @@ class AnalysisViewModel(
     private var requestJob: Job? = null
     private var screenImage: Result<AnalysisResult>? = null
     private var screenText: Result<ScreenCropAnalysis>? = null
+    private var screenResultType: ScreenResultType? = null
     private var selectionPart: MultipartBody.Part? = null
     private var selectionScreenCrop = false
     private var pendingUploadId: String? = null
@@ -90,12 +91,13 @@ class AnalysisViewModel(
     }
 
     @MainThread
-    fun choosePhoto(elementId: String) {
+    fun choosePhoto(elementId: String, resultType: ScreenResultType? = null) {
         val selection = mutableUiState.value as? AnalysisUiState.Selection ?: return
         if (requestJob?.isActive == true) return
         val uploadId = selection.upload.uploadId ?: return
         val choices = listOfNotNull(selection.upload.original) + selection.upload.elements.orEmpty()
         if (choices.none { it.elementId == elementId }) return
+        screenResultType = resultType.takeIf { selectionScreenCrop }
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
@@ -190,6 +192,7 @@ class AnalysisViewModel(
         if (requestJob?.isActive == true || mutableUiState.value is AnalysisUiState.Pending) return
         screenImage = null
         screenText = null
+        screenResultType = null
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
@@ -235,6 +238,7 @@ class AnalysisViewModel(
     }
 
     private fun Throwable.lookupId(): String? = when (this) {
+        is RestoredScreenError -> state.pendingAnalysisId
         is AnalysisLookupException -> analysisId
         is AnalysisNotCompletedException -> analysisId
         else -> null
@@ -242,6 +246,20 @@ class AnalysisViewModel(
 
     private fun screenHasLookup(): Boolean =
         screenImage?.exceptionOrNull()?.lookupId() != null || screenText?.exceptionOrNull()?.lookupId() != null
+
+    /** Continue a previously displayed partial result without restarting either analysis. */
+    @MainThread
+    internal fun restoreScreenResult(result: AnalysisUiState.ScreenSuccess) {
+        if (mutableUiState.value != AnalysisUiState.Idle) return
+        screenImage = result.image?.let { Result.success(it) }
+            ?: Result.failure(RestoredScreenError(result.imageError ?: AnalysisUiState.Error()))
+        screenText = result.text?.let { Result.success(it) }
+            ?: Result.failure(RestoredScreenError(result.textError ?: AnalysisUiState.Error()))
+        screenResultType = result.resultType
+        mutableUiState.value = result
+    }
+
+    private class RestoredScreenError(val state: AnalysisUiState.Error) : Exception()
 
     /** Recheck only unfinished IDs and keep an already successful side intact. */
     private fun refreshScreen() {
@@ -278,8 +296,10 @@ class AnalysisViewModel(
         val imageError = image.exceptionOrNull()
         val textError = text.exceptionOrNull()
         mutableUiState.value = if (image.isSuccess || text.isSuccess) {
-            AnalysisUiState.ScreenSuccess(image.getOrNull(), text.getOrNull(),
-                imageError?.toPartialError(), textError?.toPartialError())
+            AnalysisUiState.ScreenSuccess(
+                image.getOrNull(), text.getOrNull(), imageError?.toPartialError(), textError?.toPartialError(),
+                resultType = screenResultType,
+            )
         } else {
             val error = listOfNotNull(imageError, textError)
                 .firstOrNull { it !is AnalysisNotCompletedException } ?: checkNotNull(imageError)
@@ -303,6 +323,7 @@ class AnalysisViewModel(
         }
 
     private fun Exception.toUiState(): AnalysisUiState = when (this) {
+        is RestoredScreenError -> state
         is AnalysisLookupException -> when (val state = (cause as Exception).toUiState()) {
             is AnalysisUiState.Error -> state.copy(pendingAnalysisId = analysisId)
             else -> state

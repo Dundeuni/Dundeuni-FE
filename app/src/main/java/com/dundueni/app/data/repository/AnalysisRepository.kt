@@ -13,9 +13,8 @@ import com.google.gson.Gson
 import com.google.gson.JsonParseException
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
@@ -27,7 +26,6 @@ class AnalysisRepository(
     private val queryApiService: AnalysisQueryApiService? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AnalysisResultRepository {
-    private val summaryRequests = mutableMapOf<String, CompletableDeferred<String?>>()
     suspend fun analyzeImage(image: MultipartBody.Part): Response<ResponseBody> =
         apiService.analyzeImage(image)
 
@@ -105,12 +103,7 @@ class AnalysisRepository(
             throw AnalysisProtocolException("Analysis detail ID does not match the request")
         }
         when (detail.status) {
-            AnalysisExecutionStatus.COMPLETED.wireValue -> {
-                val result = detail.toDomain()
-                if (result.type == "IMAGE" && result.summary.isNullOrBlank()) {
-                    result.copy(summary = completedSummaryOrNull(analysisId))
-                } else result
-            }
+            AnalysisExecutionStatus.COMPLETED.wireValue -> detail.toDomain()
             AnalysisExecutionStatus.QUEUED.wireValue ->
                 throw AnalysisNotCompletedException(AnalysisExecutionStatus.QUEUED, analysisId, detail.errorCode)
             AnalysisExecutionStatus.ANALYZING.wireValue ->
@@ -121,52 +114,34 @@ class AnalysisRepository(
         }
     }
 
-    /** Share concurrent lookups without starting a job outside the calling ViewModel's scope. */
-    private suspend fun completedSummaryOrNull(analysisId: String): String? {
-        val (request, owner) = synchronized(summaryRequests) {
-            summaryRequests[analysisId]?.let { it to false } ?: run {
-                val next = CompletableDeferred<String?>()
-                summaryRequests[analysisId] = next
-                next to true
-            }
-        }
-        if (!owner) return request.await()
+    /** Read a single status without waiting for summary generation or reloading the analysis. */
+    override suspend fun findImageSummary(analysisId: String): ImageSummaryResult = withContext(ioDispatcher) {
+        val service = queryApiService ?: return@withContext ImageSummaryResult.Unavailable
         try {
-            val summary = pollCompletedSummary(analysisId)
-            request.complete(summary)
-            return summary
-        } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            request.cancel(cancelled)
-            throw cancelled
-        } catch (_: Exception) {
-            request.complete(null)
-            return null
-        } finally {
-            synchronized(summaryRequests) { summaryRequests.remove(analysisId) }
-        }
-    }
-
-    private suspend fun pollCompletedSummary(analysisId: String): String? {
-        // Initial lookup plus at most five retries, only while the server reports PENDING.
-        repeat(6) { attempt ->
-            if (attempt > 0) delay(2_000)
-            val response = queryApiService?.getSummary(analysisId)
-            if (response?.code() != HTTP_OK) {
-                response?.errorBody()?.close()
-                return null
+            val response = service.getSummary(analysisId)
+            if (response.code() != HTTP_OK) {
+                response.errorBody()?.close()
+                return@withContext ImageSummaryResult.LookupError
             }
             val envelope = response.body()
             val summary = envelope?.result
             if (envelope?.isSuccess != true || envelope.code != DETAIL_SUCCESS_CODE ||
                 summary?.analysisId != analysisId
-            ) return null
+            ) return@withContext ImageSummaryResult.LookupError
+
             when (summary.summaryStatus) {
-                "COMPLETED" -> return summary.summary?.takeIf { it.isNotBlank() }
-                "PENDING" -> Unit
-                else -> return null
+                "COMPLETED" -> summary.summary?.takeIf { it.isNotBlank() }
+                    ?.let { ImageSummaryResult.Completed(it) } ?: ImageSummaryResult.LookupError
+                "PENDING" -> ImageSummaryResult.Pending
+                "FAILED" -> ImageSummaryResult.Failed
+                null, "DISABLED" -> ImageSummaryResult.Unavailable
+                else -> ImageSummaryResult.LookupError
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            ImageSummaryResult.LookupError
         }
-        return null
     }
 
     private fun parseEnvelope(json: String): AnalysisResponseDto = try {

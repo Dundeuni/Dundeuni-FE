@@ -1,6 +1,7 @@
 package com.dundueni.app.data.repository
 
 import com.dundueni.app.data.model.AnalysisResult
+import kotlinx.coroutines.delay
 import okhttp3.MultipartBody
 
 /** ViewModel에 실제 Repository 또는 Fake를 주입하기 위한 최소 계약입니다. */
@@ -15,6 +16,31 @@ fun interface AnalysisResultRepository {
 
     suspend fun findResult(analysisId: String): AnalysisResult =
         throw UnsupportedOperationException("Analysis lookup is unavailable")
+
+    suspend fun findImageSummary(analysisId: String): ImageSummaryResult = ImageSummaryResult.Unavailable
+}
+
+sealed interface ImageSummaryResult {
+    data object Pending : ImageSummaryResult
+    data class Completed(val text: String) : ImageSummaryResult
+    data object Failed : ImageSummaryResult
+    data object Unavailable : ImageSummaryResult
+    data object LookupError : ImageSummaryResult
+}
+
+/** Keep the existing short summary wait for history, which displays a single detail snapshot. */
+internal suspend fun AnalysisResultRepository.findHistoryImageResult(analysisId: String): AnalysisResult {
+    val detail = findResult(analysisId)
+    if (detail.type != "IMAGE" || !detail.summary.isNullOrBlank()) return detail
+    repeat(6) { attempt ->
+        if (attempt > 0) delay(2_000)
+        when (val summary = findImageSummary(analysisId)) {
+            is ImageSummaryResult.Completed -> return detail.copy(summary = summary.text)
+            ImageSummaryResult.Pending -> Unit
+            else -> return detail
+        }
+    }
+    return detail
 }
 
 /** Preserve the POST ID even when the first detail lookup fails. */

@@ -301,6 +301,28 @@ class AnalysisViewModelTest {
         assertEquals(1, posts); assertEquals(1, gets)
     }
 
+    @Test fun restoredScreenResultRechecksOnlyPendingSide() = runTest {
+        val gets = mutableListOf<String>()
+        val text = result.copy(analysisId = "ocr-id", type = "TEXT", sourceType = "SCREEN_CROP", textDecision = "phishing")
+        val vm = viewModel(object : AnalysisResultRepository {
+            override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult = error("Unexpected upload")
+            override suspend fun findResult(analysisId: String): AnalysisResult {
+                gets += analysisId
+                return text
+            }
+        })
+        vm.restoreScreenResult(AnalysisUiState.ScreenSuccess(
+            result, null, null, AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "ocr-id"),
+        ))
+        vm.refreshPending()
+        runCurrent()
+        assertEquals(listOf("ocr-id"), gets)
+        val completed = vm.uiState.value as AnalysisUiState.ScreenSuccess
+        assertEquals(result, completed.image)
+        assertEquals(text, completed.text?.detail)
+        assertNull(completed.textError)
+    }
+
     @Test fun screenPartialSuccessKeepsCompletedSideAndRetriesOnlyPendingGet() = runTest {
         for (imageSucceeds in listOf(true, false)) {
             var imagePosts = 0

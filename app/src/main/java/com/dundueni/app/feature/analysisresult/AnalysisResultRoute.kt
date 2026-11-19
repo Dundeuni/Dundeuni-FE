@@ -14,7 +14,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
+import com.dundueni.app.feature.analysis.ScreenResultType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,13 +38,16 @@ fun AnalysisResultRoute(
     onReturn: () -> Unit,
     onHome: () -> Unit,
     isDemo: Boolean = false,
-    screenCropDecision: String? = null,
     imageAnalysisError: String? = null,
     screenCropError: String? = null,
+    screenResultType: ScreenResultType? = null,
 ) {
     BackHandler(onBack = onReturn)
     val context = LocalContext.current
     val view = LocalView.current
+    val summaryId = result.imageSummaryLookupId().takeIf { !isDemo && imageAnalysisError == null }
+    val summaryModel = rememberImageSummaryViewModel(summaryId)
+    val summaryState = summaryModel?.uiState?.collectAsStateWithLifecycle()?.value
     val scope = rememberCoroutineScope()
     val appSettings = remember(context) { context.getSharedPreferences("dundueni_settings", Context.MODE_PRIVATE) }
     var riskHapticPlayed by rememberSaveable(result.id) { mutableStateOf(false) }
@@ -74,10 +88,12 @@ fun AnalysisResultRoute(
         }, "분석 결과 공유"))
     }
 
-    AnalysisResultScreen(result, historySaved = saved, isDemo = isDemo,
-        screenCropDecision = screenCropDecision,
+    AnalysisResultScreen(result, isDemo = isDemo,
         imageAnalysisError = imageAnalysisError,
         screenCropError = screenCropError,
+        screenResultType = screenResultType,
+        imageSummary = summaryState,
+        onCheckImageSummary = { summaryModel?.checkAgain() },
         onAction = { action ->
         when (action) {
             ResultAction.RETURN -> onReturn()
@@ -125,6 +141,26 @@ fun AnalysisResultRoute(
             confirmButton = { TextButton(onClick = { dialog = null }) { Text("확인") } },
         )
     }
+}
+
+@Composable
+internal fun rememberImageSummaryViewModel(analysisId: String?): ImageSummaryViewModel? {
+    if (analysisId == null || LocalInspectionMode.current) return null
+    val owner = LocalView.current.findViewTreeViewModelStoreOwner() ?: return null
+    val context = LocalContext.current.applicationContext
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val model = remember(owner, analysisId) {
+        val factory = viewModelFactory {
+            initializer {
+                ImageSummaryViewModel.forResult(analysisId, AnalysisFlowDependencies.createRepository(context))
+            }
+        }
+        ViewModelProvider(owner, factory)["image-summary:$analysisId", ImageSummaryViewModel::class.java]
+    }
+    LaunchedEffect(lifecycle, model) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.refreshWhileVisible() }
+    }
+    return model
 }
 
 private fun hasSavedResult(json: String?, id: String): Boolean = runCatching {

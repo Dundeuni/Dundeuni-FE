@@ -2,6 +2,7 @@ package com.dundueni.app.feature.settings
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -48,6 +49,16 @@ private val Ink = BrandInk
 private val Muted = SecondaryInk
 private val Pale = SoftBlue
 
+private const val FAMILY_CONTACTS_KEY = "family_contacts"
+
+internal fun SharedPreferences.readFamilyContacts(): List<Pair<String, String>>? {
+    val stored = getString(FAMILY_CONTACTS_KEY, null) ?: return null
+    val array = JSONArray(stored)
+    return (0 until array.length()).mapNotNull { index ->
+        array.optJSONObject(index)?.let { it.optString("name") to it.optString("phone") }
+    }.filter { (name, phone) -> name.isNotBlank() && phone.isNotBlank() }
+}
+
 @Composable
 fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     val context = LocalContext.current
@@ -87,12 +98,8 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     var showRetention by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var family by remember {
-        mutableStateOf(runCatching {
-            val array = JSONArray(prefs.getString("family_contacts", "[]"))
-            (0 until array.length()).mapNotNull { index ->
-                array.optJSONObject(index)?.let { it.optString("name") to it.optString("phone") }
-            }.filter { it.first.isNotBlank() && it.second.isNotBlank() }
-        }.getOrDefault(listOf("딸내미 (안심 보호자)" to "010-8291-****")))
+        mutableStateOf(runCatching { prefs.readFamilyContacts().orEmpty() }
+            .getOrDefault(listOf("딸내미 (안심 보호자)" to "010-8291-****")))
     }
     var appliedFamily by remember { mutableStateOf(family) }
     var familyDialog by remember { mutableStateOf(false) }
@@ -123,7 +130,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
             val familyJson = JSONArray().apply {
                 family.forEach { (name, phone) -> put(JSONObject().put("name", name).put("phone", phone)) }
             }.toString()
-            editor.putString("family_contacts", familyJson)
+            editor.putString(FAMILY_CONTACTS_KEY, familyJson)
         }
         editor.apply()
         appliedButtonSize = buttonSize
@@ -153,6 +160,9 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 Text(if (easy) "쉬운설정" else "설정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                if (easy) {
+                    DundueniButton("마이페이지", { onNavigationSelected(HomeDestination.MY_SHELTER) }, Modifier.fillMaxWidth())
+                }
                 SettingsSection("플로팅 버튼 설정") {
                     Column(Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Column {

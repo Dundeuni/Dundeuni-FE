@@ -42,7 +42,6 @@ private fun SelectionPreview(withCandidates: Boolean) {
             onClose = {},
             onHome = {},
             isDemo = false,
-            onChoosePhoto = {},
         )
     }
 }

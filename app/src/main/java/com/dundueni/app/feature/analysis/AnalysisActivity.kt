@@ -33,9 +33,12 @@ import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.DundueniFETheme
 import java.io.File
+import java.io.IOException
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.withContext
 import com.dundueni.app.feature.floatingbutton.FloatingButtonService
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
 import com.google.gson.Gson
@@ -117,13 +120,22 @@ class AnalysisActivity : ComponentActivity() {
                         viewModel.completionDelivery.claim(key)) {
                         if (!BasicInspectionQuota(this@AnalysisActivity).recordCompleted(viewModel.attemptId)) return@collect
                         val screen = state as? AnalysisUiState.ScreenSuccess
-                        val destination = AnalysisResultActivity.createIntent(this@AnalysisActivity,
-                            Gson().toJson(result), false, suspendFloatingButton = true)
-                            .putExtra(AnalysisResultActivity.EXTRA_SCREEN_CROP_DECISION,
-                                screen?.text?.let { "${it.label}\n위험 수준: ${it.detail.toTextResult().riskLevel.label}" })
-                            .putExtra(AnalysisResultActivity.EXTRA_IMAGE_ERROR, screen?.imageError?.message)
-                            .putExtra(AnalysisResultActivity.EXTRA_TEXT_ERROR, screen?.textError?.message)
-                        FloatingButtonService.showInspectionCompleted(key, destination)
+                        val destination = try {
+                            withContext(Dispatchers.IO) {
+                                if (screen != null) {
+                                    AnalysisResultActivity.createScreenIntent(applicationContext, screen)
+                                } else {
+                                    AnalysisResultActivity.createIntent(applicationContext,
+                                        Gson().toJson(result), false, suspendFloatingButton = true)
+                                }
+                            }
+                        } catch (_: IOException) {
+                            Toast.makeText(this@AnalysisActivity, "결과를 임시 보관하지 못했어요.", Toast.LENGTH_SHORT).show()
+                            return@collect
+                        }
+                        if (!isFinishing && lifecycle.currentState !in setOf(Lifecycle.State.RESUMED, Lifecycle.State.DESTROYED)) {
+                            FloatingButtonService.showInspectionCompleted(key, destination)
+                        }
                     }
                 }
         }

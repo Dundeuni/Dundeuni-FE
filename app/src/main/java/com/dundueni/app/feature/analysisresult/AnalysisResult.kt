@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysisresult
 
 import java.util.Locale
+import com.dundueni.app.data.model.ImageModelDetails
 import com.dundueni.app.feature.history.HistoryType
 
 /** The overall verdict comes from the analysis service; the UI never derives it from scores. */
@@ -54,6 +55,9 @@ data class AnalysisResult(
     val textReasonCodes: List<String>? = null,
     val textOcrUsed: Boolean? = null,
     val textLimitations: List<String> = emptyList(),
+    val imageGenerationDetails: ImageModelDetails? = null,
+    val imageManipulationDetails: ImageModelDetails? = null,
+    val screenTextEvidence: List<RiskEvidence> = emptyList(),
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }

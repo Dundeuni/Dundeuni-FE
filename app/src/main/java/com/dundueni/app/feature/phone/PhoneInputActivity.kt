@@ -20,7 +20,10 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
 import com.google.gson.Gson
+import java.io.IOException
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class PhoneInputActivity : ComponentActivity() {
     private val overlayOwner = "phone-input:${UUID.randomUUID()}"
@@ -74,10 +77,18 @@ class PhoneInputActivity : ComponentActivity() {
                         is PhoneInspectionUiState.Success -> {
                             current.response.analysisId ?: return@LaunchedEffect
                             val result = current.result
-                            startActivity(AnalysisResultActivity.createIntent(
-                                this@PhoneInputActivity, Gson().toJson(result),
-                                isDemo = false, suspendFloatingButton = true,
-                            ))
+                            val destination = try {
+                                withContext(Dispatchers.IO) {
+                                    AnalysisResultActivity.createIntent(
+                                        applicationContext, Gson().toJson(result),
+                                        isDemo = false, suspendFloatingButton = true,
+                                    )
+                                }
+                            } catch (_: IOException) {
+                                viewModel.onResultOpenFailure()
+                                return@LaunchedEffect
+                            }
+                            startActivity(destination)
                             viewModel.dismiss()
                         }
                         else -> Unit

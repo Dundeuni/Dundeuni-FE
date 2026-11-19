@@ -9,7 +9,7 @@ import org.json.JSONObject
 
 /** Reads PB-05's existing metadata store. No message, URL, or evidence text is persisted. */
 class HistoryStore(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences("analysis_result_history", Context.MODE_PRIVATE)
+    private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     fun read(): List<HistoryRecord> = synchronized(lock) {
         val array = JSONArray(preferences.getString("results", "[]"))
@@ -67,5 +67,8 @@ class HistoryStore(context: Context) {
     private fun JSONObject.score(key: String): Double? =
         if (isNull(key) || !has(key)) null else optDouble(key).takeIf { it.isFinite() && it in 0.0..100.0 }
 
-    private companion object { val lock = Any() }
+    companion object {
+        internal const val PREFERENCES_NAME = "analysis_result_history"
+        private val lock = Any()
+    }
 }

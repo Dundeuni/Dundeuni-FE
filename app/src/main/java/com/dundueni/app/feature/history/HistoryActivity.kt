@@ -36,7 +36,7 @@ class HistoryActivity : ComponentActivity() {
             HomeDestination.HOME -> finish()
             HomeDestination.REPORT -> Unit
             HomeDestination.CONSULTATION -> Toast.makeText(this, "준비 중인 기능입니다", Toast.LENGTH_SHORT).show()
-            HomeDestination.MY_SHELTER -> openMain(MainActivity.EXTRA_OPEN_ACCOUNT)
+            HomeDestination.MY_SHELTER -> openMain(MainActivity.EXTRA_OPEN_MY_PAGE)
             HomeDestination.SETTINGS -> openMain(MainActivity.EXTRA_OPEN_SETTINGS)
         }
     }

@@ -1,14 +1,13 @@
 package com.dundueni.app.feature.analysisresult
 
+import com.dundueni.app.data.model.ImageModelDetails
 import org.json.JSONObject
 import com.dundueni.app.feature.history.HistoryType
 
 /** FE integration example, not an agreed BE API contract. Invalid verdicts must never become SAFE. */
 object AnalysisResultJsonAdapter {
     fun decode(json: String): AnalysisResult {
-        require(json.length <= 65_536) { "분석 결과가 너무 큽니다." }
         val value = JSONObject(json)
-        val evidence = value.optJSONArray("evidence")
         val historyType = HistoryType.entries.firstOrNull { it.name == value.optionalText("historyType") }
             ?: HistoryType.UNKNOWN
         val riskLevel = value.requiredText("riskLevel")
@@ -28,13 +27,11 @@ object AnalysisResultJsonAdapter {
                 AiLikelihood.valueOf(it.uppercase(java.util.Locale.ROOT))
             } ?: AiLikelihood.UNKNOWN,
             aiScore = value.optionalScore("aiScore"),
-            evidence = List(evidence?.length() ?: 0) { index ->
-                val item = evidence!!.getJSONObject(index)
-                RiskEvidence(item.requiredText("title"), item.requiredText("description"))
-            },
+            evidence = value.evidence("evidence"),
             sourceText = value.optionalText("sourceText"),
             sourceUrl = value.optionalText("sourceUrl"),
-            targetLabel = value.optionalText("targetLabel") ?: "수신된 문자 메시지 및 첨부 링크",
+            targetLabel = value.optionalText("targetLabel")
+                ?: if (historyType == HistoryType.PHONE) "" else "수신된 문자 메시지 및 첨부 링크",
             imageModelResult = value.optBoolean("imageModelResult", false),
             imageOverallDecisionLabel = value.optionalText("imageOverallDecisionLabel"),
             imageGenerationDecision = value.optionalText("imageGenerationDecision"),
@@ -52,8 +49,33 @@ object AnalysisResultJsonAdapter {
             textLimitations = value.optJSONArray("textLimitations")?.let { items ->
                 List(items.length()) { items.getString(it) }.filter { it.isNotBlank() }
             }.orEmpty(),
+            imageGenerationDetails = value.modelDetails("imageGenerationDetails"),
+            imageManipulationDetails = value.modelDetails("imageManipulationDetails"),
+            screenTextEvidence = value.evidence("screenTextEvidence"),
         )
     }
+
+    private fun JSONObject.evidence(key: String): List<RiskEvidence> =
+        optJSONArray(key)?.let { items ->
+            List(items.length()) { index ->
+                val item = items.getJSONObject(index)
+                RiskEvidence(item.requiredText("title"), item.requiredText("description"))
+            }
+        }.orEmpty()
+
+    private fun JSONObject.modelDetails(key: String): ImageModelDetails? =
+        optJSONObject(key)?.let { model ->
+            ImageModelDetails(
+                status = model.optionalText("status"),
+                reasons = model.strings("reasons"),
+                limitations = model.strings("limitations"),
+            )
+        }
+
+    private fun JSONObject.strings(key: String): List<String> =
+        optJSONArray(key)?.let { items ->
+            List(items.length()) { items.getString(it) }.filter(String::isNotBlank)
+        }.orEmpty()
 
     private fun JSONObject.requiredText(key: String): String {
         val value = get(key)

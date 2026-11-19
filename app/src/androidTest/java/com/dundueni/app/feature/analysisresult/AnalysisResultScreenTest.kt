@@ -23,14 +23,16 @@ class AnalysisResultScreenTest {
     @get:Rule val compose = createComposeRule()
 
 
-    @Test fun safeShowsEvidenceAndDispatchesSave() {
+    @Test fun safeShowsEvidenceAndDispatchesReturnWithoutSaveButton() {
         var dispatched: ResultAction? = null
         compose.setContent { DundueniFETheme { AnalysisResultScreen(AnalysisResultSamples.forLevel(RiskLevel.SAFE), onAction = { dispatched = it }, isDemo = true) } }
         compose.onNodeWithText("현재는 안전해 보여요").assertIsDisplayed()
         screenshot("pb05-safe")
         compose.onNodeWithText("비정상 발신자 및 사칭 패턴 없음").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("검사 결과 기록에 보관하기").performScrollTo().performClick()
-        assertEquals(ResultAction.SAVE_HISTORY, dispatched)
+        compose.onNodeWithText("검사 결과 기록에 보관하기").assertDoesNotExist()
+        compose.onNodeWithText("검사 결과가 기록에 보관되었어요").assertDoesNotExist()
+        compose.onNodeWithText("원래 화면으로 돌아가기").performScrollTo().performClick()
+        assertEquals(ResultAction.RETURN, dispatched)
     }
 
     @Test fun cautionShowsIndependentScoresAndDomainAction() {

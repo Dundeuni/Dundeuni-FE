@@ -38,12 +38,6 @@ internal fun AnalysisResult.toPb05Result(isDemo: Boolean): PresentedResult? {
 private fun AnalysisResult.toRealPb05Result(): PresentedResult {
     val descriptions = (if (type == "TEXT") textEvidence else reasons).filter { it.isNotBlank() }
     val isText = type == "TEXT"
-    val level = when (if (isText) normalizedRiskLevel else null) {
-        "SAFE" -> RiskLevel.SAFE
-        "CAUTION" -> RiskLevel.CAUTION
-        "DANGER" -> RiskLevel.DANGER
-        else -> RiskLevel.UNKNOWN
-    }
     val decisionLabel = if (isText) when (textDecision) {
         "normal" -> "일반 텍스트로 판단"
         "phishing" -> "피싱 의심"
@@ -53,20 +47,28 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
     return PresentedResult(
         historyType = if (isText) HistoryType.TEXT else HistoryType.IMAGE,
         id = analysisId?.takeIf { it.isNotBlank() } ?: "image-result-${hashCode()}",
-        riskLevel = level,
-        fraudLevel = level.takeUnless { it == RiskLevel.UNKNOWN },
+        riskLevel = RiskLevel.UNKNOWN,
         keyFinding = decisionLabel,
-        guidance = recommendedActions.filter { it.isNotBlank() },
-        summary = summary?.takeIf { it.isNotBlank() }.orEmpty(),
+        // The current TEXT detail attaches guides computed from image model results.
+        guidance = if (isText) emptyList() else recommendedActions.filter { it.isNotBlank() },
+        summary = if (isText) "" else summary?.takeIf { it.isNotBlank() }.orEmpty(),
         aiLikelihood = AiLikelihood.UNKNOWN,
         aiRiskLabel = null,
-        aiScore = null,
+        aiScore = aiGenerationScore?.takeIf {
+            type == "IMAGE" && !hasImageModels &&
+                imageGenerationDecision == null && imageManipulationDecision == null &&
+                imageGenerationDisplayScore == null && imageManipulationDisplayScore == null &&
+                imageGenerationDetails == null && imageManipulationDetails == null &&
+                it.isFinite() && it in 0.0..100.0
+        },
         imageModelResult = !isText,
         imageOverallDecisionLabel = if (isText) null else imageOverallDecisionLabel?.takeIf { it.isNotBlank() },
         imageGenerationDecision = if (isText) null else imageGenerationDecision,
         imageGenerationDisplayScore = if (isText) null else imageGenerationDisplayScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
         imageManipulationDecision = if (isText) null else imageManipulationDecision,
         imageManipulationDisplayScore = if (isText) null else imageManipulationDisplayScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
+        imageGenerationDetails = if (isText) null else imageGenerationDetails,
+        imageManipulationDetails = if (isText) null else imageManipulationDetails,
         textDecision = if (isText) textDecision else null,
         textRiskScore = if (isText) riskScore?.takeIf { it.isFinite() && it in 0.0..1.0 } else null,
         textSourceType = if (isText) sourceType else null,
@@ -81,7 +83,7 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
     )
 }
 
-/** Preserve the submitted text while sharing dev's normalized verdict and guidance mapping. */
+/** Preserve the submitted text alongside the server's text classifier result. */
 internal fun AnalysisResult.toTextResult(text: String? = null): PresentedResult {
     check(status == "COMPLETED" && type == "TEXT")
     require(!analysisId.isNullOrBlank())
