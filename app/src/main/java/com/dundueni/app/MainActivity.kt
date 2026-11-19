@@ -75,17 +75,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         currentDestination = savedInstanceState?.getString(STATE_DESTINATION)?.let { HomeDestination.valueOf(it) }
             ?: requestedDestination(intent) ?: HomeDestination.HOME
-        showingOnboarding = !getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
-            .getBoolean(ONBOARDING_COMPLETED, false)
-        onboardingPage = savedInstanceState?.getInt(STATE_ONBOARDING_PAGE, 1) ?: 1
-        val authStore = AuthSessionRuntime.store(applicationContext)
-        authStore.read()?.onboardingCompleted?.let { showingOnboarding = !it }
         lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
-        authStore.read()?.takeIf { !it.isValid() }?.let {
-            AuthSessionRuntime.onExpired(it)
+        val session = AuthSessionRuntime.store(applicationContext).read()
+        if (session != null && !session.isValid()) {
+            AuthSessionRuntime.onExpired(session)
             redirectToLogin()
             return
         }
+        val onboardingCompleted = session?.onboardingCompleted
+            ?: getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
+                .getBoolean(ONBOARDING_COMPLETED, false)
+        showingOnboarding = !onboardingCompleted
+        onboardingPage = savedInstanceState?.getInt(STATE_ONBOARDING_PAGE, 1) ?: 1
         syncFloatingButtonState()
 
         setContent {

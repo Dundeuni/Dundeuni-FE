@@ -95,33 +95,42 @@ class AnalysisViewModel(
         val selection = mutableUiState.value as? AnalysisUiState.Selection ?: return
         if (requestJob?.isActive == true) return
         val uploadId = selection.upload.uploadId ?: return
-        val choices = listOfNotNull(selection.upload.original) + selection.upload.elements.orEmpty()
-        if (choices.none { it.elementId == elementId }) return
-        screenResultType = resultType.takeIf { selectionScreenCrop }
+        val screenType = if (selectionScreenCrop) resultType ?: ScreenResultType.IMAGE else null
+        if (screenType != ScreenResultType.TEXT) {
+            val choices = listOfNotNull(selection.upload.original) + selection.upload.elements.orEmpty()
+            if (choices.none { it.elementId == elementId }) return
+        }
+        screenResultType = screenType
+        screenImage = null
+        screenText = null
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
             try {
-                if (selectionScreenCrop) {
-                    val (image, text) = coroutineScope {
-                        val imageRequest = async { attempt { checkNotNull(photoSelection).select(uploadId, elementId) } }
-                        val textRequest = async { attempt {
+                when (screenType) {
+                    ScreenResultType.IMAGE -> {
+                        val image = attempt { checkNotNull(photoSelection).select(uploadId, elementId) }
+                        ensureActive()
+                        screenImage = image
+                        if (image.isSuccess || image.exceptionOrNull() is AnalysisLookupException ||
+                            image.exceptionOrNull() is AnalysisNotCompletedException) pendingUploadId = null
+                        publishScreenResult()
+                    }
+                    ScreenResultType.TEXT -> {
+                        val text = attempt {
                             val api = checkNotNull(screenCropApi).invoke()
                             api.analyzeScreenCrop(checkNotNull(selectionPart)).toCompletedScreenCrop(repository)
-                        } }
-                        imageRequest.await() to textRequest.await()
+                        }
+                        ensureActive()
+                        screenText = text
+                        publishScreenResult()
                     }
-                    ensureActive()
-                    screenImage = image
-                    screenText = text
-                    if (image.isSuccess || image.exceptionOrNull() is AnalysisLookupException ||
-                        image.exceptionOrNull() is AnalysisNotCompletedException) pendingUploadId = null
-                    publishScreenResult()
-                } else {
-                    val result = checkNotNull(photoSelection).select(uploadId, elementId)
-                    ensureActive()
-                    pendingUploadId = null
-                    mutableUiState.value = AnalysisUiState.Success(result)
+                    null -> {
+                        val result = checkNotNull(photoSelection).select(uploadId, elementId)
+                        ensureActive()
+                        pendingUploadId = null
+                        mutableUiState.value = AnalysisUiState.Success(result)
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 mutableUiState.value = AnalysisUiState.Idle
@@ -152,7 +161,7 @@ class AnalysisViewModel(
     /** Rechecks the ID from POST without uploading the image or creating another analysis. */
     @MainThread
     fun refreshPending() {
-        if (screenImage != null) { refreshScreen(); return }
+        if (screenImage != null || screenText != null) { refreshScreen(); return }
         val id = when (val state = mutableUiState.value) {
             is AnalysisUiState.Pending -> state.analysisId
             is AnalysisUiState.Error -> state.pendingAnalysisId
@@ -252,9 +261,9 @@ class AnalysisViewModel(
     internal fun restoreScreenResult(result: AnalysisUiState.ScreenSuccess) {
         if (mutableUiState.value != AnalysisUiState.Idle) return
         screenImage = result.image?.let { Result.success(it) }
-            ?: Result.failure(RestoredScreenError(result.imageError ?: AnalysisUiState.Error()))
+            ?: result.imageError?.let { Result.failure(RestoredScreenError(it)) }
         screenText = result.text?.let { Result.success(it) }
-            ?: Result.failure(RestoredScreenError(result.textError ?: AnalysisUiState.Error()))
+            ?: result.textError?.let { Result.failure(RestoredScreenError(it)) }
         screenResultType = result.resultType
         mutableUiState.value = result
     }
@@ -291,19 +300,19 @@ class AnalysisViewModel(
     }
 
     private fun publishScreenResult() {
-        val image = checkNotNull(screenImage)
-        val text = checkNotNull(screenText)
-        val imageError = image.exceptionOrNull()
-        val textError = text.exceptionOrNull()
-        mutableUiState.value = if (image.isSuccess || text.isSuccess) {
+        val image = screenImage
+        val text = screenText
+        val imageError = image?.exceptionOrNull()
+        val textError = text?.exceptionOrNull()
+        mutableUiState.value = if (image?.isSuccess == true || text?.isSuccess == true) {
             AnalysisUiState.ScreenSuccess(
-                image.getOrNull(), text.getOrNull(), imageError?.toPartialError(), textError?.toPartialError(),
+                image?.getOrNull(), text?.getOrNull(), imageError?.toPartialError(), textError?.toPartialError(),
                 resultType = screenResultType,
             )
         } else {
-            val error = listOfNotNull(imageError, textError)
-                .firstOrNull { it !is AnalysisNotCompletedException } ?: checkNotNull(imageError)
-            (error as Exception).toUiState()
+            val errors = listOfNotNull(imageError, textError)
+            val error = errors.firstOrNull { it !is AnalysisNotCompletedException } ?: errors.first()
+            (error as Exception).toUiState(screenResultType)
         }
     }
 
@@ -322,9 +331,9 @@ class AnalysisViewModel(
             else -> AnalysisUiState.Error()
         }
 
-    private fun Exception.toUiState(): AnalysisUiState = when (this) {
+    private fun Exception.toUiState(screenType: ScreenResultType? = null): AnalysisUiState = when (this) {
         is RestoredScreenError -> state
-        is AnalysisLookupException -> when (val state = (cause as Exception).toUiState()) {
+        is AnalysisLookupException -> when (val state = (cause as Exception).toUiState(screenType)) {
             is AnalysisUiState.Error -> state.copy(pendingAnalysisId = analysisId)
             else -> state
         }
@@ -332,7 +341,7 @@ class AnalysisViewModel(
         is AnalysisHttpException -> when (code) {
             "PHOTO_DETECTION503" -> AnalysisUiState.Error(AnalysisErrorKind.PHOTO_DETECTION, httpStatus)
             else -> AnalysisUiState.Error(AnalysisErrorKind.HTTP, httpStatus,
-                reuploadRequired = httpStatus == 404 && pendingUploadId != null)
+                reuploadRequired = httpStatus == 404 && pendingUploadId != null && screenType != ScreenResultType.TEXT)
         }
         is AnalysisProtocolException -> AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
         is AnalysisNotCompletedException -> {
@@ -340,7 +349,9 @@ class AnalysisViewModel(
             if (id.isNullOrBlank()) AnalysisUiState.Error(AnalysisErrorKind.RESPONSE)
             else AnalysisUiState.Pending(id, status)
         }
-        is AnalysisFailedException -> AnalysisUiState.Error(AnalysisErrorKind.SERVER)
+        is AnalysisFailedException -> AnalysisUiState.Error(
+            if (screenType == ScreenResultType.TEXT) AnalysisErrorKind.SCREEN_TEXT_SERVER else AnalysisErrorKind.SERVER,
+        )
         // SocketTimeoutException and OkHttp call timeouts both extend InterruptedIOException.
         is InterruptedIOException -> AnalysisUiState.Error(AnalysisErrorKind.TIMEOUT)
         is IOException -> AnalysisUiState.Error(AnalysisErrorKind.CONNECTION)

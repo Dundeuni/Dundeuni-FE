@@ -64,5 +64,6 @@ enum class AnalysisErrorKind(val message: String) {
     RESPONSE("분석 서버 응답 형식을 확인할 수 없습니다."),
     IN_PROGRESS("서버 분석이 아직 완료되지 않았습니다. 같은 분석 ID로 결과를 다시 확인해 주세요."),
     SERVER("서버에서 이미지 분석에 실패했습니다. 다시 시도해 주세요."),
+    SCREEN_TEXT_SERVER("서버에서 화면 텍스트 분석에 실패했습니다. 다시 시도해 주세요."),
     UNKNOWN("검사에 실패했습니다. 다시 시도하거나 이미지를 다시 선택해 주세요."),
 }
