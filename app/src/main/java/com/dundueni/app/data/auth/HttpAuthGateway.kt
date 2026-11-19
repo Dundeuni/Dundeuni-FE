@@ -110,7 +110,14 @@ class HttpAuthGateway(
         val token = requireNotNull(accessToken)
         require(Regex("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+").matches(token))
         val expiry = Instant.parse(accessTokenExpiresAt).epochSecond
-        return AuthSession(token, AuthSessionSource.BACKEND, expiry, onboarding).also {
+        return AuthSession(
+            accessToken = token,
+            source = AuthSessionSource.BACKEND,
+            serverExpiresAtEpochSeconds = expiry,
+            onboardingCompleted = onboarding,
+            email = user.email,
+            nickname = user.nickname,
+        ).also {
             require(it.isValid(epochMillis() / 1000))
         }
     }

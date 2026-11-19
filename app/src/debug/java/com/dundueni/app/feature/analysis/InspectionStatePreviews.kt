@@ -23,16 +23,23 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 
 // These are completed detail responses supplied directly to the production presentation path.
 // No ViewModel, repository, or network client is created by these previews.
-internal fun previewImageDetail(partialFailure: Boolean = false, summaryReady: Boolean = true): BackendResult {
+internal fun previewImageDetail(
+    partialFailure: Boolean = false,
+    summaryReady: Boolean = true,
+    noClearSignal: Boolean = false,
+): BackendResult {
     val generationReasons = listOf(AnalysisReasonDto("뚜렷한 생성 흔적을 찾지 못했습니다."))
-    val overallLabel = if (partialFailure) "판단 불가" else "생성·변조 의심"
+    val overallResult = when {
+        partialFailure -> AnalysisOverallResultDto(decision = "INCONCLUSIVE", decisionLabel = "판단 불가")
+        noClearSignal -> AnalysisOverallResultDto(decision = "NO_CLEAR_SIGNAL", decisionLabel = "뚜렷한 신호 없음")
+        else -> AnalysisOverallResultDto(
+            decision = "GENERATION_OR_MANIPULATION_SUSPECTED", decisionLabel = "생성·변조 의심",
+        )
+    }
     return AnalysisDetailDto(
         analysisId = "preview-image", type = "IMAGE", status = "COMPLETED",
         aiGenerationScore = 12.0, reasons = generationReasons,
-        overallResult = AnalysisOverallResultDto(
-            decision = if (partialFailure) "INCONCLUSIVE" else "GENERATION_OR_MANIPULATION_SUSPECTED",
-            decisionLabel = overallLabel,
-        ),
+        overallResult = overallResult,
         models = AnalysisImageModelsDto(
             status = if (partialFailure) "PARTIAL_FAILED" else "COMPLETED",
             generation = AnalysisModelResultDto(
@@ -43,8 +50,13 @@ internal fun previewImageDetail(partialFailure: Boolean = false, summaryReady: B
                 AnalysisModelResultDto(status = "FAILED", retryable = true)
             } else {
                 AnalysisModelResultDto(
-                    status = "SUCCEEDED", decision = "MANIPULATION_SUSPECTED", displayScore = 82.0,
-                    reasons = listOf(AnalysisReasonDto("이미지 일부에서 합성 흔적이 감지됐습니다.")),
+                    status = "SUCCEEDED",
+                    decision = if (noClearSignal) "NO_CLEAR_MANIPULATION_SIGNAL" else "MANIPULATION_SUSPECTED",
+                    displayScore = if (noClearSignal) 9.0 else 82.0,
+                    reasons = listOf(AnalysisReasonDto(
+                        if (noClearSignal) "이미지 경계에서 뚜렷한 편집 흔적을 찾지 못했습니다."
+                        else "이미지 일부에서 합성 흔적이 감지됐습니다.",
+                    )),
                 )
             },
         ),
@@ -52,7 +64,11 @@ internal fun previewImageDetail(partialFailure: Boolean = false, summaryReady: B
         else listOf("사진이나 정보의 출처를 확인해 주세요."),
     ).toDomain().copy(
         // Sample COMPLETED response from the separate image summary endpoint.
-        summary = if (summaryReady && !partialFailure) "뚜렷한 생성 신호는 없지만 이미지 변조 의심 신호가 확인됐습니다." else null,
+        summary = when {
+            !summaryReady || partialFailure -> null
+            noClearSignal -> "두 모델에서 뚜렷한 생성 또는 변조 신호가 확인되지 않았습니다."
+            else -> "뚜렷한 생성 신호는 없지만 이미지 변조 의심 신호가 확인됐습니다."
+        },
     )
 }
 
@@ -66,18 +82,26 @@ internal fun previewLegacyImageDetail() = AnalysisDetailDto(
 
 internal fun previewTextDetail(
     sourceType: String = "SCREEN_CROP",
-    deferred: Boolean = false,
-    evidence: List<String> = if (deferred) emptyList() else listOf("급한 송금을 요구하는 문구가 있어요."),
+    decision: String = "phishing",
+    evidence: List<String> = when (decision) {
+        "normal" -> listOf("일상적인 약속을 확인하는 문장입니다.")
+        "defer" -> emptyList()
+        else -> listOf("급한 송금을 요구하는 문구가 있어요.")
+    },
 ) =
     AnalysisDetailDto(
         analysisId = "preview-text", type = "TEXT", status = "COMPLETED",
         textResult = TextAnalysisTextResultDto(
-            decision = if (deferred) "defer" else "phishing",
-            riskScore = if (deferred) null else 0.87,
+            decision = decision,
+            riskScore = when (decision) {
+                "normal" -> 0.08
+                "defer" -> null
+                else -> 0.87
+            },
             sourceType = sourceType,
-            quality = TextAnalysisQualityDto(needsReview = true, ocrUsed = sourceType == "SCREEN_CROP"),
+            quality = TextAnalysisQualityDto(needsReview = decision != "normal", ocrUsed = sourceType == "SCREEN_CROP"),
             evidence = evidence,
-            limitations = listOf(if (deferred) "분류에 필요한 문맥이 부족합니다." else "발신자 신원은 확인할 수 없습니다."),
+            limitations = listOf(if (decision == "defer") "분류에 필요한 문맥이 부족합니다." else "발신자 신원은 확인할 수 없습니다."),
         ),
         guides = listOf("현재 분석만으로는 판단하기 어렵습니다.", "원본 사진이나 추가 자료를 확인해 주세요."),
     ).toDomain()
@@ -87,7 +111,8 @@ internal fun screenState(
     text: ScreenCropAnalysis? = previewScreenText(),
     imageError: AnalysisUiState.Error? = null,
     textError: AnalysisUiState.Error? = null,
-) = AnalysisUiState.ScreenSuccess(image, text, imageError, textError)
+    resultType: ScreenResultType? = null,
+) = AnalysisUiState.ScreenSuccess(image, text, imageError, textError, resultType)
 
 private fun previewScreenText() = previewTextDetail().toScreenCropAnalysis()
 
@@ -139,30 +164,31 @@ private fun InspectionRefreshErrorPreview() = FlowPreview(
     AnalysisUiState.Error(AnalysisErrorKind.CONNECTION, pendingAnalysisId = "preview-analysis"),
 )
 
-@Preview(name = "P1 화면 검사 · 문자 분석 실패", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 화면 검사 · 문자 분석 실패", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun ScreenTextFailedPreview() = FlowPreview(
-    screenState(text = null, textError = AnalysisUiState.Error(AnalysisErrorKind.SERVER)),
+    screenState(text = null, textError = AnalysisUiState.Error(AnalysisErrorKind.SERVER), resultType = ScreenResultType.TEXT),
     HistoryType.SCREEN,
 )
 
-@Preview(name = "P1 화면 검사 · 이미지 분석 실패", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 화면 검사 · 이미지 분석 실패", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun ScreenImageFailedPreview() = FlowPreview(
-    screenState(image = null, imageError = AnalysisUiState.Error(AnalysisErrorKind.CONNECTION)),
+    screenState(image = null, imageError = AnalysisUiState.Error(AnalysisErrorKind.CONNECTION), resultType = ScreenResultType.IMAGE),
     HistoryType.SCREEN,
 )
 
-@Preview(name = "P1 화면 검사 · 부분 결과 재조회", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 화면 검사 · 부분 결과 재조회", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun ScreenPartialRefreshPreview() = FlowPreview(
-    screenState(text = null, textError = AnalysisUiState.Error(
-        AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "preview-text",
-    )),
+    screenState(
+        text = null, textError = AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "preview-text"),
+        resultType = ScreenResultType.TEXT,
+    ),
     HistoryType.SCREEN,
 )
 
-@Preview(name = "P1 결과 · 이미지 모델 부분 실패", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 판단 불가 · 모델 부분 실패", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImagePartialFailureResultPreview() = ResultPreview(
     checkNotNull(previewImageDetail(partialFailure = true).toPb05Result(isDemo = false)),
@@ -171,7 +197,7 @@ private fun ImagePartialFailureResultPreview() = ResultPreview(
 @Preview(name = "P1 결과 · 이미지 요약 등록 대기", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImageSummaryPendingResultPreview() =
-    ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Unavailable))
+    ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Unavailable), noClearSignal = true)
 
 @Preview(name = "P1 결과 · 이미지 요약 다시 확인", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
@@ -189,21 +215,35 @@ private fun ImageSummaryRegisteredPendingPreview() =
     ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Pending))
 
 @Composable
-private fun ImageSummaryStatusPreview(state: ImageSummaryUiState) = ResultPreview(
-    checkNotNull(previewImageDetail(summaryReady = false).toPb05Result(isDemo = false)),
+private fun ImageSummaryStatusPreview(state: ImageSummaryUiState, noClearSignal: Boolean = false) = ResultPreview(
+    checkNotNull(previewImageDetail(summaryReady = false, noClearSignal = noClearSignal).toPb05Result(isDemo = false)),
     imageSummary = state,
 )
 
-@Preview(name = "P1 화면 검사 · 백그라운드 결과 재조회", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 화면 검사 · 백그라운드 결과 재조회", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun BackgroundScreenPartialRefreshPreview() {
-    val state = screenState(text = null, textError = AnalysisUiState.Error(
-        AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "preview-text",
-    ))
+    val state = screenState(
+        text = null, textError = AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "preview-text"),
+        resultType = ScreenResultType.TEXT,
+    )
     val result = checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN))
     DundueniFETheme {
-        ScreenInspectionResult(state, result, onReturn = {}, onHome = {}, onRefresh = {})
+        ScreenInspectionResult(
+            state, result, onReturn = {}, onHome = {}, onRefresh = {}, refreshing = true,
+        )
     }
+}
+
+@Preview(name = "P1 화면 검사 · AI 요약 다시 확인", widthDp = 390, heightDp = 1200, showBackground = true)
+@Composable
+private fun ScreenSummaryManualRetryPreview() {
+    val state = screenState(image = previewImageDetail(summaryReady = false), resultType = ScreenResultType.IMAGE)
+    ResultPreview(
+        checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
+        imageSummary = ImageSummaryUiState(ImageSummaryResult.Unavailable, checking = false, showRetry = true),
+        screenResultType = state.resultType,
+    )
 }
 
 // POST inspection and the subsequent detail GET both use PhoneInspectionUiState.Loading.

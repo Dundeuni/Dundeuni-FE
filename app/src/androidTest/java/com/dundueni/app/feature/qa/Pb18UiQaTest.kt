@@ -19,7 +19,6 @@ import com.dundueni.app.feature.history.*
 import com.dundueni.app.feature.phone.PhoneInputActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
 import com.dundueni.app.feature.url.UrlInputActivity
-import com.google.gson.Gson
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -131,15 +130,12 @@ class Pb18UiQaTest {
             instrumentation.waitForIdleSync()
         }
     }
-    @Test fun savingResultFiltersByTypeAndRecentRecordReturnsHome() {
-        HistoryStore(context).save(AnalysisResult("pb18-fixture-image", RiskLevel.SAFE, "QA fixture", historyType = HistoryType.IMAGE), 100)
+    @Test fun savedRecordsFilterByTypeAndRecentRecordReturnsHome() {
+        val history = HistoryStore(context)
+        history.save(AnalysisResult("pb18-fixture-image", RiskLevel.SAFE, "QA fixture", historyType = HistoryType.IMAGE), 100)
         val result = AnalysisResult("pb18-fixture-text", RiskLevel.SAFE, "QA fixture", historyType = HistoryType.TEXT)
-        ActivityScenario.launch<AnalysisResultActivity>(AnalysisResultActivity.createIntent(context, Gson().toJson(result))).use {
-            waitText("결과 화면")
-            compose.onNodeWithText("검사 결과 기록에 보관하기").performScrollTo().performClick()
-            waitText("검사 결과가 기록에 보관되었어요")
-            assertEquals(HistoryType.TEXT, HistoryStore(context).read().first { it.id == result.id }.type)
-        }
+        assertTrue(history.save(result))
+        assertEquals(HistoryType.TEXT, history.read().first { it.id == result.id }.type)
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
             waitText("최근 검사")
             compose.onAllNodesWithText("저장한 검사 결과")[0].performScrollTo().performClick()

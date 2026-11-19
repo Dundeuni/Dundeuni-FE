@@ -53,7 +53,9 @@ internal class ImageSummaryViewModel private constructor(
 
 /** With the current Repository, Unavailable includes the BE's initial null status. */
 private fun ImageSummaryResult?.canRecheck() =
-    this == ImageSummaryResult.Pending || this == ImageSummaryResult.Unavailable
+    this == ImageSummaryResult.Pending ||
+        this == ImageSummaryResult.Unavailable ||
+        this == ImageSummaryResult.LookupError
 
 private class ImageSummaryLookup {
     private val state = MutableStateFlow(ImageSummaryUiState())

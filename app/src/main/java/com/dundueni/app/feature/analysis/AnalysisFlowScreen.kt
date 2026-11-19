@@ -73,15 +73,22 @@ fun AnalysisFlowScreen(
     isDemo: Boolean = false,
     historyType: HistoryType = HistoryType.IMAGE,
     onRefresh: () -> Unit = {},
-    onChoosePhoto: (String) -> Unit = {},
+    onChoosePhoto: (String, ScreenResultType?) -> Unit = { _, _ -> },
 ) {
-    // 팝업 표시 여부는 분석 상태와 별개로 저장해 회전 후에도 닫힌 상태를 유지한다.
-    var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
     // The host window is translucent: render only the dialog over the screen that launched inspection.
     when (state) {
         AnalysisUiState.Idle -> return
         AnalysisUiState.Loading -> {
-            if (!loadingPopupDismissed) InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+            var dismissed by rememberSaveable { mutableStateOf(false) }
+            if (!dismissed) InspectionLoadingDialog(onDismissPopup = { dismissed = true })
+            return
+        }
+        is AnalysisUiState.Pending -> {
+            InspectionLoadingDialog(
+                onDismissPopup = onClose,
+                message = AnalysisErrorKind.IN_PROGRESS.message,
+                onCheckResult = onRefresh,
+            )
             return
         }
         is AnalysisUiState.Error -> {
@@ -96,7 +103,6 @@ fun AnalysisFlowScreen(
                     else "\n다시 시도하면 이미지를 다시 업로드합니다.")
                 },
                 onRetry = {
-                    loadingPopupDismissed = false
                     if (state.pendingAnalysisId != null) onRefresh() else onRetry()
                 },
                 onCancelInspection = onClose,
@@ -117,7 +123,7 @@ fun AnalysisFlowScreen(
         return
     }
     if (state is AnalysisUiState.Selection) {
-        AnalysisSelectionScreen(state, onClose, onChoosePhoto, isDemo)
+        AnalysisSelectionScreen(state, onClose, onChoosePhoto, isDemo, historyType == HistoryType.SCREEN)
         return
     }
     Column(Modifier.fillMaxSize().background(PageBackground).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -130,11 +136,8 @@ fun AnalysisFlowScreen(
             is AnalysisUiState.Selection -> Unit
             is AnalysisUiState.Success -> AnalysisResultContent(state.result)
             is AnalysisUiState.ScreenSuccess -> Unit
-            is AnalysisUiState.Pending -> Text("분석 요청이 접수되었으며 서버에서 처리 중입니다.")
+            is AnalysisUiState.Pending -> Unit
             is AnalysisUiState.Error -> Unit
-        }
-        if (state is AnalysisUiState.Pending) {
-            DundueniButton("결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
         }
         if (state !is AnalysisUiState.Error) {
             DundueniButton(if (state == AnalysisUiState.Loading) "검사 취소" else "닫기", onClose,
@@ -152,17 +155,53 @@ internal fun ScreenInspectionResult(
     onRefresh: () -> Unit,
     refreshing: Boolean = false,
 ) {
-    Column {
-        if (state.imageError?.pendingAnalysisId != null || state.textError?.pendingAnalysisId != null) {
-            DundueniButton(
-                "결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY,
-                enabled = !refreshing,
-            )
+    val resultType = state.resultType ?: when {
+        state.image == null -> ScreenResultType.TEXT
+        state.text == null -> ScreenResultType.IMAGE
+        else -> null
+    }
+    val selectedError = when (resultType) {
+        ScreenResultType.IMAGE -> state.imageError
+        ScreenResultType.TEXT -> state.textError
+        null -> null
+    }
+    if (selectedError == null) {
+        Column {
+            if (state.imageError?.pendingAnalysisId != null || state.textError?.pendingAnalysisId != null) {
+                DundueniButton(
+                    "결과 다시 확인", onRefresh, Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY,
+                    enabled = !refreshing,
+                )
+            }
+            AnalysisResultRoute(result, onReturn = onReturn, onHome = onHome, screenResultType = resultType)
         }
-        AnalysisResultRoute(
-            result, onReturn = onReturn, onHome = onHome,
-            imageAnalysisError = state.imageError?.message,
-            screenCropError = state.textError?.message,
+    }
+
+    if (refreshing) {
+        var dismissed by rememberSaveable { mutableStateOf(false) }
+        if (!dismissed) InspectionLoadingDialog(onDismissPopup = { dismissed = true })
+        return
+    }
+    if (selectedError == null) return
+
+    val canRecheck = selectedError.pendingAnalysisId != null
+    // A failed detail lookup can keep the analysis ID even when the server verdict is still unknown.
+    val awaitingResult = selectedError.kind == AnalysisErrorKind.IN_PROGRESS ||
+        (canRecheck && selectedError.kind != AnalysisErrorKind.SERVER)
+    if (awaitingResult) {
+        InspectionLoadingDialog(
+            onDismissPopup = onReturn,
+            message = selectedError.message,
+            onCheckResult = onRefresh,
+        )
+    } else {
+        val analysis = if (resultType == ScreenResultType.IMAGE) "이미지 분석" else "문자 분석"
+        InspectionErrorDialog(
+            message = if (selectedError.kind == AnalysisErrorKind.SERVER) "서버에서 ${analysis}에 실패했어요."
+                else "$analysis · ${selectedError.message}",
+            onRetry = onRefresh,
+            onCancelInspection = onReturn,
+            showRetry = canRecheck,
         )
     }
 }
@@ -171,8 +210,9 @@ internal fun ScreenInspectionResult(
 private fun AnalysisSelectionScreen(
     state: AnalysisUiState.Selection,
     onClose: () -> Unit,
-    onChoosePhoto: (String) -> Unit,
+    onChoosePhoto: (String, ScreenResultType?) -> Unit,
     isDemo: Boolean,
+    fromScreen: Boolean,
 ) {
     val upload = state.upload
     val image = checkNotNull(upload.image)
@@ -196,8 +236,17 @@ private fun AnalysisSelectionScreen(
                     Text(selectedLabel, style = MaterialTheme.typography.titleMedium,
                         color = if (selected == null) SecondaryInk else ProtectiveBlue)
                 }
-                if (selected != null) DundueniButton("선택한 대상 분석", { onChoosePhoto(checkNotNull(selected)) },
-                    Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
+                selected?.let { elementId ->
+                    if (fromScreen) {
+                        DundueniButton("이미지 분석", { onChoosePhoto(elementId, ScreenResultType.IMAGE) },
+                            Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
+                        DundueniButton("텍스트 분석", { onChoosePhoto(elementId, ScreenResultType.TEXT) },
+                            Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
+                    } else {
+                        DundueniButton("선택한 대상 분석", { onChoosePhoto(elementId, null) },
+                            Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
+                    }
+                }
                 TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text("닫기", style = MaterialTheme.typography.bodyLarge, color = SecondaryInk)
                 }

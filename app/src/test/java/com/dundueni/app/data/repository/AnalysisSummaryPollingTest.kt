@@ -151,6 +151,33 @@ class AnalysisSummaryPollingTest {
         assertEquals(1, repository.ids.size)
     }
 
+    @Test fun firstLookupErrorAllowsManualRecoveryWithoutAutomaticRetries() = runTest {
+        val repository = SummaryRepository {
+            if (it <= 2) ImageSummaryResult.LookupError else completed
+        }
+        val model = ImageSummaryViewModel.forResult(analysisId, repository)
+        val visible = launch { model.refreshWhileVisible() }
+        runCurrent()
+        assertEquals(ImageSummaryResult.LookupError, model.uiState.value.result)
+        assertTrue(model.uiState.value.lookupFailed)
+        assertTrue(model.uiState.value.showRetry)
+        advanceTimeBy(60_000)
+        assertEquals(listOf(analysisId), repository.ids)
+
+        model.checkAgain()
+        runCurrent()
+        assertEquals(2, repository.ids.size)
+        assertTrue(model.uiState.value.showRetry)
+
+        model.checkAgain()
+        runCurrent()
+        assertEquals(List(3) { analysisId }, repository.ids)
+        assertEquals(completed, model.uiState.value.result)
+        assertFalse(model.uiState.value.lookupFailed)
+        assertFalse(model.uiState.value.showRetry)
+        assertTrue(visible.isCompleted)
+    }
+
     @Test fun failedLookupAfterConfirmedPendingStopsAutoAndAllowsManualRecovery() = runTest {
         val repository = SummaryRepository {
             when (it) {

@@ -1,7 +1,6 @@
 package com.dundueni.app.feature.history
 
 import com.dundueni.app.BuildConfig
-import com.dundueni.app.data.repository.findHistoryImageResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -13,6 +12,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.dundueni.app.feature.home.HomeDestination
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,33 +50,23 @@ fun HistoryRoute(
             .onFailure { error = "기록을 불러오지 못했어요. 다시 시도해주세요." }
         loading = false
     }
-    LaunchedEffect(initialRecordId, revision, loading) {
-        if (real && !loading && initialRecordId != null) {
-            withContext(Dispatchers.IO) { runCatching { checkNotNull(remote).detail(initialRecordId).toHistoryRecord().let { record ->
-                if (record.type == HistoryType.IMAGE && record.status == "COMPLETED")
-                    runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findHistoryImageResult(initialRecordId)) }.getOrDefault(record)
-                else record
-            } } }
-                .onSuccess { detail -> records = listOf(detail) + records.filterNot { it.id == detail.id } }
-                .onFailure { error = "기록 상세를 불러오지 못했어요. 다시 시도해주세요." }
-        }
-    }
     HistoryScreen(
         initialRecordId = initialRecordId, onCloseDetail = if (initialRecordId != null) onHome else null,
         onNavigationSelected = onNavigationSelected,
         records = records, loading = loading, error = error, onHome = onHome,
         onRetry = { revision++ }, onDelete = { pendingDelete = it }, onClear = { pendingDelete = "*" },
-        allowDelete = !real, onSelect = { id ->
-            if (real) scope.launch {
-                val detail = withContext(Dispatchers.IO) { runCatching { checkNotNull(remote).detail(id).toHistoryRecord().let { record ->
-                    if (record.type == HistoryType.IMAGE && record.status == "COMPLETED")
-                        runCatching { record.withImageDetail(AnalysisFlowDependencies.createRepository(context).findHistoryImageResult(id)) }.getOrDefault(record)
-                    else record
-                } } }
-                detail.onSuccess { record -> records = records.map { if (it.id == id) record else it }; error = null }
-                    .onFailure { error = "기록 상세를 불러오지 못했어요. 다시 시도해주세요." }
+        allowDelete = !real,
+        detailContent = if (real) {
+            { id ->
+                ServerHistoryDetail(revision) {
+                    val entry = checkNotNull(remote).detail(id)
+                    val image = if (entry.type == "IMAGE" && entry.status == "COMPLETED") {
+                        AnalysisFlowDependencies.createRepository(context).findResult(id)
+                    } else null
+                    entry.toRecordDetail(image)
+                }
             }
-        },
+        } else null,
     )
     pendingDelete?.let { target ->
         AlertDialog(
@@ -99,4 +89,24 @@ fun HistoryRoute(
             dismissButton = { TextButton(enabled = !deleting, onClick = { pendingDelete = null }) { Text("취소") } },
         )
     }
+}
+
+@Composable
+private fun ServerHistoryDetail(revision: Int, load: suspend () -> HistoryRecordDetail) {
+    var attempt by remember { mutableIntStateOf(0) }
+    var response by remember(revision, attempt) { mutableStateOf<Result<HistoryRecordDetail>?>(null) }
+    LaunchedEffect(revision, attempt) {
+        response = try {
+            Result.success(withContext(Dispatchers.IO) { load() })
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+    HistoryResultDetail(
+        detail = response?.getOrNull(),
+        error = response?.isFailure == true,
+        onRetry = { attempt++ },
+    )
 }

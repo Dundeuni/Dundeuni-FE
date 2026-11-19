@@ -25,6 +25,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
+import com.dundueni.app.feature.analysis.ScreenResultType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +40,7 @@ fun AnalysisResultRoute(
     isDemo: Boolean = false,
     imageAnalysisError: String? = null,
     screenCropError: String? = null,
+    screenResultType: ScreenResultType? = null,
 ) {
     BackHandler(onBack = onReturn)
     val context = LocalContext.current
@@ -86,9 +88,10 @@ fun AnalysisResultRoute(
         }, "분석 결과 공유"))
     }
 
-    AnalysisResultScreen(result, historySaved = saved, isDemo = isDemo,
+    AnalysisResultScreen(result, isDemo = isDemo,
         imageAnalysisError = imageAnalysisError,
         screenCropError = screenCropError,
+        screenResultType = screenResultType,
         imageSummary = summaryState,
         onCheckImageSummary = { summaryModel?.checkAgain() },
         onAction = { action ->
@@ -141,7 +144,7 @@ fun AnalysisResultRoute(
 }
 
 @Composable
-private fun rememberImageSummaryViewModel(analysisId: String?): ImageSummaryViewModel? {
+internal fun rememberImageSummaryViewModel(analysisId: String?): ImageSummaryViewModel? {
     if (analysisId == null || LocalInspectionMode.current) return null
     val owner = LocalView.current.findViewTreeViewModelStoreOwner() ?: return null
     val context = LocalContext.current.applicationContext

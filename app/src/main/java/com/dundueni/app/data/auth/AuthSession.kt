@@ -10,6 +10,8 @@ data class AuthSession(
     val source: AuthSessionSource,
     val serverExpiresAtEpochSeconds: Long? = null,
     val onboardingCompleted: Boolean? = null,
+    val email: String? = null,
+    val nickname: String? = null,
 ) {
     fun expiresAtEpochSeconds(): Long? = JwtAccessToken.expiresAtEpochSeconds(accessToken)?.let {
         minOf(it, serverExpiresAtEpochSeconds ?: it)

@@ -33,6 +33,8 @@ class AndroidEncryptedAuthSessionStore(context: Context) : AuthSessionStore {
             AuthSession(token, source,
                 if (json.has("serverExpiresAt")) json.getLong("serverExpiresAt") else null,
                 if (json.has("onboardingCompleted")) json.getBoolean("onboardingCompleted") else null,
+                email = json.optString("email", "").takeIf { it.isNotBlank() },
+                nickname = json.optString("nickname", "").takeIf { it.isNotBlank() },
             ).takeIf { it.expiresAtEpochSeconds() != null }
         }.getOrElse {
             preferences.edit().remove(SESSION_KEY).commit()
@@ -49,6 +51,8 @@ class AndroidEncryptedAuthSessionStore(context: Context) : AuthSessionStore {
             .put("source", session.source.name)
             .put("serverExpiresAt", session.serverExpiresAtEpochSeconds)
             .put("onboardingCompleted", session.onboardingCompleted)
+            .put("email", session.email)
+            .put("nickname", session.nickname)
             .toString()
             .toByteArray(Charsets.UTF_8)
         val cipher = Cipher.getInstance(TRANSFORMATION)

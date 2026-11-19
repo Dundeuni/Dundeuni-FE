@@ -6,25 +6,21 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.data.auth.AuthSessionRuntime
 import com.dundueni.app.feature.capture.MediaProjectionService
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeScreen
+import com.dundueni.app.feature.mypage.MyPageRoute
 import com.dundueni.app.feature.history.HistoryActivity
 import com.dundueni.app.feature.photopicker.PhotoPickerActivity
 import com.dundueni.app.feature.textinput.TextInputActivity
@@ -35,21 +31,20 @@ import com.dundueni.app.feature.onboarding.OnboardingScreen
 import com.dundueni.app.feature.payment.showLimitIfExhausted
 import com.dundueni.app.ui.theme.LocalEasyMode
 import com.dundueni.app.ui.theme.DundueniFETheme
-import com.dundueni.app.ui.theme.BrandInk
 
 class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_OPEN_SETTINGS = "com.dundueni.app.extra.OPEN_SETTINGS"
-        const val EXTRA_OPEN_ACCOUNT = "com.dundueni.app.extra.OPEN_ACCOUNT"
+        const val EXTRA_OPEN_MY_PAGE = "com.dundueni.app.extra.OPEN_MY_PAGE"
+        private const val STATE_DESTINATION = "main_destination"
         private const val ONBOARDING_PREFERENCES = "dundueni_onboarding"
         private const val ONBOARDING_COMPLETED = "completed"
         private const val STATE_ONBOARDING_PAGE = "onboarding_page"
     }
 
     private var floatingButtonEnabled by mutableStateOf(false)
-    private var showingSettings by mutableStateOf(false)
+    private var currentDestination by mutableStateOf(HomeDestination.HOME)
     private var showingOnboarding by mutableStateOf(false)
-    private var showingAccountDialog by mutableStateOf(false)
     private var onboardingPage by mutableIntStateOf(1)
     private var pendingOverlayAction: OverlayAction? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -78,7 +73,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        showingSettings = intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false)
+        currentDestination = savedInstanceState?.getString(STATE_DESTINATION)?.let { HomeDestination.valueOf(it) }
+            ?: requestedDestination(intent) ?: HomeDestination.HOME
         showingOnboarding = !getSharedPreferences(ONBOARDING_PREFERENCES, MODE_PRIVATE)
             .getBoolean(ONBOARDING_COMPLETED, false)
         onboardingPage = savedInstanceState?.getInt(STATE_ONBOARDING_PAGE, 1) ?: 1
@@ -95,6 +91,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             DundueniFETheme {
                 val easy = LocalEasyMode.current
+                val navigate: (HomeDestination) -> Unit = { destination ->
+                    when (destination) {
+                        HomeDestination.HOME, HomeDestination.SETTINGS, HomeDestination.MY_SHELTER ->
+                            currentDestination = destination
+                        HomeDestination.REPORT -> {
+                            if (easy || currentDestination == HomeDestination.MY_SHELTER) {
+                                currentDestination = HomeDestination.HOME
+                            }
+                            startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+                        }
+                        HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
+                    }
+                }
                 if (showingOnboarding) {
                     OnboardingScreen(
                         page = onboardingPage,
@@ -107,20 +116,17 @@ class MainActivity : ComponentActivity() {
                         },
                         onStart = ::completeOnboarding,
                     )
-                } else if (showingSettings) {
-                    SettingsScreen { destination ->
-                        when (destination) {
-                            HomeDestination.HOME -> showingSettings = false
-                            HomeDestination.REPORT -> {
-                                // Easy tabs return to Home when the history Activity is closed.
-                                if (easy) showingSettings = false
-                                startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
-                            }
-                            HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
-                            HomeDestination.MY_SHELTER -> openAccount()
-                            HomeDestination.SETTINGS -> Unit
-                        }
-                    }
+                } else if (currentDestination == HomeDestination.SETTINGS) {
+                    SettingsScreen(navigate)
+                } else if (currentDestination == HomeDestination.MY_SHELTER) {
+                    val goHome = { navigate(HomeDestination.HOME) }
+                    BackHandler(onBack = goHome)
+                    MyPageRoute(
+                        onBack = goHome,
+                        onLogin = { startActivity(Intent(this@MainActivity, LoginActivity::class.java)) },
+                        onUpgrade = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
+                        onNavigationSelected = navigate,
+                    )
                 } else HomeScreen(
                     floatingButtonEnabled = floatingButtonEnabled,
                     onFloatingButtonChange = ::onFloatingButtonChange,
@@ -132,32 +138,8 @@ class MainActivity : ComponentActivity() {
                     onMembership = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
                     onRecentHistory = { id -> startActivity(HistoryActivity.createIntent(this@MainActivity, id)) },
                     onViewAllHistory = { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) },
-                    onNavigationSelected = { destination ->
-                        when (destination) {
-                            HomeDestination.MY_SHELTER -> openAccount()
-                            HomeDestination.HOME -> Unit
-                            HomeDestination.SETTINGS -> showingSettings = true
-                            HomeDestination.REPORT -> startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
-                            HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
-                        }
-                    },
+                    onNavigationSelected = navigate,
                 )
-                if (showingAccountDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showingAccountDialog = false },
-                        title = { Text("계정") },
-                        text = { Text("로그인된 상태입니다.") },
-                        dismissButton = { TextButton(onClick = { showingAccountDialog = false }) { Text("취소") } },
-                        confirmButton = { TextButton(onClick = {
-                            showingAccountDialog = false
-                            AuthSessionRuntime.store(applicationContext).clear()
-                            redirectToLogin()
-                        }) { Text("로그아웃") } },
-                        shape = RoundedCornerShape(16.dp),
-                        containerColor = Color.White,
-                        titleContentColor = BrandInk,
-                    )
-                }
             }
         }
     }
@@ -192,16 +174,20 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        when {
-            intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) -> showingSettings = true
-            intent.getBooleanExtra(EXTRA_OPEN_ACCOUNT, false) -> {
-                showingSettings = false
-                openAccount()
-            }
+        val requested = requestedDestination(intent)
+        if (requested != null || currentDestination == HomeDestination.MY_SHELTER) {
+            currentDestination = requested ?: HomeDestination.HOME
         }
     }
 
+    private fun requestedDestination(intent: Intent): HomeDestination? = when {
+        intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) -> HomeDestination.SETTINGS
+        intent.getBooleanExtra(EXTRA_OPEN_MY_PAGE, false) -> HomeDestination.MY_SHELTER
+        else -> null
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_DESTINATION, currentDestination.name)
         outState.putInt(STATE_ONBOARDING_PAGE, onboardingPage)
         super.onSaveInstanceState(outState)
     }
@@ -220,19 +206,6 @@ class MainActivity : ComponentActivity() {
             .putBoolean(ONBOARDING_COMPLETED, true)
             .apply()
         showingOnboarding = false
-    }
-
-    private fun openAccount() {
-        val session = AuthSessionRuntime.store(applicationContext).read()
-        if (session == null) {
-            startActivity(Intent(this, LoginActivity::class.java))
-        } else if (!session.isValid()) {
-            AuthSessionRuntime.onExpired(session)
-            lastUnauthorizedRevision = AuthSessionRuntime.unauthorizedRevision.value
-            redirectToLogin()
-        } else {
-            showingAccountDialog = true
-        }
     }
 
     private fun redirectToLogin() {

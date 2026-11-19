@@ -7,7 +7,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -94,7 +93,6 @@ import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
 import com.dundueni.app.ui.theme.LocalEasyMode
-import com.dundueni.app.feature.floatingbutton.FloatingButtonPreferences
 import org.json.JSONArray
 
 private val HomeBackground = PageBackground
@@ -161,11 +159,6 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize().padding(contentPadding),
         ) {
             HomeHeader(
-                easy = easy,
-                onToggleMode = {
-                    context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
-                        .edit().putBoolean(FloatingButtonPreferences.KEY_EASY_MODE, !easy).apply()
-                },
                 onNotifications = onNotifications,
                 onSettings = { onNavigationSelected(HomeDestination.SETTINGS) },
             )
@@ -236,8 +229,6 @@ enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS }
 
 @Composable
 private fun HomeHeader(
-    easy: Boolean,
-    onToggleMode: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -251,16 +242,6 @@ private fun HomeHeader(
             modifier = Modifier.width(93.dp).height(56.dp),
             contentScale = ContentScale.Fit,
         )
-        TextButton(
-            onClick = onToggleMode,
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp).heightIn(min = 48.dp).semantics {
-                contentDescription = if (easy) "현재 쉬운 모드, 기본 모드로 전환" else "현재 기본 모드, 쉬운 모드로 전환"
-            },
-            contentPadding = PaddingValues(horizontal = 8.dp),
-        ) {
-            Text(if (easy) "기본 모드 ⇄" else "쉬운 모드 ⇄", color = HomeBlue,
-                fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-        }
         Row(
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -464,7 +445,7 @@ private fun SafetyTipCard() {
 
 @Composable
 fun HomeBottomNavigation(
-    selectedDestination: HomeDestination,
+    selectedDestination: HomeDestination?,
     onNavigationSelected: (HomeDestination) -> Unit,
 ) {
     val easy = LocalEasyMode.current
@@ -479,7 +460,7 @@ fun HomeBottomNavigation(
         Triple(HomeDestination.MY_SHELTER, "profile", "마이페이지"),
     )
     LaunchedEffect(easy, selectedDestination) {
-        if (easy && items.none { it.first == selectedDestination }) {
+        if (easy && selectedDestination != null && items.none { it.first == selectedDestination }) {
             onNavigationSelected(HomeDestination.HOME)
         }
     }

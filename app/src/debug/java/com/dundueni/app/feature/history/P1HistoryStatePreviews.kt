@@ -2,6 +2,8 @@ package com.dundueni.app.feature.history
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import com.dundueni.app.data.remote.api.HistoryEntryDto
+import com.dundueni.app.data.remote.dto.TextAnalysisTextResultDto
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 @Preview(name = "P1 기록 · 목록 조회 중", widthDp = 390, heightDp = 844, showBackground = true)
@@ -25,31 +27,35 @@ private fun HistoryLoadErrorPreview() = DundueniFETheme {
 
 @Preview(name = "P1 기록 · 검사 상세", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
-private fun HistoryDetailPreview() = DundueniFETheme {
-    val record = historySamples().first().copy(evidence = listOf("송금을 재촉하는 문구가 있어요."))
-    HistoryScreen(
-        records = listOf(record), onHome = {}, onDelete = {}, onClear = {},
-        initialRecordId = record.id, onCloseDetail = {}, allowDelete = false,
-    )
-}
+private fun HistoryDetailPreview() = TextHistoryDetailPreview(listOf("송금을 재촉하는 문구가 있어요."))
 
 @Preview(name = "P1 기록 · 상세 조회 실패", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun HistoryDetailErrorPreview() = DundueniFETheme {
-    val record = historySamples().first()
     HistoryScreen(
-        records = listOf(record), onHome = {}, onDelete = {}, onClear = {},
-        initialRecordId = record.id, onCloseDetail = {}, allowDelete = false,
-        error = "기록 상세를 불러오지 못했어요. 다시 시도해주세요.",
+        records = emptyList(), onHome = {}, onDelete = {}, onClear = {},
+        initialRecordId = "preview-text", onCloseDetail = {}, allowDelete = false,
+        detailContent = { HistoryResultDetail(detail = null, error = true, onRetry = {}) },
     )
 }
 
 @Preview(name = "P1 기록 · 상세 근거 없음", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
-private fun HistoryDetailWithoutEvidencePreview() = DundueniFETheme {
-    val record = historySamples().first().copy(evidence = emptyList())
+private fun HistoryDetailWithoutEvidencePreview() = TextHistoryDetailPreview(emptyList())
+
+@Composable
+private fun TextHistoryDetailPreview(evidence: List<String>) = DundueniFETheme {
+    val detail = HistoryEntryDto(
+        id = "preview-text",
+        type = "TEXT",
+        status = "COMPLETED",
+        createdAt = "2026-11-19T05:32:00Z",
+        textPreview = "오늘까지 아래 계좌로 송금해 주세요.",
+        textResult = TextAnalysisTextResultDto(decision = "phishing", riskScore = 0.89, evidence = evidence),
+    ).toRecordDetail()
     HistoryScreen(
-        records = listOf(record), onHome = {}, onDelete = {}, onClear = {},
-        initialRecordId = record.id, onCloseDetail = {}, allowDelete = false,
+        records = listOf(detail.record), onHome = {}, onDelete = {}, onClear = {},
+        initialRecordId = detail.record.id, onCloseDetail = {}, allowDelete = false,
+        detailContent = { HistoryResultDetail(detail, onRetry = {}) },
     )
 }

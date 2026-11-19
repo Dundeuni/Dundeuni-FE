@@ -22,6 +22,7 @@ sealed interface AnalysisUiState {
         val text: ScreenCropAnalysis?,
         val imageError: Error?,
         val textError: Error?,
+        val resultType: ScreenResultType? = null,
     ) : AnalysisUiState
     // Preserve a safe category, never the exception or raw server message.
     data class Error(
@@ -49,6 +50,8 @@ sealed interface AnalysisUiState {
             } else kind.message
     }
 }
+
+enum class ScreenResultType { IMAGE, TEXT }
 
 enum class AnalysisErrorKind(val message: String) {
     PHOTO_DETECTION("사진 후보를 찾는 중 오류가 발생했습니다. 이미지를 다시 업로드해 주세요."),

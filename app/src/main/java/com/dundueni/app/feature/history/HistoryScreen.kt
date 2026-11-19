@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -49,7 +50,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dundueni.app.R
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.feature.analysisresult.AiLikelihood
+import com.dundueni.app.feature.analysisresult.ImageInspectionContent
+import com.dundueni.app.feature.analysisresult.PhoneInspectionContent
+import com.dundueni.app.feature.analysisresult.TextInspectionContent
+import com.dundueni.app.feature.analysisresult.imageSummaryLookupId
+import com.dundueni.app.feature.analysisresult.rememberImageSummaryViewModel
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
 import com.dundueni.app.feature.analysisresult.RiskLevel
@@ -103,6 +110,7 @@ fun HistoryScreen(
     onCloseDetail: (() -> Unit)? = null,
     onNavigationSelected: ((HomeDestination) -> Unit)? = null,
     initialEasyMode: Boolean = LocalEasyMode.current,
+    detailContent: (@Composable (String) -> Unit)? = null,
 ) {
     val easy = initialEasyMode
     var filterName by rememberSaveable { mutableStateOf("ALL") }
@@ -125,7 +133,9 @@ fun HistoryScreen(
             else -> panel = "notifications"
         }
     }
-    val selected = records.firstOrNull { it.id == selectedId }
+    val detailId = selectedId
+    val selected = records.firstOrNull { it.id == detailId }
+    val showingDetail = selected != null || (detailId != null && detailContent != null)
     val displayRecords = remember(records) { records.filterNot { it.type == HistoryType.LINK } }
     val searchableRecords = remember(displayRecords, query.text) { filterHistory(displayRecords, null, query.text) }
     val activeFilter = HistoryType.entries.firstOrNull { it.name == filterName && it != HistoryType.LINK }
@@ -133,7 +143,9 @@ fun HistoryScreen(
         searchableRecords.filter { activeFilter == null || it.type == activeFilter }
     }
     LaunchedEffect(records, loading) {
-        if (!loading && selectedId != null && selected == null && initialRecordId == null) selectedId = null
+        if (detailContent == null && !loading && selectedId != null && selected == null && initialRecordId == null) {
+            selectedId = null
+        }
     }
     BackHandler {
         when {
@@ -147,7 +159,7 @@ fun HistoryScreen(
         topBar = {
             Surface(color = if (easy) Color.White else Background, border = BorderStroke(1.dp, Outline)) {
                 Row(Modifier.statusBarsPadding().fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (selected != null) {
+                    if (showingDetail) {
                         IconButton(onClick = closeDetail, modifier = Modifier.semantics { contentDescription = if (onCloseDetail != null) "홈으로 돌아가기" else "검사 기록 목록으로 돌아가기" }) {
                             ResultGlyph(ResultIcon.BACK, Ink, 21.dp)
                         }
@@ -160,11 +172,11 @@ fun HistoryScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(if (selected != null) "검사 기록 상세" else if (easy) "검사 기록" else "든든이",
+                    Text(if (showingDetail) "검사 기록 상세" else if (easy) "검사 기록" else "든든이",
                         modifier = if (easy) Modifier.weight(1f) else Modifier, color = Ink, fontSize = 18.sp,
                         fontWeight = if (easy) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (!easy) {
-                        if (selected == null) Text("History", Modifier.padding(start = 12.dp), color = Muted, fontSize = 11.sp)
+                        if (!showingDetail) Text("History", Modifier.padding(start = 12.dp), color = Muted, fontSize = 11.sp)
                         Spacer(Modifier.weight(1f))
                     }
                     IconButton(onClick = { navigate(HomeDestination.MY_SHELTER) }, modifier = Modifier.semantics { contentDescription = "내 기록 정보" }) {
@@ -178,8 +190,12 @@ fun HistoryScreen(
         bottomBar = { HomeBottomNavigation(HomeDestination.REPORT, ::navigate) },
     ) { padding ->
         Box(Modifier.padding(padding).imePadding().fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            if (selected != null) {
-                HistoryDetail(selected, easy, error, onRetry, onBack = closeDetail,
+            if (detailId != null && detailContent != null) {
+                key(detailId) {
+                    CompositionLocalProvider(LocalEasyMode provides easy) { detailContent(detailId) }
+                }
+            } else if (selected != null) {
+                LocalHistoryDetail(selected, easy, error, onRetry, onBack = closeDetail,
                     onDelete = { onDelete(selected.id) }, allowDelete = allowDelete)
             } else {
                 LazyColumn(
@@ -457,7 +473,60 @@ private fun HistorySearchField(value: TextFieldValue, onValueChange: (TextFieldV
 }
 
 @Composable
-private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, onRetry: () -> Unit, onBack: () -> Unit, onDelete: () -> Unit, allowDelete: Boolean) {
+internal fun HistoryResultDetail(
+    detail: HistoryRecordDetail?,
+    onRetry: () -> Unit,
+    error: Boolean = false,
+) {
+    val easy = LocalEasyMode.current
+    Column(
+        Modifier.testTag("history-detail").widthIn(max = 512.dp).fillMaxSize()
+            .verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        if (error) {
+            EmptyPanel("기록을 확인하지 못했어요", "기록 상세를 불러오지 못했어요.", "다시 시도", onRetry, easy)
+        } else if (detail == null) {
+            Column(
+                Modifier.fillMaxWidth().padding(48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                CircularProgressIndicator(color = Blue)
+                Text("기록 상세를 불러오고 있어요", color = Muted)
+            }
+        } else {
+            val record = detail.record
+            val date = Instant.ofEpochMilli(record.savedAt).atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm"))
+            Text("검사 일시 · $date", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+            if (record.textSourceType == "SCREEN_CROP") {
+                Text("분석 출처 · 화면 캡처", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+            }
+
+            val result = detail.result
+            when {
+                result?.historyType == HistoryType.TEXT -> TextInspectionContent(result, fromHistory = true)
+                result?.historyType == HistoryType.IMAGE -> {
+                    val summary = rememberImageSummaryViewModel(result.imageSummaryLookupId())
+                    ImageInspectionContent(
+                        result,
+                        summaryState = summary?.uiState?.collectAsStateWithLifecycle()?.value,
+                        onCheckSummary = { summary?.checkAgain() },
+                    )
+                }
+                result?.historyType == HistoryType.PHONE -> PhoneInspectionContent(result)
+                record.status == "QUEUED" || record.status == "ANALYZING" ->
+                    EmptyPanel("분석 중이에요", "분석이 완료되면 결과를 확인할 수 있어요.", "다시 확인", onRetry, easy)
+                record.status == "FAILED" -> Notice("분석에 실패했어요.", easy)
+                else -> Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalHistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, onRetry: () -> Unit, onBack: () -> Unit, onDelete: () -> Unit, allowDelete: Boolean) {
     LazyColumn(Modifier.testTag("history-detail").widthIn(max = 600.dp).fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (error != null) item { EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy) }
         item {
@@ -476,13 +545,23 @@ private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, 
                 Text(record.preview ?: "이 기록에는 위험 단계와 제공된 분석 점수가 보관되어 있어요.", color = Ink, fontSize = if (easy) 17.sp else 14.sp, lineHeight = 23.sp)
             }
         }
-        item {
-            Panel {
-                Text("분석 지표", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
-                ScoreRow("사기 위험도", record.fraudScore, riskColor(record.riskLevel))
-                ScoreRow("AI 생성·변조", record.aiScore, Purple)
-                if (record.aiLikelihood != AiLikelihood.UNKNOWN) Text("AI 분석 단계: ${record.aiLikelihood.label}", color = Muted, fontSize = 12.sp)
-                Text("두 지표는 서로 독립적이며, AI 점수가 사기 위험 판정을 의미하지는 않아요.", color = Muted, fontSize = 12.sp, lineHeight = 20.sp)
+        if (record.fraudScore != null || record.aiScore != null || record.aiLikelihood != AiLikelihood.UNKNOWN) {
+            item {
+                Panel {
+                    Text("분석 지표", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
+                    record.fraudScore?.let { ScoreRow("사기 위험도", it, riskColor(record.riskLevel)) }
+                    record.aiScore?.let {
+                        if (record.type == HistoryType.IMAGE) {
+                            ScoreRow("AI 생성 점수", it, Purple, unit = "/100")
+                        } else {
+                            ScoreRow("AI 생성·변조", it, Purple)
+                        }
+                    }
+                    if (record.aiLikelihood != AiLikelihood.UNKNOWN) Text("AI 분석 단계: ${record.aiLikelihood.label}", color = Muted, fontSize = 12.sp)
+                    if (record.fraudScore != null && record.aiScore != null) {
+                        Text("두 지표는 서로 독립적이며, AI 점수가 사기 위험 판정을 의미하지는 않아요.", color = Muted, fontSize = 12.sp, lineHeight = 20.sp)
+                    }
+                }
             }
         }
         item {
@@ -516,13 +595,13 @@ private fun HistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, 
 }
 
 @Composable
-private fun ScoreRow(label: String, score: Double?, tint: Color) {
+private fun ScoreRow(label: String, score: Double, tint: Color, unit: String = "%") {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, color = Muted, fontSize = 13.sp)
-            Text(score?.let { "${formatScore(it)}%" } ?: "정보 없음", color = if (score == null) Muted else tint, fontWeight = FontWeight.SemiBold)
+            Text("${formatScore(score)}$unit", color = tint, fontWeight = FontWeight.SemiBold)
         }
-        if (score != null) Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(Outline)) {
+        Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(Outline)) {
             Box(Modifier.fillMaxWidth((score / 100).toFloat().coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(tint))
         }
     }

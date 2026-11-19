@@ -1,8 +1,14 @@
 package com.dundueni.app.feature.history
 
 import com.dundueni.app.data.remote.api.HistoryEntryDto
+import com.dundueni.app.data.mapper.toDomain
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.remote.dto.AnalysisDetailDto
+import com.dundueni.app.feature.analysis.toPb05Result
+import com.dundueni.app.feature.analysis.toTextResult
+import com.dundueni.app.feature.analysisresult.AnalysisResult as PresentedResult
 import com.dundueni.app.feature.analysisresult.RiskLevel
+import com.dundueni.app.feature.phone.toPhoneResult
 import java.time.Instant
 
 /** List has no final image/text verdict; only the phone risk level is a BE verdict. */
@@ -43,13 +49,26 @@ internal fun HistoryEntryDto.toHistoryRecord(): HistoryRecord {
     )
 }
 
-internal fun HistoryRecord.withImageDetail(result: AnalysisResult): HistoryRecord {
-    require(type == HistoryType.IMAGE && result.type == "IMAGE" && result.analysisId == id)
-    return copy(
-        aiScore = result.aiGenerationScore?.takeIf { it.isFinite() && it in 0.0..100.0 },
-        preview = result.summary?.takeIf { it.isNotBlank() }
-            ?: result.imageOverallDecisionLabel?.takeIf { it.isNotBlank() }
-            ?: preview,
-        evidence = result.reasons.filter { it.isNotBlank() },
-    )
+internal data class HistoryRecordDetail(val record: HistoryRecord, val result: PresentedResult?)
+
+internal fun HistoryEntryDto.toRecordDetail(imageResult: AnalysisResult? = null): HistoryRecordDetail {
+    val record = toHistoryRecord()
+    if (status != "COMPLETED") return HistoryRecordDetail(record, null)
+
+    val result = when (record.type) {
+        HistoryType.TEXT -> AnalysisDetailDto(
+            analysisId = record.id,
+            type = type,
+            status = status,
+            textResult = textResult,
+        ).toDomain().toTextResult(textPreview?.takeIf { it.isNotBlank() })
+        HistoryType.IMAGE -> {
+            val image = checkNotNull(imageResult)
+            check(image.type == "IMAGE" && image.analysisId == record.id)
+            checkNotNull(image.toPb05Result(isDemo = false))
+        }
+        HistoryType.PHONE -> toPhoneResult()
+        else -> null
+    }
+    return HistoryRecordDetail(record, result)
 }

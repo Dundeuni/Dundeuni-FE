@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -55,16 +56,24 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.ui.theme.PrimaryMidnight
 import com.dundueni.app.ui.theme.ProtectiveBlue
 
-/** Dismissing this dialog only hides the popup. The caller keeps the analysis job running. */
+/** The caller decides how to dismiss the popup or recheck a result the server is still processing. */
 @Composable
-fun InspectionLoadingDialog(onDismissPopup: () -> Unit) {
+fun InspectionLoadingDialog(
+    onDismissPopup: () -> Unit,
+    message: String? = null,
+    onCheckResult: (() -> Unit)? = null,
+) {
     InspectionDialogFrame(onDismissRequest = onDismissPopup) {
-        InspectionLoadingContent(onDismissPopup)
+        InspectionLoadingContent(onDismissPopup, message, onCheckResult)
     }
 }
 
 @Composable
-private fun InspectionLoadingContent(onDismissPopup: () -> Unit) {
+private fun InspectionLoadingContent(
+    onDismissPopup: () -> Unit,
+    message: String? = null,
+    onCheckResult: (() -> Unit)? = null,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth().heightIn(
             max = (LocalConfiguration.current.screenHeightDp - 48).coerceAtLeast(1).dp,
@@ -95,7 +104,7 @@ private fun InspectionLoadingContent(onDismissPopup: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "든든이가 꼼꼼하게 검사하고 있어요!",
+                text = message ?: "든든이가 꼼꼼하게 검사하고 있어요!",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
                 color = Color(0xFF454A53),
                 textAlign = TextAlign.Center,
@@ -110,13 +119,13 @@ private fun InspectionLoadingContent(onDismissPopup: () -> Unit) {
             )
             Spacer(Modifier.height(26.dp))
             Button(
-                onClick = onDismissPopup,
+                onClick = onCheckResult ?: onDismissPopup,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryMidnight),
             ) {
                 Text(
-                    text = "닫고 검사 계속하기 →",
+                    text = if (onCheckResult != null) "결과 다시 확인" else "닫고 검사 계속하기 →",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
@@ -125,7 +134,9 @@ private fun InspectionLoadingContent(onDismissPopup: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onCheckResult != null) {
+                TextButton(onClick = onDismissPopup, modifier = Modifier.fillMaxWidth()) { Text("닫기") }
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "ⓘ  팝업을 닫아도 검사는 안전하게 계속 진행돼요",
                     style = MaterialTheme.typography.bodySmall.copy(
