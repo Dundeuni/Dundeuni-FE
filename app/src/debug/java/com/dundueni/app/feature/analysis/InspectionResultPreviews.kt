@@ -52,7 +52,7 @@ private fun ImageNoClearSignalPreview() = ResultPreview(
 @Composable
 private fun ScreenImageSummaryCompletedPreview() {
     val image = previewImageDetail(noClearSignal = true)
-    val state = screenState(image = image.copy(summary = null), resultType = ScreenResultType.IMAGE)
+    val state = screenState(image = image.copy(summary = null), text = null, resultType = ScreenResultType.IMAGE)
     ResultPreview(
         checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
         imageSummary = ImageSummaryUiState(
@@ -118,7 +118,7 @@ private fun TextDeferredResultPreview() = ResultPreview(
 @Preview(name = "P1 화면 검사 · 텍스트 선택 · OCR 결과", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ScreenTextResultPreview() = FlowPreview(
-    screenState(resultType = ScreenResultType.TEXT), HistoryType.SCREEN,
+    screenState(image = null, resultType = ScreenResultType.TEXT), HistoryType.SCREEN,
 )
 
 @Preview(name = "P1 결과 · 구형 이미지 응답", widthDp = 390, heightDp = 1200, showBackground = true)

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -50,9 +51,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import com.dundueni.app.R
 import com.dundueni.app.feature.payment.BasicInspectionQuota
-import com.dundueni.app.ui.theme.DundueniDefaultShape
+import com.dundueni.app.ui.theme.DisabledSurface
 import com.dundueni.app.ui.theme.DundueniDimens
 import com.dundueni.app.ui.theme.DundueniFETheme
+import com.dundueni.app.ui.theme.PageBackground
 import com.dundueni.app.ui.theme.PrimaryMidnight
 import com.dundueni.app.ui.theme.ProtectiveBlue
 
@@ -412,7 +414,9 @@ private fun InspectionDialogFrame(
     }
 }
 
-/** Shared card used by Activity dialogs and the service overlay window. */
+internal val InspectionCompletedMaxWidth = 328.dp
+internal val InspectionCompletedWindowMargin = 24.dp
+internal const val InspectionCompletedDimAmount = 0.45f
 @Composable
 private fun InspectionStatusContent(
     @DrawableRes mascotResId: Int,
@@ -422,35 +426,42 @@ private fun InspectionStatusContent(
     actions: @Composable () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        modifier = Modifier
+            .widthIn(max = InspectionCompletedMaxWidth)
+            .fillMaxWidth()
+            .heightIn(
+                max = (LocalConfiguration.current.screenHeightDp.dp - InspectionCompletedWindowMargin * 2)
+                    .coerceAtLeast(1.dp),
+            ),
+        shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+            modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Image(
                 painter = painterResource(mascotResId),
                 contentDescription = mascotDescription,
-                modifier = Modifier.size(112.dp),
+                modifier = Modifier.size(80.dp),
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
             actions()
         }
     }
@@ -464,14 +475,29 @@ fun InspectionCompletedContent(onViewResult: () -> Unit, onClose: () -> Unit) {
         title = "검사가 완료됐어요 !",
         description = "검사 결과를 확인해 주세요.",
     ) {
-        DundueniButton("검사 결과 조회", onViewResult, Modifier.fillMaxWidth())
-        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onViewResult,
+            modifier = Modifier.fillMaxWidth().heightIn(min = DundueniDimens.ButtonHeight),
+            shape = MaterialTheme.shapes.large,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ProtectiveBlue,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
+        ) {
+            Text("검사 결과 조회", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        }
+        Spacer(Modifier.height(8.dp))
         OutlinedButton(
             onClick = onClose,
-            modifier = Modifier.fillMaxWidth().height(DundueniDimens.ButtonHeight),
-            shape = DundueniDefaultShape,
+            modifier = Modifier.fillMaxWidth().heightIn(min = DundueniDimens.ButtonHeight),
+            shape = MaterialTheme.shapes.large,
+            border = BorderStroke(1.dp, DisabledSurface),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = PageBackground,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
         ) {
-            Text("닫기", style = MaterialTheme.typography.bodyLarge)
+            Text("닫기", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
         }
     }
 }

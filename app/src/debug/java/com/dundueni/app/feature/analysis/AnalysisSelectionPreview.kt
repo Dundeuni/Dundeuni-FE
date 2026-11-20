@@ -5,13 +5,20 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
 import com.dundueni.app.data.remote.api.PhotoBox
 import com.dundueni.app.data.remote.api.PhotoCandidate
 import com.dundueni.app.data.remote.api.PhotoImage
 import com.dundueni.app.data.remote.api.PhotoUpload
+import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.ui.theme.DundueniFETheme
+
+private const val PREVIEW_ORIGINAL_ID = "whole-image"
+private const val PREVIEW_FIRST_PHOTO_ID = "photo-1"
 
 @Preview(name = "검사 대상 선택 · 사진 후보 2개", widthDp = 390, heightDp = 900, showBackground = true)
 @Composable
@@ -21,27 +28,56 @@ private fun PhotoCandidatesPreview() = SelectionPreview(withCandidates = true)
 @Composable
 private fun WholeImagePreview() = SelectionPreview(withCandidates = false)
 
+@Preview(name = "AI 화면 검사 · 전체 이미지 선택", widthDp = 390, heightDp = 900, showBackground = true)
 @Composable
-private fun SelectionPreview(withCandidates: Boolean) {
+private fun WholeScreenSelectionPreview() = SelectionPreview(
+    withCandidates = true,
+    historyType = HistoryType.SCREEN,
+    initialSelectionElementId = PREVIEW_ORIGINAL_ID,
+)
+
+@Preview(name = "AI 화면 검사 · 사진 부분 선택", widthDp = 390, heightDp = 900, showBackground = true)
+@Composable
+private fun ScreenPhotoRegionSelectionPreview() = SelectionPreview(
+    withCandidates = true,
+    historyType = HistoryType.SCREEN,
+    initialSelectionElementId = PREVIEW_FIRST_PHOTO_ID,
+)
+
+@Composable
+private fun SelectionPreview(
+    withCandidates: Boolean,
+    historyType: HistoryType = HistoryType.IMAGE,
+    initialSelectionElementId: String? = null,
+) {
     val preview = remember { samplePreviewBitmap() }
     val upload = remember(withCandidates) {
         PhotoUpload(
             uploadId = "preview-upload",
             image = PhotoImage(width = preview.width, height = preview.height),
-            original = PhotoCandidate(elementId = "whole-image"),
+            original = PhotoCandidate(elementId = PREVIEW_ORIGINAL_ID),
             elements = if (withCandidates) listOf(
-                PhotoCandidate(elementId = "photo-1", bbox = PhotoBox(24, 76, 144, 132)),
+                PhotoCandidate(elementId = PREVIEW_FIRST_PHOTO_ID, bbox = PhotoBox(24, 76, 144, 132)),
                 PhotoCandidate(elementId = "photo-2", bbox = PhotoBox(192, 76, 144, 132)),
             ) else emptyList(),
         )
     }
+    var result by remember { mutableStateOf<AnalysisUiState.ScreenSuccess?>(null) }
     DundueniFETheme {
         AnalysisFlowScreen(
-            state = AnalysisUiState.Selection(upload, preview),
+            state = result ?: AnalysisUiState.Selection(upload, preview),
             onRetry = {},
-            onClose = {},
-            onHome = {},
-            isDemo = false,
+            onClose = { result = null },
+            onHome = { result = null },
+            historyType = historyType,
+            initialSelectionElementId = initialSelectionElementId,
+            onChoosePhoto = { _, resultType ->
+                result = when (resultType) {
+                    ScreenResultType.IMAGE -> screenState(text = null, resultType = resultType)
+                    ScreenResultType.TEXT -> screenState(image = null, resultType = resultType)
+                    null -> null
+                }
+            },
         )
     }
 }

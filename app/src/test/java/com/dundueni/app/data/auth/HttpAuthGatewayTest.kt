@@ -1,13 +1,23 @@
 package com.dundueni.app.data.auth
 
+import androidx.lifecycle.ViewModelStore
 import com.dundueni.app.data.remote.api.AuthApiService
 import com.dundueni.app.data.remote.dto.*
+import com.dundueni.app.data.remote.network.BearerAuthInterceptor
 import com.dundueni.app.data.remote.network.RetrofitClient
 import com.dundueni.app.feature.auth.*
 import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -100,6 +110,60 @@ class HttpAuthGatewayTest {
         assertNotNull(sessions.read())
         assertEquals(0, invalidations)
         assertNull(server.takeRequest().getHeader("Authorization"))
+    }
+
+    @Test fun loginRequestAndServerErrorsAreDistinctFromInvalidCredentials() = runBlocking {
+        server.enqueue(error(400, "COMMON400"))
+        assertEquals(LoginOutcome.Rejected(AuthFailure.INVALID_REQUEST), gateway.submit(email, "password"))
+        server.enqueue(error(500, "COMMON500"))
+        assertEquals(LoginOutcome.Rejected(AuthFailure.SERVER), gateway.submit(email, "password"))
+        assertNull(sessions.read())
+        assertEquals(0, invalidations)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun expiredSessionCanBeReplacedByLoginBeforeNavigating() = runBlocking {
+        val expiredToken = token(now / 1000)
+        sessions.save(AuthSession(expiredToken, AuthSessionSource.BACKEND, onboardingCompleted = true))
+        val interceptor = BearerAuthInterceptor(sessions, { invalidations++ }, { now / 1000 })
+        val client = OkHttpClient.Builder().addInterceptor(interceptor).build()
+        val protectedRequest = Request.Builder().url(server.url("/protected"))
+            .header(BearerAuthInterceptor.REQUIRES_AUTH_HEADER, "true")
+            .build()
+
+        server.enqueue(error(401, "AUTH401"))
+        client.newCall(protectedRequest).execute().use { assertEquals(401, it.code) }
+        val expiredRequest = requireNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+        assertNull(expiredRequest.getHeader("Authorization"))
+        assertNull(sessions.read())
+        assertEquals(1, invalidations)
+
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val models = ViewModelStore()
+        try {
+            val viewModel = LoginViewModel(gateway, saveSession = sessions::save)
+                .also { models.put("login", it) }
+            val newToken = token()
+            server.enqueue(success(authResult(onboarding = ",\"onboardingCompleted\":false", accessToken = newToken)))
+            viewModel.changeEmail(email)
+            viewModel.changePassword("password")
+            viewModel.login()
+            withTimeout(5_000) { viewModel.uiState.first { it.navigationPending } }
+            val loginRequest = requireNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+            assertEquals("/api/auth/login", loginRequest.path)
+            assertNull(loginRequest.getHeader("Authorization"))
+            assertEquals(newToken, sessions.read()?.accessToken)
+            assertEquals(false, sessions.read()?.onboardingCompleted)
+
+            server.enqueue(MockResponse().setResponseCode(200))
+            client.newCall(protectedRequest).execute().use { assertEquals(200, it.code) }
+            val authenticatedRequest = requireNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+            assertEquals("Bearer $newToken", authenticatedRequest.getHeader("Authorization"))
+            assertEquals(1, invalidations)
+        } finally {
+            models.clear()
+            Dispatchers.resetMain()
+        }
     }
 
     @Test fun sendUsesServerDatesAndReturnsBothDeadlinesEvenWithDeviceClockSkew() = runBlocking {

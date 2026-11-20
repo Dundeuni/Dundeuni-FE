@@ -232,7 +232,7 @@ fun HistoryScreen(
                             }
                         }
                         error != null -> item { EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy) }
-                        displayRecords.isEmpty() -> item { EmptyPanel("아직 검사 기록이 없어요", "검사를 진행하고 결과를 보관하면\n이곳에서 다시 확인할 수 있어요.", "홈으로 돌아가기", onHome, easy) }
+                        displayRecords.isEmpty() -> item { EmptyPanel("아직 검사 기록이 없어요", "검사를 진행하고 결과를 보관하면\n이곳에서 다시 확인할 수 있어요.", "홈으로 돌아가기", { navigate(HomeDestination.HOME) }, easy) }
                         visible.isEmpty() -> item { EmptyPanel("조건에 맞는 기록이 없어요", "다른 검사 유형을 선택하거나\n검색어를 바꿔보세요.", "전체 기록 보기", { query = TextFieldValue(); filterName = "ALL" }, easy) }
                         else -> {
                             val today = LocalDate.now()

@@ -10,19 +10,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,11 +37,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.model.AnalysisResult
@@ -51,6 +61,9 @@ import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
 import com.dundueni.app.ui.theme.BrandInk
 import com.dundueni.app.ui.theme.CanvasSubLayer
+import com.dundueni.app.ui.theme.Caution
+import com.dundueni.app.ui.theme.DundueniDimens
+import com.dundueni.app.ui.theme.DundueniPillShape
 import com.dundueni.app.ui.theme.PageBackground
 import com.dundueni.app.ui.theme.ProtectiveBlue
 import com.dundueni.app.ui.theme.SecondaryInk
@@ -73,6 +86,7 @@ fun AnalysisFlowScreen(
     isDemo: Boolean = false,
     historyType: HistoryType = HistoryType.IMAGE,
     onRefresh: () -> Unit = {},
+    initialSelectionElementId: String? = null,
     onChoosePhoto: (String, ScreenResultType?) -> Unit = { _, _ -> },
 ) {
     // The host window is translucent: render only the dialog over the screen that launched inspection.
@@ -123,7 +137,9 @@ fun AnalysisFlowScreen(
         return
     }
     if (state is AnalysisUiState.Selection) {
-        AnalysisSelectionScreen(state, onClose, onChoosePhoto, isDemo, historyType == HistoryType.SCREEN)
+        AnalysisSelectionScreen(
+            state, onClose, onChoosePhoto, isDemo, historyType == HistoryType.SCREEN, initialSelectionElementId,
+        )
         return
     }
     Column(Modifier.fillMaxSize().background(PageBackground).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -213,151 +229,243 @@ private fun AnalysisSelectionScreen(
     onChoosePhoto: (String, ScreenResultType?) -> Unit,
     isDemo: Boolean,
     fromScreen: Boolean,
+    initialSelectionElementId: String?,
 ) {
     val upload = state.upload
     val image = checkNotNull(upload.image)
-    val original = checkNotNull(upload.original)
-    var selected by rememberSaveable(upload.uploadId) { mutableStateOf<String?>(null) }
-    val selectedLabel = when (selected) {
-        null -> "아직 선택하지 않았어요"
-        original.elementId -> "전체 이미지"
-        else -> upload.elements.orEmpty().indexOfFirst { it.elementId == selected }
-            .takeIf { it >= 0 }?.let { "사진 후보 ${it + 1}" } ?: "사진 영역"
+    val originalElementId = checkNotNull(upload.original?.elementId)
+    val candidates = upload.elements.orEmpty()
+    var selectingPart by rememberSaveable(upload.uploadId, initialSelectionElementId) {
+        mutableStateOf(candidates.isNotEmpty() && initialSelectionElementId != originalElementId)
+    }
+    var selectedRegionId by rememberSaveable(upload.uploadId, initialSelectionElementId) {
+        mutableStateOf(candidates.firstOrNull { it.elementId == initialSelectionElementId }?.elementId)
+    }
+    val selectedElementId = if (selectingPart) selectedRegionId else originalElementId
+    val selectRegion: (String) -> Unit = { elementId ->
+        selectedRegionId = if (selectingPart && selectedRegionId == elementId) null else elementId
+        selectingPart = true
     }
 
-    Scaffold(containerColor = PageBackground, bottomBar = {
-        Surface(color = SurfaceLight, border = BorderStroke(1.dp, Color(0xFFE9EEFB))) {
-            Column(Modifier.fillMaxWidth().navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("현재 선택", style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
-                    Spacer(Modifier.weight(1f))
-                    Text(selectedLabel, style = MaterialTheme.typography.titleMedium,
-                        color = if (selected == null) SecondaryInk else ProtectiveBlue)
+    Scaffold(
+        containerColor = PageBackground,
+        topBar = {
+            Surface(color = SurfaceLight) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로가기", tint = BrandInk)
+                    }
+                    Text(
+                        if (fromScreen) "AI 화면 검사" else "이미지 검사",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = BrandInk,
+                    )
                 }
-                selected?.let { elementId ->
-                    if (fromScreen) {
-                        DundueniButton("이미지 분석", { onChoosePhoto(elementId, ScreenResultType.IMAGE) },
-                            Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
-                        DundueniButton("텍스트 분석", { onChoosePhoto(elementId, ScreenResultType.TEXT) },
-                            Modifier.fillMaxWidth(), DundueniButtonType.SECONDARY)
+            }
+        },
+        bottomBar = {
+            Surface(color = SurfaceLight, border = BorderStroke(1.dp, CanvasSubLayer)) {
+                Column(
+                    Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    DundueniButton(
+                        text = if (selectingPart) "선택한 부분 검사하기" else "전체 이미지 검사하기",
+                        onClick = {
+                            selectedElementId?.let { onChoosePhoto(it, ScreenResultType.IMAGE.takeIf { fromScreen }) }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = selectedElementId != null,
+                    )
+                    if (fromScreen && !selectingPart) {
+                        TextButton(
+                            onClick = { onChoosePhoto(originalElementId, ScreenResultType.TEXT) },
+                            modifier = Modifier.heightIn(min = DundueniDimens.MinTouchSize),
+                        ) {
+                            Text("화면 내 텍스트 검사하기", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+        },
+    ) { contentPadding ->
+        Column(
+            Modifier.fillMaxSize().padding(contentPadding).verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Surface(color = SoftBlue, shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("검사할 대상을 골라 주세요", style = MaterialTheme.typography.titleMedium, color = BrandInk)
+                    Text(
+                        "이미지 전체를 검사하거나, 표시된 사진 영역을 하나 선택할 수 있어요.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = SecondaryInk,
+                    )
+                    if (isDemo) Text("Mock 검사 — 실제 이미지 분석 결과가 아닙니다.")
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth().selectableGroup().background(CanvasSubLayer, DundueniPillShape).padding(4.dp),
+            ) {
+                SelectionMode(
+                    title = "이미지 부분 검사",
+                    selected = selectingPart,
+                    enabled = candidates.isNotEmpty(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { selectingPart = true },
+                )
+                SelectionMode(
+                    title = "전체 이미지 검사",
+                    selected = !selectingPart,
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                    onClick = { selectingPart = false },
+                )
+            }
+
+            Surface(color = SurfaceLight, shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("이미지 미리보기", style = MaterialTheme.typography.titleMedium, color = BrandInk)
+                    val previewShape = MaterialTheme.shapes.medium
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .aspectRatio(state.preview.width.toFloat() / state.preview.height)
+                            .clip(previewShape)
+                            .border(1.dp, if (selectingPart) CanvasSubLayer else ProtectiveBlue, previewShape),
+                    ) {
+                        Image(
+                            state.preview.asImageBitmap(),
+                            contentDescription = if (fromScreen) "캡처한 화면" else "업로드한 이미지",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.FillBounds,
+                        )
+                        if (selectingPart) {
+                            Canvas(Modifier.fillMaxSize().pointerInput(upload.uploadId) {
+                                detectTapGestures { tap ->
+                                    val x = tap.x * image.width / size.width
+                                    val y = tap.y * image.height / size.height
+                                    val candidate = candidates.lastOrNull { candidate ->
+                                        val box = candidate.bbox ?: return@lastOrNull false
+                                        x >= box.left && x <= box.left + box.width &&
+                                            y >= box.top && y <= box.top + box.height
+                                    }
+                                    candidate?.elementId?.let(selectRegion)
+                                }
+                            }) {
+                                candidates.forEach { candidate ->
+                                    val box = candidate.bbox ?: return@forEach
+                                    val selected = candidate.elementId == selectedRegionId
+                                    val offset = Offset(box.left * size.width / image.width, box.top * size.height / image.height)
+                                    val bounds = Size(box.width * size.width / image.width, box.height * size.height / image.height)
+                                    if (selected) drawRect(ProtectiveBlue.copy(alpha = 0.16f), offset, bounds)
+                                    drawRect(
+                                        color = if (selected) ProtectiveBlue else Caution,
+                                        topLeft = offset,
+                                        size = bounds,
+                                        style = Stroke(width = 3.dp.toPx()),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (selectingPart) {
+                        Text(
+                            "이미지의 테두리 안이나 아래 목록에서 사진 영역을 눌러 주세요.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SecondaryInk,
+                        )
+                    }
+                }
+            }
+
+            Surface(color = SurfaceLight, shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("검사 영역", style = MaterialTheme.typography.titleMedium, color = BrandInk)
+                    if (candidates.isEmpty()) {
+                        Text(
+                            "선택할 사진 영역을 찾지 못했어요. 전체 이미지는 검사할 수 있어요.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SecondaryInk,
+                        )
                     } else {
-                        DundueniButton("선택한 대상 분석", { onChoosePhoto(elementId, null) },
-                            Modifier.fillMaxWidth(), DundueniButtonType.PRIMARY)
-                    }
-                }
-                TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("닫기", style = MaterialTheme.typography.bodyLarge, color = SecondaryInk)
-                }
-            }
-        }
-    }) { contentPadding ->
-        Column(Modifier.fillMaxSize().padding(contentPadding).verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("검사 대상 선택", style = MaterialTheme.typography.headlineSmall, color = BrandInk)
-                Text(if (upload.elements.isNullOrEmpty())
-                    "사진 영역을 찾지 못했어요. 전체 이미지를 분석할까요?"
-                else "전체 이미지 또는 표시된 사진 영역을 선택해 주세요.",
-                    style = MaterialTheme.typography.bodyLarge, color = SecondaryInk)
-                if (isDemo) Text("Mock 검사 — 실제 이미지 분석 결과가 아닙니다.")
-            }
-            Surface(color = SurfaceLight, shape = MaterialTheme.shapes.large) {
-                Column(Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("검사할 이미지", style = MaterialTheme.typography.titleMedium, color = BrandInk)
-                        Spacer(Modifier.weight(1f))
-                        if (!upload.elements.isNullOrEmpty()) {
-                            Surface(color = SoftBlue, shape = CircleShape) {
-                                Text("사진 후보 ${upload.elements.size}개", Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    style = MaterialTheme.typography.labelLarge, color = ProtectiveBlue)
+                        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            candidates.forEachIndexed { index, candidate ->
+                                val elementId = checkNotNull(candidate.elementId)
+                                val selected = selectingPart && selectedRegionId == elementId
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.medium,
+                                    color = if (selected) SoftBlue else PageBackground,
+                                    border = BorderStroke(1.dp, if (selected) ProtectiveBlue else CanvasSubLayer),
+                                ) {
+                                    Row(
+                                        Modifier.fillMaxWidth()
+                                            .selectable(selected, role = Role.RadioButton, onClick = { selectRegion(elementId) })
+                                            .heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        RadioButton(selected = selected, onClick = null)
+                                        Text("사진 영역 ${index + 1}", style = MaterialTheme.typography.bodyLarge, color = BrandInk)
+                                    }
+                                }
                             }
                         }
                     }
-                    Box(Modifier.fillMaxWidth().aspectRatio(state.preview.width.toFloat() / state.preview.height)
-                        .border(1.dp, Color(0xFFD1D5DB))) {
-                        Image(state.preview.asImageBitmap(), contentDescription = "업로드한 이미지",
-                            modifier = Modifier.fillMaxSize())
-                        Canvas(Modifier.fillMaxSize().pointerInput(upload.uploadId, selected) {
-                            detectTapGestures { tap ->
-                                val x = tap.x * image.width / size.width
-                                val y = tap.y * image.height / size.height
-                                selected = upload.elements.orEmpty().lastOrNull { candidate ->
-                                    val box = candidate.bbox ?: return@lastOrNull false
-                                    x >= box.left && x <= box.left + box.width &&
-                                        y >= box.top && y <= box.top + box.height
-                                }?.elementId ?: original.elementId
-                            }
-                        }) {
-                            upload.elements.orEmpty().forEach { candidate ->
-                                val box = candidate.bbox ?: return@forEach
-                                val color = if (selected == candidate.elementId) Color(0xFF1463D6) else Color(0xFFFFC107)
-                                drawRect(color, Offset(box.left * size.width / image.width,
-                                    box.top * size.height / image.height),
-                                    Size(box.width * size.width / image.width,
-                                        box.height * size.height / image.height),
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
-                            }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().semantics { disabled() },
+                        color = PageBackground,
+                        shape = MaterialTheme.shapes.medium,
+                        border = BorderStroke(1.dp, CanvasSubLayer),
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("텍스트 부분 검사", style = MaterialTheme.typography.bodyLarge, color = SecondaryInk)
+                            Text("이 화면에서는 문자 영역을 선택할 수 없어요.", style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
                         }
                     }
-                    Text("표시된 영역을 누르거나 아래에서 대상을 선택하세요.",
-                        style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
                 }
             }
-            Surface(color = SurfaceLight, shape = MaterialTheme.shapes.large) {
-                Column(Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("분석할 대상", style = MaterialTheme.typography.titleMedium, color = BrandInk)
-                    SelectionOption("전체 이미지", "이미지 전체를 검사해요", "전체",
-                        selected == original.elementId) { selected = original.elementId }
-                    upload.elements.orEmpty().forEachIndexed { index, candidate ->
-                        SelectionOption("사진 후보 ${index + 1}", "표시된 사진 영역을 검사해요", "${index + 1}",
-                            selected == candidate.elementId) { selected = candidate.elementId }
-                    }
-                }
-            }
-            Surface(color = SoftBlue, shape = MaterialTheme.shapes.medium) {
-                Text("업로드는 10분 후 만료됩니다. 만료되면 이미지를 다시 업로드해 주세요.",
-                    Modifier.fillMaxWidth().padding(14.dp), style = MaterialTheme.typography.bodyMedium,
-                    color = SecondaryInk)
-            }
+
+            Text(
+                "업로드는 10분 후 만료됩니다. 만료되면 이미지를 다시 업로드해 주세요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = SecondaryInk,
+            )
         }
     }
 }
 
 @Composable
-private fun SelectionOption(
+private fun SelectionMode(
     title: String,
-    description: String,
-    badge: String,
     selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
-        color = if (selected) SoftBlue else PageBackground,
-        border = BorderStroke(1.dp, if (selected) ProtectiveBlue else CanvasSubLayer)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).background(if (selected) ProtectiveBlue else CanvasSubLayer, CircleShape),
-                contentAlignment = Alignment.Center) {
-                Text(badge, style = MaterialTheme.typography.labelLarge,
-                    color = if (selected) SurfaceLight else BrandInk)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, color = BrandInk)
-                Text(description, style = MaterialTheme.typography.bodyMedium, color = SecondaryInk)
-            }
-            Box(Modifier.size(24.dp).border(1.dp,
-                if (selected) ProtectiveBlue else Color(0xFFD1D5DB), CircleShape)
-                .background(if (selected) ProtectiveBlue else SurfaceLight, CircleShape),
-                contentAlignment = Alignment.Center) {
-                if (selected) Text("✓", style = MaterialTheme.typography.labelLarge, color = SurfaceLight)
-            }
-        }
+    Box(
+        modifier.clip(DundueniPillShape)
+            .background(if (selected) SurfaceLight else Color.Transparent)
+            .selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .heightIn(min = DundueniDimens.MinTouchSize)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = when {
+                selected -> ProtectiveBlue
+                enabled -> BrandInk
+                else -> SecondaryInk
+            },
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

@@ -13,6 +13,9 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.dundueni.app.ui.component.InspectionCompletedContent
+import com.dundueni.app.ui.component.InspectionCompletedDimAmount
+import com.dundueni.app.ui.component.InspectionCompletedMaxWidth
+import com.dundueni.app.ui.component.InspectionCompletedWindowMargin
 import com.dundueni.app.ui.theme.DundueniFETheme
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
@@ -72,6 +75,7 @@ import com.dundueni.app.feature.payment.showLimitIfExhausted
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Activity 화면과 별개로 플로팅 버튼과 검사 메뉴의 표시 수명을 관리한다.
@@ -242,15 +246,19 @@ class FloatingButtonService : Service() {
                 }
             }
         }
-        // Match the existing platform dialog width, centered with its same dim amount.
-        val width = (resources.displayMetrics.widthPixels *
-            if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 0.65f else 0.87f).toInt()
+        val metrics = resources.displayMetrics
+        val sideMargin = (InspectionCompletedWindowMargin.value * metrics.density).roundToInt()
+        val maxWidth = (InspectionCompletedMaxWidth.value * metrics.density).roundToInt()
+        val width = minOf(maxWidth, metrics.widthPixels - 2 * sideMargin).coerceAtLeast(1)
         val params = WindowManager.LayoutParams(
             width, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_DIM_BEHIND,
             PixelFormat.TRANSLUCENT,
-        ).apply { gravity = Gravity.CENTER; dimAmount = 0.45f }
+        ).apply {
+            gravity = Gravity.CENTER
+            dimAmount = InspectionCompletedDimAmount
+        }
         completionWindows[id] = view to owner
         try {
             windowManager.addView(view, params)

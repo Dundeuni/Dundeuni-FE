@@ -225,7 +225,7 @@ fun HomeScreen(
     }
 }
 
-enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS }
+enum class HomeDestination { HOME, REPORT, CONSULTATION, MY_SHELTER, SETTINGS, FAMILY_SHARE }
 
 @Composable
 private fun HomeHeader(
@@ -456,7 +456,7 @@ fun HomeBottomNavigation(
     ) else listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
         Triple(HomeDestination.REPORT, "report", "검사 기록"),
-        Triple(HomeDestination.CONSULTATION, "chat", "가족 공유"),
+        Triple(HomeDestination.FAMILY_SHARE, "chat", "가족 공유"),
         Triple(HomeDestination.MY_SHELTER, "profile", "마이페이지"),
     )
     LaunchedEffect(easy, selectedDestination) {
