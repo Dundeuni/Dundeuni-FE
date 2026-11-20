@@ -248,9 +248,14 @@ private fun HomeHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HeaderAction("알림", "notification", onNotifications)
-            HeaderAction("설정", "settings", onSettings)
+            HomeSettingsButton(onClick = onSettings)
         }
     }
+}
+
+@Composable
+internal fun HomeSettingsButton(onClick: () -> Unit) {
+    HeaderAction("설정", "settings", onClick)
 }
 
 @Composable

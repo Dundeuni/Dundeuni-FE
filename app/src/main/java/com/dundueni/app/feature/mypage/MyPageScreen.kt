@@ -1,5 +1,6 @@
 package com.dundueni.app.feature.mypage
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,11 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,8 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,22 +37,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
 import com.dundueni.app.feature.home.HomeBottomNavigation
 import com.dundueni.app.feature.home.HomeDestination
+import com.dundueni.app.feature.home.HomeSettingsButton
 import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
 import com.dundueni.app.ui.theme.BrandInk
+import com.dundueni.app.ui.theme.Danger
 import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniPillShape
 import com.dundueni.app.ui.theme.LocalEasyMode
@@ -58,6 +71,7 @@ import com.dundueni.app.ui.theme.PrimaryMidnight
 import com.dundueni.app.ui.theme.ProtectiveBlue
 import com.dundueni.app.ui.theme.SecondaryInk
 import com.dundueni.app.ui.theme.SoftBlue
+import com.dundueni.app.ui.theme.SoftDanger
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -94,9 +108,7 @@ internal fun MyPageScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "홈으로 돌아가기", tint = BrandInk)
                 }
                 Text("마이페이지", Modifier.weight(1f), color = BrandInk, style = MaterialTheme.typography.titleMedium)
-                IconButton(onClick = { onNavigationSelected(HomeDestination.SETTINGS) }) {
-                    Icon(Icons.Filled.Settings, contentDescription = "설정", tint = BrandInk)
-                }
+                HomeSettingsButton(onClick = { onNavigationSelected(HomeDestination.SETTINGS) })
             }
         },
         bottomBar = {
@@ -112,6 +124,7 @@ internal fun MyPageScreen(
             MonthlyInspectionsCard("${firstDate.format(DateFormat)} ~ ${today.format(DateFormat)}", inspections, familyCount)
             PlanCard(quotaUsage, onUpgrade)
             ModeCard(easy, onChangeMode)
+            SupportCard()
             if (signedIn) {
                 MyPageAccountActions(
                     onLogoutConfirmed = onLogoutConfirmed,
@@ -260,7 +273,144 @@ private fun ModeCard(easy: Boolean, onChangeMode: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun MyPageCard(color: Color = Color.White, content: @Composable ColumnScope.() -> Unit) {
+private fun SupportCard() {
+    MyPageCard(contentPadding = PaddingValues(top = 16.dp)) {
+        Text(
+            "안내 및 지원",
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color = SecondaryInk,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Column {
+            SupportRow("공지사항 & 신종 사기 수법 알림", SupportIcon.NOTICE, showNewBadge = true)
+            SupportRow("고객센터 및 오탐지 제보", SupportIcon.HEADSET)
+            SupportRow("서비스 이용약관 및 개인정보 처리방침", SupportIcon.PRIVACY)
+            SupportRow("앱 버전", SupportIcon.INFO, versionLabel = "v${BuildConfig.VERSION_NAME} 최신 버전")
+        }
+    }
+}
+
+@Composable
+private fun SupportRow(
+    label: String,
+    icon: SupportIcon,
+    showNewBadge: Boolean = false,
+    versionLabel: String? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clickable(role = Role.Button, onClick = {})
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SupportGlyph(icon)
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = BrandInk,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (showNewBadge) {
+            Text(
+                "NEW",
+                modifier = Modifier.background(SoftDanger, MaterialTheme.shapes.extraSmall)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                color = Danger,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        if (versionLabel == null) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = SecondaryInk,
+            )
+        } else {
+            Text(versionLabel, color = ProtectiveBlue, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+private enum class SupportIcon { NOTICE, HEADSET, PRIVACY, INFO }
+
+@Composable
+private fun SupportGlyph(icon: SupportIcon) {
+    Canvas(Modifier.size(18.dp)) {
+        scale(size.width / 24f, size.height / 24f, pivot = Offset.Zero) {
+            val stroke = Stroke(width = 2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            fun line(x1: Float, y1: Float, x2: Float, y2: Float) {
+                drawLine(SecondaryInk, Offset(x1, y1), Offset(x2, y2), stroke.width, stroke.cap)
+            }
+
+            when (icon) {
+                SupportIcon.NOTICE -> {
+                    val speaker = Path().apply {
+                        moveTo(2f, 10f)
+                        lineTo(7f, 10f)
+                        lineTo(13f, 6f)
+                        lineTo(13f, 18f)
+                        lineTo(7f, 14f)
+                        lineTo(2f, 14f)
+                        close()
+                    }
+                    drawPath(speaker, SecondaryInk, style = stroke)
+                    line(6f, 14f, 8f, 19f)
+                    line(17f, 8f, 20f, 6f)
+                    line(18f, 12f, 22f, 12f)
+                    line(17f, 16f, 20f, 18f)
+                }
+                SupportIcon.HEADSET -> {
+                    drawArc(SecondaryInk, 180f, 180f, false, Offset(3f, 3f), Size(18f, 18f), style = stroke)
+                    val earcups = Path().apply {
+                        moveTo(3f, 12f)
+                        lineTo(7f, 12f)
+                        lineTo(7f, 17f)
+                        lineTo(3f, 17f)
+                        close()
+                        moveTo(21f, 12f)
+                        lineTo(17f, 12f)
+                        lineTo(17f, 17f)
+                        lineTo(21f, 17f)
+                        quadraticTo(21f, 21f, 16f, 21f)
+                        lineTo(13f, 21f)
+                    }
+                    drawPath(earcups, SecondaryInk, style = stroke)
+                }
+                SupportIcon.PRIVACY -> {
+                    val shield = Path().apply {
+                        moveTo(12f, 2f)
+                        lineTo(21f, 6f)
+                        lineTo(20f, 13f)
+                        quadraticTo(19f, 19f, 12f, 22f)
+                        quadraticTo(5f, 19f, 4f, 13f)
+                        lineTo(3f, 6f)
+                        close()
+                    }
+                    drawPath(shield, SecondaryInk, style = stroke)
+                    drawCircle(SecondaryInk, radius = 3f, center = Offset(11f, 11f), style = stroke)
+                    line(13f, 13f, 16f, 16f)
+                }
+                SupportIcon.INFO -> {
+                    drawCircle(SecondaryInk, radius = 10f, center = Offset(12f, 12f), style = stroke)
+                    drawCircle(SecondaryInk, radius = 1f, center = Offset(12f, 8f))
+                    line(12f, 11f, 12f, 16f)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MyPageCard(
+    color: Color = Color.White,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -268,7 +418,7 @@ private fun MyPageCard(color: Color = Color.White, content: @Composable ColumnSc
         shadowElevation = 1.dp,
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(16.dp),
+            Modifier.fillMaxWidth().padding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             content = content,
         )
