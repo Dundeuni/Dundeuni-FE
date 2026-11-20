@@ -18,6 +18,9 @@ import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.feature.auth.LoginActivity
 import com.dundueni.app.data.auth.AuthSessionRuntime
 import com.dundueni.app.feature.capture.MediaProjectionService
+import com.dundueni.app.feature.familyshare.FamilyShareResult
+import com.dundueni.app.feature.familyshare.FamilyShareRoute
+import com.dundueni.app.feature.familyshare.FamilyShareState
 import com.dundueni.app.feature.home.HomeDestination
 import com.dundueni.app.feature.home.HomeScreen
 import com.dundueni.app.feature.mypage.MyPageRoute
@@ -36,6 +39,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_OPEN_SETTINGS = "com.dundueni.app.extra.OPEN_SETTINGS"
         const val EXTRA_OPEN_MY_PAGE = "com.dundueni.app.extra.OPEN_MY_PAGE"
+        const val EXTRA_OPEN_FAMILY_SHARE = "com.dundueni.app.extra.OPEN_FAMILY_SHARE"
         private const val STATE_DESTINATION = "main_destination"
         private const val ONBOARDING_PREFERENCES = "dundueni_onboarding"
         private const val ONBOARDING_COMPLETED = "completed"
@@ -94,13 +98,19 @@ class MainActivity : ComponentActivity() {
                 val easy = LocalEasyMode.current
                 val navigate: (HomeDestination) -> Unit = { destination ->
                     when (destination) {
-                        HomeDestination.HOME, HomeDestination.SETTINGS, HomeDestination.MY_SHELTER ->
+                        HomeDestination.HOME, HomeDestination.SETTINGS, HomeDestination.MY_SHELTER,
+                        HomeDestination.FAMILY_SHARE ->
                             currentDestination = destination
                         HomeDestination.REPORT -> {
+                            val fromFamilyShare = currentDestination == HomeDestination.FAMILY_SHARE
                             if (easy || currentDestination == HomeDestination.MY_SHELTER) {
                                 currentDestination = HomeDestination.HOME
                             }
-                            startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+                            startActivity(Intent(this@MainActivity, HistoryActivity::class.java).apply {
+                                if (fromFamilyShare && !easy) {
+                                    putExtra(HistoryActivity.EXTRA_FROM_FAMILY_SHARE, true)
+                                }
+                            })
                         }
                         HomeDestination.CONSULTATION -> showMessage("준비 중인 기능입니다")
                     }
@@ -119,6 +129,15 @@ class MainActivity : ComponentActivity() {
                     )
                 } else if (currentDestination == HomeDestination.SETTINGS) {
                     SettingsScreen(navigate)
+                } else if (currentDestination == HomeDestination.FAMILY_SHARE) {
+                    FamilyShareRoute(
+                        // The current payment flow provides no paid entitlement or family group.
+                        state = FamilyShareState(hasFamilyPlan = false),
+                        onAction = { FamilyShareResult.Unavailable },
+                        onBack = { navigate(HomeDestination.HOME) },
+                        onViewPlans = { startActivity(PaymentActivity.createIntent(this@MainActivity)) },
+                        onNavigationSelected = navigate,
+                    )
                 } else if (currentDestination == HomeDestination.MY_SHELTER) {
                     val goHome = { navigate(HomeDestination.HOME) }
                     BackHandler(onBack = goHome)
@@ -176,7 +195,9 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         val requested = requestedDestination(intent)
-        if (requested != null || currentDestination == HomeDestination.MY_SHELTER) {
+        if (requested != null || currentDestination == HomeDestination.MY_SHELTER ||
+            currentDestination == HomeDestination.FAMILY_SHARE
+        ) {
             currentDestination = requested ?: HomeDestination.HOME
         }
     }
@@ -184,6 +205,7 @@ class MainActivity : ComponentActivity() {
     private fun requestedDestination(intent: Intent): HomeDestination? = when {
         intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) -> HomeDestination.SETTINGS
         intent.getBooleanExtra(EXTRA_OPEN_MY_PAGE, false) -> HomeDestination.MY_SHELTER
+        intent.getBooleanExtra(EXTRA_OPEN_FAMILY_SHARE, false) -> HomeDestination.FAMILY_SHARE
         else -> null
     }
 
