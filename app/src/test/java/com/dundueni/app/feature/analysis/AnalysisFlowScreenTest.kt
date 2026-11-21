@@ -4,11 +4,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertCountEquals
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.ui.theme.DundueniFETheme
 import org.junit.Assert.assertEquals
@@ -184,6 +182,7 @@ class AnalysisFlowScreenTest {
         compose.onNodeWithText("이미지 서버 요약").assertIsDisplayed()
         compose.onNodeWithText("이미지 서버 대응").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("일반 텍스트로 판단").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("텍스트 판정 · 일반").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("현재는 안전해 보여요").assertDoesNotExist()
     }
 
@@ -196,7 +195,8 @@ class AnalysisFlowScreenTest {
         compose.setContent { DundueniFETheme {
             AnalysisFlowScreen(state, {}, {}, {}, isDemo = false)
         } }
-        compose.onAllNodesWithText("피싱 의심").assertCountEquals(2)
+        compose.onNodeWithText("피싱 의심").assertIsDisplayed()
+        compose.onNodeWithText("텍스트 판정 · 의심").assertIsDisplayed()
         compose.onNodeWithText("위험할 가능성이 높아요").assertDoesNotExist()
         compose.onNodeWithText("분석 점수 41.2%").assertDoesNotExist()
     }

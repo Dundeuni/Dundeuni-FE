@@ -42,6 +42,7 @@ import com.dundueni.app.ui.theme.SoftCaution
 import com.dundueni.app.ui.theme.SoftDanger
 import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.feature.analysis.ScreenResultType
+import com.dundueni.app.feature.analysis.textDisplayRiskLevel
 import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.ui.component.DundueniButton
@@ -436,10 +437,7 @@ internal fun TextInspectionContent(
     // A combined Screen result stores the image summary and guides in these shared fields.
     val summary = result.summary.takeUnless { screenCrop }.orEmpty()
     if (error == null) {
-        TextInspectionSummary(
-            result.riskLevel, result.keyFinding ?: title, summary,
-            showRiskLevel = !fromHistory && result.riskLevel != RiskLevel.UNKNOWN,
-        )
+        TextInspectionSummary(result.textDecision, result.keyFinding ?: title, summary)
     }
     if (!screenCrop) result.sourceText?.let { text ->
         MessageQuote(text, label = if (fromHistory) "저장된 메시지 미리보기" else "분석된 메시지 내용")
@@ -494,43 +492,20 @@ internal fun TextInspectionContent(
 }
 
 @Composable
-private fun TextInspectionSummary(riskLevel: RiskLevel, title: String, summary: String, showRiskLevel: Boolean) {
-    val (tint, badgeInk, mascot) = when (riskLevel) {
-        RiskLevel.SAFE -> Triple(SoftBlue, Ink, R.drawable.dundeuni_mascot_confident)
-        RiskLevel.CAUTION -> Triple(SoftCaution, CautionInk, R.drawable.dundeuni_mascot_suspicious)
-        RiskLevel.DANGER -> Triple(SoftDanger, Danger, R.drawable.dundeuni_mascot_danger)
-        RiskLevel.UNKNOWN -> Triple(Color(0xFFF0F1F4), Muted, R.drawable.dundeuni_mascot_search)
+private fun TextInspectionSummary(decision: String?, title: String, summary: String) {
+    val (style, badge) = when (textDisplayRiskLevel(decision)) {
+        RiskLevel.SAFE -> InspectionSummaryStyle.BLUE to "텍스트 판정 · 일반"
+        RiskLevel.CAUTION -> InspectionSummaryStyle.YELLOW to "텍스트 판정 · 의심"
+        else -> InspectionSummaryStyle.NEUTRAL to (if (decision == "defer") "텍스트 판정 · 보류" else null)
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, CardOutline),
-    ) {
-        Column(
-            Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(tint, Color.White, tint))).padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Image(painterResource(mascot), contentDescription = null, modifier = Modifier.size(84.dp))
+    InspectionSummaryCard(title, badge, style) {
+        if (summary.isNotBlank()) {
+            InspectionHeading("AI 요약")
             Text(
-                title, color = Ink, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                fontSize = if (LocalEasyMode.current) 24.sp else 20.sp,
+                summary, color = Muted, textAlign = TextAlign.Center,
+                fontSize = if (LocalEasyMode.current) 18.sp else 14.sp,
+                lineHeight = if (LocalEasyMode.current) 26.sp else 22.sp,
             )
-            if (showRiskLevel) Surface(shape = CircleShape, color = tint) {
-                Text(
-                    "위험도 · ${riskLevel.label}", Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                    color = badgeInk, fontSize = if (LocalEasyMode.current) 16.sp else 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            if (summary.isNotBlank()) {
-                InspectionHeading("AI 요약")
-                Text(
-                    summary, color = Muted, textAlign = TextAlign.Center,
-                    fontSize = if (LocalEasyMode.current) 18.sp else 14.sp,
-                    lineHeight = if (LocalEasyMode.current) 26.sp else 22.sp,
-                )
-            }
         }
     }
 }

@@ -18,18 +18,18 @@ class AnalysisResultMappingPipelineTest {
         AnalysisDetailResponseDto::class.java,
     ).result!!.toDomain()
 
-    @Test fun normalizedVerdictAndAllContentReachPb05ForImageAndText() {
+    @Test fun normalizedVerdictStaysSeparateFromDisplayRisk() {
         for (type in listOf("IMAGE", "TEXT")) for (level in listOf("SAFE", "CAUTION", "DANGER", "UNKNOWN")) {
             val domain = get("""{"riskLevel":"$level","reasons":["서버 근거",null,""],
                 "guidance":["서버 대응 안내",null," "],"summary":"서버 요약",
                 "textDecision":"phishing","riskScore":0.99}""", type)
             val result = checkNotNull(domain.toPb05Result(false))
-            assertEquals(if (type == "TEXT") RiskLevel.valueOf(level) else RiskLevel.UNKNOWN, result.riskLevel)
+            assertEquals(if (type == "TEXT") RiskLevel.CAUTION else RiskLevel.UNKNOWN, result.riskLevel)
             assertEquals(level, domain.riskLevel)
-            assertEquals("서버 요약", result.summary)
+            assertEquals(if (type == "TEXT") "" else "서버 요약", result.summary)
             assertEquals(if (type == "TEXT") emptyList<String>() else listOf("서버 근거"),
                 result.evidence.map { it.description })
-            assertEquals(listOf("서버 대응 안내"), result.guidance)
+            assertEquals(if (type == "TEXT") emptyList<String>() else listOf("서버 대응 안내"), result.guidance)
             assertEquals(if (type == "TEXT") HistoryType.TEXT else HistoryType.IMAGE, result.historyType)
             assertNull(result.fraudScore)
             if (type == "TEXT") assertNull(result.aiScore)
@@ -48,10 +48,10 @@ class AnalysisResultMappingPipelineTest {
         }
     }
 
-    @Test fun aiScoresAndTextDecisionsNeverBecomeFinalRisk() {
+    @Test fun phishingUsesCautionDisplayWithoutSettingFraudVerdict() {
         for (risk in listOf("UNKNOWN", "LOW", "MOCK_DANGER", "safe", " SAFE ")) {
             val result = checkNotNull(get("""{"riskLevel":"$risk","textDecision":"phishing","riskScore":100}""", "TEXT").toPb05Result(false))
-            assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
+            assertEquals(RiskLevel.CAUTION, result.riskLevel)
             assertNull(result.fraudLevel)
             assertNull(result.fraudScore)
             assertEquals("피싱 의심", result.keyFinding)
@@ -68,16 +68,31 @@ class AnalysisResultMappingPipelineTest {
         assertTrue(domain.toPb05Result(false)!!.guidance.isEmpty())
     }
 
-    @Test fun textPostUsesDecisionWithoutAssumingGetFields() {
-        for (decision in listOf("normal", "phishing", "defer", "future")) {
+    @Test fun textAndScreenOcrUseDecisionForDisplayRisk() {
+        val decisions = mapOf(
+            "normal" to RiskLevel.SAFE,
+            "phishing" to RiskLevel.CAUTION,
+            "defer" to RiskLevel.UNKNOWN,
+            "future" to RiskLevel.UNKNOWN,
+        )
+        for ((decision, expectedRisk) in decisions) {
             val domain = gson.fromJson("""{"result":{"analysisId":"text-id","type":"TEXT","status":"COMPLETED",
                 "textResult":{"sourceType":"TEXT","decision":"$decision"}}}""", TextAnalysisResponse::class.java).result!!.toDomain()
-            val result = domain.toPb05Result(false)!!
+            val result = domain.toTextResult()
             assertEquals(HistoryType.TEXT, result.historyType)
-            assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
+            assertEquals(expectedRisk, result.riskLevel)
             assertTrue(result.evidence.isEmpty())
             assertTrue(result.guidance.isEmpty())
             assertNull(result.aiScore)
+            assertNull(result.fraudLevel)
+
+            val ocr = domain.copy(sourceType = "SCREEN_CROP").toScreenCropAnalysis()
+            val screen = AnalysisUiState.ScreenSuccess(
+                image = null, text = ocr, imageError = null, textError = null, resultType = ScreenResultType.TEXT,
+            ).toPresentedResult(false, HistoryType.SCREEN)
+            assertEquals(HistoryType.SCREEN, screen?.historyType)
+            assertEquals(expectedRisk, screen?.riskLevel)
+            assertEquals(decision, screen?.textDecision)
         }
     }
 
@@ -98,7 +113,7 @@ class AnalysisResultMappingPipelineTest {
         assertEquals(listOf("링크 주소가 요청 기관과 다릅니다."), presented.evidence.map { it.description })
         assertEquals(listOf("발신자 신원은 확인하지 못했습니다."), presented.textLimitations)
         assertEquals("", presented.summary)
-        assertEquals(RiskLevel.UNKNOWN, presented.riskLevel)
+        assertEquals(RiskLevel.CAUTION, presented.riskLevel)
         assertNull(presented.fraudScore)
     }
 

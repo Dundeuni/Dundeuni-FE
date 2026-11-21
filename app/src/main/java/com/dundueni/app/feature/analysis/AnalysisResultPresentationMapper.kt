@@ -47,7 +47,7 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
     return PresentedResult(
         historyType = if (isText) HistoryType.TEXT else HistoryType.IMAGE,
         id = analysisId?.takeIf { it.isNotBlank() } ?: "image-result-${hashCode()}",
-        riskLevel = RiskLevel.UNKNOWN,
+        riskLevel = if (isText) textDisplayRiskLevel(textDecision) else RiskLevel.UNKNOWN,
         keyFinding = decisionLabel,
         // The current TEXT detail attaches guides computed from image model results.
         guidance = if (isText) emptyList() else recommendedActions.filter { it.isNotBlank() },
@@ -81,6 +81,12 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
         },
         targetLabel = if (isText) "입력한 텍스트 내용" else "선택한 이미지 또는 캡처 화면",
     )
+}
+
+internal fun textDisplayRiskLevel(decision: String?): RiskLevel = when (decision) {
+    "normal" -> RiskLevel.SAFE
+    "phishing" -> RiskLevel.CAUTION
+    else -> RiskLevel.UNKNOWN
 }
 
 /** Preserve the submitted text alongside the server's text classifier result. */

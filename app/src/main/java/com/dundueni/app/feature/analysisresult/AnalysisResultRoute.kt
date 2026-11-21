@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import com.dundueni.app.feature.history.HistoryStore
+import com.dundueni.app.feature.history.HistoryType
 
 @Composable
 fun AnalysisResultRoute(
@@ -58,8 +59,9 @@ fun AnalysisResultRoute(
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(result.id, isDemo) {
+        val isTextInspection = result.historyType == HistoryType.TEXT || screenResultType == ScreenResultType.TEXT
         val isWarning = result.riskLevel == RiskLevel.CAUTION || result.riskLevel == RiskLevel.DANGER
-        if (!isDemo && isWarning && !riskHapticPlayed && appSettings.getBoolean("haptics", true)) {
+        if (!isDemo && !isTextInspection && isWarning && !riskHapticPlayed && appSettings.getBoolean("haptics", true)) {
             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             riskHapticPlayed = true
         }

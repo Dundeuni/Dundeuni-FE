@@ -65,7 +65,7 @@ private fun ScreenImageSummaryCompletedPreview() {
 @Preview(name = "P1 결과 · 텍스트 피싱 의심", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun TextResultPreview() = ResultPreview(
-    previewTextDetail(sourceType = "TEXT").toTextResult("급하게 송금해 주세요."),
+    previewTextDetail(sourceType = "TEXT", decision = "phishing").toTextResult("급하게 송금해 주세요."),
 )
 
 @Preview(name = "P1 결과 · 일반 텍스트 판정", widthDp = 390, heightDp = 1200, showBackground = true)
@@ -115,10 +115,26 @@ private fun TextDeferredResultPreview() = ResultPreview(
     previewTextDetail(sourceType = "TEXT", decision = "defer").toTextResult("확인 부탁드립니다."),
 )
 
-@Preview(name = "P1 화면 검사 · 텍스트 선택 · OCR 결과", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · OCR · 피싱 의심", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ScreenTextResultPreview() = FlowPreview(
-    screenState(image = null, resultType = ScreenResultType.TEXT), HistoryType.SCREEN,
+private fun ScreenTextResultPreview() = ScreenOcrResultPreview("phishing")
+
+@Preview(name = "P1 결과 · OCR · 일반 텍스트", widthDp = 390, heightDp = 1200, showBackground = true)
+@Composable
+private fun ScreenTextNormalResultPreview() = ScreenOcrResultPreview("normal")
+
+@Preview(name = "P1 결과 · OCR · 판단 보류", widthDp = 390, heightDp = 1200, showBackground = true)
+@Composable
+private fun ScreenTextDeferredResultPreview() = ScreenOcrResultPreview("defer")
+
+@Composable
+private fun ScreenOcrResultPreview(decision: String) = FlowPreview(
+    screenState(
+        image = null,
+        text = previewTextDetail(decision = decision).toScreenCropAnalysis(),
+        resultType = ScreenResultType.TEXT,
+    ),
+    HistoryType.SCREEN,
 )
 
 @Preview(name = "P1 결과 · 구형 이미지 응답", widthDp = 390, heightDp = 1200, showBackground = true)
