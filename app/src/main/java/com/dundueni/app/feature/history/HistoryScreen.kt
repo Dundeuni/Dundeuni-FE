@@ -41,13 +41,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dundueni.app.R
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.ImageInspectionContent
+import com.dundueni.app.feature.analysisresult.ImageSummaryUiState
 import com.dundueni.app.feature.analysisresult.PhoneInspectionContent
 import com.dundueni.app.feature.analysisresult.TextInspectionContent
-import com.dundueni.app.feature.analysisresult.imageSummaryLookupId
-import com.dundueni.app.feature.analysisresult.rememberImageSummaryViewModel
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
 import com.dundueni.app.feature.analysisresult.RiskLevel
@@ -101,6 +100,11 @@ fun HistoryScreen(
     onNavigationSelected: ((HomeDestination) -> Unit)? = null,
     initialEasyMode: Boolean = LocalEasyMode.current,
     detailContent: (@Composable (String) -> Unit)? = null,
+    serverBacked: Boolean = false,
+    deletedRecordId: String? = null,
+    loadingMore: Boolean = false,
+    loadMoreError: String? = null,
+    onLoadMore: (() -> Unit)? = null,
 ) {
     val easy = initialEasyMode
     var filterName by rememberSaveable { mutableStateOf("ALL") }
@@ -134,6 +138,9 @@ fun HistoryScreen(
         if (detailContent == null && !loading && selectedId != null && selected == null && initialRecordId == null) {
             selectedId = null
         }
+    }
+    LaunchedEffect(deletedRecordId) {
+        if (deletedRecordId != null && deletedRecordId == selectedId) closeDetail()
     }
     BackHandler {
         when {
@@ -238,6 +245,18 @@ fun HistoryScreen(
                             }
                         }
                     }
+                    if (!loading && error == null && onLoadMore != null) item {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            loadMoreError?.let { Text(it, color = Muted, fontSize = 13.sp) }
+                            TextButton(onClick = onLoadMore, enabled = !loadingMore) {
+                                Text(when {
+                                    loadingMore -> "기록을 더 불러오는 중…"
+                                    loadMoreError != null -> "다시 시도"
+                                    else -> "기록 더 불러오기"
+                                })
+                            }
+                        }
+                    }
                     if (allowDelete && !loading && error == null && records.isNotEmpty()) item {
                         Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (easy) {
@@ -253,7 +272,7 @@ fun HistoryScreen(
                                     HistoryGlyph(HistoryIcon.TRASH, Red, 15.dp)
                                     Text("전체 기록 지우기", Modifier.padding(start = 6.dp), color = Red, fontSize = 12.sp)
                                 }
-                                Text("최근 50건까지 이 기기에 보관돼요", color = Muted, fontSize = 10.sp)
+                                if (!serverBacked) Text("최근 50건까지 이 기기에 보관돼요", color = Muted, fontSize = 10.sp)
                             }
                         }
                     }
@@ -269,8 +288,8 @@ fun HistoryScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(when (current) {
-                        "settings" -> if (allowDelete) "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요." else "서버에 저장된 검사 기록을 확인할 수 있어요."
-                        "profile" -> if (allowDelete) "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요." else "현재 계정의 검사 기록을 서버에서 조회해요."
+                        "settings" -> if (serverBacked || !allowDelete) "현재 계정의 검사 기록을 서버에서 관리해요." else "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요."
+                        "profile" -> if (serverBacked || !allowDelete) "현재 계정의 검사 기록을 서버에서 조회해요." else "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요."
                         else -> "검사 기록 화면에는 별도의 알림 내역이 없어요. 실제 앱에서는 기기의 앱 알림 설정을 열 수 있어요."
                     }, fontSize = 14.sp, lineHeight = 22.sp)
                     if (allowDelete && current == "settings") {
@@ -447,7 +466,8 @@ private fun RecordTypeIcon(record: HistoryRecord, size: Dp) {
 internal fun HistoryResultDetail(
     detail: HistoryRecordDetail?,
     onRetry: () -> Unit,
-    error: Boolean = false,
+    error: String? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val easy = LocalEasyMode.current
     Column(
@@ -455,8 +475,8 @@ internal fun HistoryResultDetail(
             .verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        if (error) {
-            EmptyPanel("기록을 확인하지 못했어요", "기록 상세를 불러오지 못했어요.", "다시 시도", onRetry, easy)
+        if (error != null) {
+            EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy)
         } else if (detail == null) {
             Column(
                 Modifier.fillMaxWidth().padding(48.dp),
@@ -478,21 +498,48 @@ internal fun HistoryResultDetail(
             val result = detail.result
             when {
                 result?.historyType == HistoryType.TEXT -> TextInspectionContent(result, fromHistory = true)
-                result?.historyType == HistoryType.IMAGE -> {
-                    val summary = rememberImageSummaryViewModel(result.imageSummaryLookupId())
+                result?.historyType == HistoryType.IMAGE || result?.historyType == HistoryType.SCREEN -> {
+                    result.aiRiskLabel?.let { level ->
+                        val label = RiskLevel.entries.firstOrNull { it.name == level }?.label ?: level
+                        Text("AI 분석 단계 · $label", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+                    }
                     ImageInspectionContent(
                         result,
-                        summaryState = summary?.uiState?.collectAsStateWithLifecycle()?.value,
-                        onCheckSummary = { summary?.checkAgain() },
+                        summaryState = detail.imageSummaryStatus?.let {
+                            ImageSummaryUiState(
+                                result = it,
+                                checking = false,
+                                showRetry = it == ImageSummaryResult.Pending,
+                            )
+                        },
+                        onCheckSummary = onRetry,
                     )
                 }
                 result?.historyType == HistoryType.PHONE -> PhoneInspectionContent(result)
                 record.status == "QUEUED" || record.status == "ANALYZING" ->
                     EmptyPanel("분석 중이에요", "분석이 완료되면 결과를 확인할 수 있어요.", "다시 확인", onRetry, easy)
                 record.status == "FAILED" -> Notice("분석에 실패했어요.", easy)
-                else -> Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
+                else -> {
+                    if (record.evidence.isNotEmpty()) {
+                        Panel {
+                            Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
+                            record.evidence.forEach { Text(it, color = Muted) }
+                        }
+                    }
+                    Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
+                }
             }
+            onDelete?.let { DeleteHistoryButton(it) }
         }
+    }
+}
+
+@Composable
+private fun DeleteHistoryButton(onDelete: () -> Unit) {
+    OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
+        border = BorderStroke(1.dp, Red.copy(alpha = .25f))) {
+        HistoryGlyph(HistoryIcon.TRASH, Red, 16.dp)
+        Text("이 기록 삭제하기", Modifier.padding(start = 6.dp), color = Red)
     }
 }
 
@@ -555,11 +602,7 @@ private fun LocalHistoryDetail(record: HistoryRecord, easy: Boolean, error: Stri
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(containerColor = Ink)) { Text("목록으로 돌아가기") }
-                if (allowDelete) OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
-                    border = BorderStroke(1.dp, Red.copy(alpha = .25f))) {
-                    HistoryGlyph(HistoryIcon.TRASH, Red, 16.dp)
-                    Text("이 기록 삭제하기", Modifier.padding(start = 6.dp), color = Red)
-                }
+                if (allowDelete) DeleteHistoryButton(onDelete)
             }
         }
     }

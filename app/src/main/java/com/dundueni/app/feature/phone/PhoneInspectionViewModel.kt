@@ -50,7 +50,7 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
                         val body = response.body()
                         if (body?.isCompleted() == true) {
                             completedAnalysisId = body.analysisId
-                            val detail = AnalysisFlowDependencies.createHistoryRepository(context)
+                            val detail = AnalysisFlowDependencies.createDemoPhoneResultRepository(context)
                                 .detail(requireNotNull(body.analysisId))
                             PhoneInspectionUiState.Success(body, detail.toPhoneResult())
                         }
@@ -89,7 +89,7 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
         mutableUiState.value = PhoneInspectionUiState.Loading
         viewModelScope.launch {
             try {
-                val detail = AnalysisFlowDependencies.createHistoryRepository(getApplication<Application>())
+                val detail = AnalysisFlowDependencies.createDemoPhoneResultRepository(getApplication<Application>())
                     .detail(id)
                 mutableUiState.value = PhoneInspectionUiState.Success(
                     PhoneAnalysisResponseDto(id, "COMPLETED"), detail.toPhoneResult(),

@@ -11,38 +11,59 @@ data class PreparedApiEnvelope<T>(
 data class HistoryPageDto(
     val items: List<HistoryPageItemDto>? = null,
     val page: Int? = null,
-    val size: Int? = null,
-    val totalElements: Int? = null,
-    val totalPages: Int? = null,
+    val limit: Int? = null,
+    val total: Int? = null,
+    val hasNext: Boolean? = null,
 )
 
 data class HistoryPageItemDto(
-    val historyId: String? = null,
     val analysisId: String? = null,
     val type: String? = null,
-    val title: String? = null,
-    val summary: String? = null,
-    val summaryStatus: String? = null,
+    val targetSummary: String? = null,
+    val status: String? = null,
+    val aiRiskLevel: String? = null,
     val createdAt: String? = null,
 )
 
-data class RecentHistoryDto(val items: List<RecentHistoryItemDto>? = null)
-
-/** The ZIP has two different item shapes for /recent. Preserve both without choosing a UI mapping. */
-data class RecentHistoryItemDto(
-    val historyId: String? = null,
+data class HistoryDetailDto(
     val analysisId: String? = null,
     val type: String? = null,
-    val title: String? = null,
+    val status: String? = null,
+    val aiGenerationScore: Double? = null,
+    val aiRiskLevel: String? = null,
+    val reasons: List<HistoryReasonDto>? = null,
+    val createdAt: String? = null,
+    val completedAt: String? = null,
+    val detail: HistoryTypeDetailDto? = null,
+)
+
+data class HistoryReasonDto(val description: String? = null)
+
+/** The record type selects the fields supplied by each history feature branch. */
+data class HistoryTypeDetailDto(
+    // IMAGE
     val summary: String? = null,
     val summaryStatus: String? = null,
-    val maskedSummary: String? = null,
+    val summaryModel: String? = null,
+    val summarizedAt: String? = null,
+    // TEXT
+    val textPreview: String? = null,
+    val decision: String? = null,
+    val riskScore: Double? = null,
+    val scoreMeaning: String? = null,
+    val modelVersion: String? = null,
+    val policyVersion: String? = null,
+    val needsReview: Boolean? = null,
+    // PHONE
+    val maskedPhoneNumber: String? = null,
     val riskLevel: String? = null,
-    val createdAt: String? = null,
+    val reportCount: Int? = null,
+    val reportCountIsRange: Boolean? = null,
+    val reasons: List<String>? = null,
+    val analyzedAt: String? = null,
 )
 
-data class DeleteHistoryDto(val deleted: Boolean? = null)
-data class DeleteAllHistoryDto(val deletedCount: Int? = null)
+data class DeleteHistoryDto(val deletedCount: Int? = null)
 
 data class OnboardingRequestDto(
     val easyMode: Boolean,

@@ -56,31 +56,46 @@ class PreparedApiRepositoriesTest {
         Buffer().also(body::writeTo).readUtf8()
     }).asJsonObject
 
-    @Test fun historyApisStaySeparateFromLocalStoreAndRejectFailures() = runBlocking {
+    @Test fun historyApisUseSharedRoutesPaginationAndDeleteCounts() = runBlocking {
         val stub = StubTransport()
         val repository = HistoryApiRepository(stub.service<HistoryApiService>())
-        stub.reply(200, envelope("HISTORY200", """{"items":[],"page":0,"size":10,"totalElements":0,"totalPages":0}"""))
-        stub.reply(200, envelope("HISTORY200", """{"items":[{"analysisId":"a","type":"TEXT","title":"x","maskedSummary":"y","createdAt":"2026-01-01T00:00:00Z"}]}"""))
-        stub.reply(200, envelope("HISTORY200", """{"deleted":true}"""))
-        stub.reply(200, envelope("HISTORY200", """{"deletedCount":0}"""))
-        assertEquals(0, repository.list(0, 10).items!!.size)
-        assertEquals("y", repository.recent().items!!.single().maskedSummary)
-        repository.deleteOne("analysis-id")
+        val id = "587b0a5b-4e91-4d85-96fc-a73931e30a0d"
+        stub.reply(200, envelope("ANALYSIS200", """{
+            "items":[{"analysisId":"$id","type":"TEXT","status":"COMPLETED","targetSummary":"preview","createdAt":"2026-01-01T00:00:00Z"}],
+            "page":1,"limit":1,"total":2,"hasNext":true
+        }"""))
+        stub.reply(200, envelope("ANALYSIS200", """{
+            "items":[{"analysisId":"889c9788-dd7a-4a09-abc8-bae7eb5c240a","type":"IMAGE","status":"COMPLETED","createdAt":"2025-12-31T00:00:00Z"}],
+            "page":2,"limit":1,"total":2,"hasNext":false
+        }"""))
+        stub.reply(200, envelope("ANALYSIS200", """{"analysisId":"$id","detail":null}"""))
+        stub.reply(200, envelope("ANALYSIS200", """{"deletedCount":1}"""))
+        stub.reply(200, envelope("ANALYSIS200", """{"deletedCount":0}"""))
+
+        val first = repository.list(limit = 1)
+        assertEquals("preview", first.items.single().targetSummary)
+        assertTrue(first.hasNext)
+        assertFalse(repository.list(page = 2, limit = 1).hasNext)
+        assertNull(repository.detail(id).detail)
+        repository.deleteOne(id)
         assertEquals(0, repository.deleteAll())
-        assertEquals(listOf("GET", "GET", "DELETE", "DELETE"), stub.requests.map { it.method })
+        assertEquals(listOf("GET", "GET", "GET", "DELETE", "DELETE"), stub.requests.map { it.method })
         assertEquals(listOf(
-            "/api/analysis-history?page=0&size=10", "/api/analysis-history/recent",
-            "/api/analysis-history/analysis-id", "/api/analysis-history",
+            "/api/analysis/history?page=1&limit=1",
+            "/api/analysis/history?page=2&limit=1",
+            "/api/analysis/history/$id", "/api/analysis/history/$id", "/api/analysis/history",
         ), stub.requests.map { it.url.encodedPath + (it.url.encodedQuery?.let { q -> "?$q" } ?: "") })
         assertTrue(stub.requests.all { it.header("X-Dundeuni-Auth-Required") == "true" })
 
-        stub.reply(404, """{"isSuccess":false,"code":"HISTORY404","message":"missing","result":null}""")
-        try {
-            repository.deleteOne("missing")
-            fail("404 was accepted")
-        } catch (error: PreparedApiHttpException) {
-            assertEquals(404, error.httpStatus)
-            assertEquals("HISTORY404", error.apiCode)
+        for ((status, code) in listOf(400 to "COMMON400", 401 to "AUTH401", 404 to "COMMON404", 500 to "COMMON500")) {
+            stub.reply(status, """{"isSuccess":false,"code":"$code","message":"error","result":null}""")
+            try {
+                repository.deleteOne(id)
+                fail("$status was accepted")
+            } catch (error: PreparedApiHttpException) {
+                assertEquals(status, error.httpStatus)
+                assertEquals(code, error.apiCode)
+            }
         }
     }
 
@@ -149,7 +164,7 @@ class PreparedApiRepositoriesTest {
         val analysis = AnalysisSupportRepository(stub.service<AnalysisSupportApiService>())
         stub.reply(200, envelope("WRONG_CODE", """{"items":[]}"""))
         try {
-            history.recent()
+            history.list()
             fail("Wrong envelope code was accepted")
         } catch (_: PreparedApiProtocolException) { }
 

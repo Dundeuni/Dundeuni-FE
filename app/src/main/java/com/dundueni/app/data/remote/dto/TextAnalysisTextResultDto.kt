@@ -1,6 +1,6 @@
 package com.dundueni.app.data.remote.dto
 
-/** TEXT result shared by analysis POST, detail GET, and history detail. */
+/** TEXT result shared by analysis POST and immediate detail GET. */
 data class TextAnalysisTextResultDto(
     val decision: String? = null,
     val riskScore: Double? = null,

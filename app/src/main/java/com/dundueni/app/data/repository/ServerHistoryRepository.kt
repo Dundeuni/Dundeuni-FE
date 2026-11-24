@@ -3,18 +3,11 @@ package com.dundueni.app.data.repository
 import com.dundueni.app.data.remote.api.ServerHistoryApiService
 import com.dundueni.app.data.remote.api.HistoryEntryDto
 import com.dundueni.app.data.remote.api.HistoryEnvelope
-import com.dundueni.app.data.remote.api.HistoryItemsDto
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import retrofit2.Response
 
-class ServerHistoryRepository(private val api: ServerHistoryApiService) {
-    suspend fun list(limit: Int = 20): List<HistoryEntryDto> {
-        require(limit in 1..100)
-        return api.list(limit).result().items
-            ?: throw AnalysisProtocolException("History items are missing")
-    }
-
+internal class ServerHistoryRepository(private val api: ServerHistoryApiService) {
     suspend fun detail(analysisId: String): HistoryEntryDto {
         require(analysisId.isNotBlank())
         return api.detail(analysisId).result().also {
