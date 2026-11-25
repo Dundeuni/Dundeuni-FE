@@ -30,8 +30,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,8 +45,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,7 +61,6 @@ import com.dundueni.app.ui.theme.BrandInk
 import com.dundueni.app.ui.theme.Danger
 import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniPillShape
-import com.dundueni.app.ui.theme.LocalEasyMode
 import com.dundueni.app.ui.theme.PageBackground
 import com.dundueni.app.ui.theme.PrimaryMidnight
 import com.dundueni.app.ui.theme.ProtectiveBlue
@@ -93,10 +88,8 @@ internal fun MyPageScreen(
     onLogoutConfirmed: () -> Unit,
     onWithdrawalConfirmed: () -> Unit,
     onUpgrade: () -> Unit,
-    onChangeMode: (Boolean) -> Unit,
     onNavigationSelected: (HomeDestination) -> Unit,
 ) {
-    val easy = LocalEasyMode.current
     Scaffold(
         containerColor = PageBackground,
         topBar = {
@@ -112,7 +105,7 @@ internal fun MyPageScreen(
             }
         },
         bottomBar = {
-            HomeBottomNavigation(if (easy) null else HomeDestination.MY_SHELTER, onNavigationSelected)
+            HomeBottomNavigation(HomeDestination.MY_SHELTER, onNavigationSelected)
         },
     ) { padding ->
         Column(
@@ -123,7 +116,6 @@ internal fun MyPageScreen(
             ProfileCard(signedIn, nickname, email, onLogin)
             MonthlyInspectionsCard("${firstDate.format(DateFormat)} ~ ${today.format(DateFormat)}", inspections, familyCount)
             PlanCard(quotaUsage, onUpgrade)
-            ModeCard(easy, onChangeMode)
             SupportCard()
             if (signedIn) {
                 MyPageAccountActions(
@@ -242,32 +234,6 @@ private fun PlanCard(usage: BasicInspectionQuota.Usage?, onUpgrade: () -> Unit) 
             Box(Modifier.size(36.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = BrandInk)
             }
-        }
-    }
-}
-
-@Composable
-private fun ModeCard(easy: Boolean, onChangeMode: (Boolean) -> Unit) {
-    MyPageCard(color = SoftBlue) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(40.dp).background(Color.White, DundueniDefaultShape), contentAlignment = Alignment.Center) {
-                Text("가", color = ProtectiveBlue, style = MaterialTheme.typography.titleMedium)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(if (easy) "쉬운 모드 사용 중" else "쉬운 모드로 전환하기", color = BrandInk,
-                    style = MaterialTheme.typography.labelLarge)
-                Text("글씨를 더 크게, 조작을 더 단순하게 바꿔요.", color = SecondaryInk,
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            Switch(
-                checked = easy,
-                onCheckedChange = onChangeMode,
-                modifier = Modifier.semantics { contentDescription = "쉬운 모드" },
-                colors = SwitchDefaults.colors(checkedTrackColor = ProtectiveBlue),
-            )
         }
     }
 }

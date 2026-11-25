@@ -164,9 +164,6 @@ internal fun MyPageRoute(
         onLogoutConfirmed = onLogoutConfirmed,
         onWithdrawalConfirmed = onWithdrawalConfirmed,
         onUpgrade = onUpgrade,
-        onChangeMode = { easy ->
-            settings.edit().putBoolean(FloatingButtonPreferences.KEY_EASY_MODE, easy).apply()
-        },
         onNavigationSelected = onNavigationSelected,
     )
 }

@@ -9,6 +9,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.ui.theme.DundueniFETheme
+import com.dundueni.app.ui.theme.LocalEasyMode
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -61,8 +62,15 @@ internal fun easyHistorySamples(): List<HistoryRecord> {
 
 @Preview(name = "PB-06 쉬운 모드", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
-private fun EasyHistoryPreview() { DundueniFETheme { HistoryScreen(easyHistorySamples(), {}, {}, {}, initialEasyMode = true) } }
+private fun EasyHistoryPreview() = EasyHistoryPreviewContent()
 
 @Preview(name = "PB-06 쉬운 모드 큰 글씨", widthDp = 320, heightDp = 720, fontScale = 1.3f, showBackground = true)
 @Composable
-private fun EasyHistoryLargeTextPreview() { DundueniFETheme { HistoryScreen(easyHistorySamples(), {}, {}, {}, initialEasyMode = true) } }
+private fun EasyHistoryLargeTextPreview() = EasyHistoryPreviewContent()
+
+@Composable
+private fun EasyHistoryPreviewContent() = DundueniFETheme {
+    CompositionLocalProvider(LocalEasyMode provides true) {
+        HistoryScreen(easyHistorySamples(), {}, {}, {})
+    }
+}
