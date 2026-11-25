@@ -40,6 +40,8 @@ import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.feature.analysis.ScreenResultType
 import com.dundueni.app.feature.analysis.textDisplayRiskLevel
 import com.dundueni.app.feature.history.HistoryType
+import com.dundueni.app.data.model.ImageDetailedReason
+import com.dundueni.app.data.model.ImageModelDetails
 import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.ui.component.DundueniButton
 import com.dundueni.app.ui.component.DundueniButtonType
@@ -89,7 +91,7 @@ fun AnalysisResultScreen(
         ) { forImage ->
             val onCheckSummary = onCheckImageSummary.takeUnless { forImage }
             when (result.historyType.takeUnless { isDemo }) {
-                HistoryType.IMAGE -> ImageInspectionContent(result, summaryState = imageSummary, onCheckSummary = onCheckSummary)
+                HistoryType.IMAGE -> ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
                 HistoryType.TEXT -> TextInspectionContent(result)
                 HistoryType.PHONE -> PhoneInspectionContent(result)
                 HistoryType.SCREEN -> {
@@ -200,70 +202,98 @@ internal fun ImageInspectionContent(
         return
     }
 
-    val verdict = result.imageOverallDecisionLabel?.trim()?.takeIf { it.isNotEmpty() }
-    // Only the server's existing verdict text informs the palette when there is no explicit risk grade.
-    val imageVerdict = verdict.takeIf { result.riskLevel == RiskLevel.UNKNOWN }
-    val style = when {
-        result.riskLevel == RiskLevel.DANGER -> InspectionSummaryStyle.RED
-        result.riskLevel == RiskLevel.CAUTION || imageVerdict == "생성·변조 의심" -> InspectionSummaryStyle.YELLOW
-        result.riskLevel == RiskLevel.SAFE || imageVerdict == "뚜렷한 신호 없음" -> InspectionSummaryStyle.BLUE
+    val label = result.imageOverallDecisionLabel?.trim()
+    val serverLevel = when (result.imageOverallDecision) {
+        "GENERATION_OR_MANIPULATION_SUSPECTED" -> RiskLevel.DANGER
+        "INCONCLUSIVE" -> RiskLevel.CAUTION
+        "NO_CLEAR_SIGNAL" -> RiskLevel.SAFE
+        else -> RiskLevel.entries.firstOrNull { it != RiskLevel.UNKNOWN && it.label == label }
+    }
+    val level = serverLevel ?: result.riskLevel.takeUnless { result.imageModelResult }
+    val style = when (level) {
+        RiskLevel.DANGER -> InspectionSummaryStyle.RED
+        RiskLevel.CAUTION -> InspectionSummaryStyle.YELLOW
+        RiskLevel.SAFE -> InspectionSummaryStyle.BLUE
         else -> InspectionSummaryStyle.NEUTRAL
     }
-    val badge = if (result.riskLevel != RiskLevel.UNKNOWN) "위험도 · ${result.riskLevel.label}"
-        else verdict?.let { "이미지 종합 판정" }
-    InspectionSummaryCard(verdict ?: "이미지 생성·변조 분석", badge, style) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ImageSummaryContent(result.summary, summaryState, onCheckSummary)
-        }
+    val title = serverLevel?.label
+        ?: label?.takeIf { it == "판단 불가" || !result.imageModelResult && it.isNotEmpty() }
+        ?: "이미지 생성·변조 분석"
+    val badge = when {
+        serverLevel != null -> "이미지 종합 판정"
+        level != null && level != RiskLevel.UNKNOWN -> "위험도 · ${level.label}"
+        else -> null
+    }
+    val state = summaryState ?: result.initialImageSummary()?.let {
+        ImageSummaryUiState(result = it, checking = it == ImageSummaryResult.Pending)
+    }
+    val completed = (state?.result as? ImageSummaryResult.Completed)?.details
+    val summary = completed?.summary ?: result.summary.takeUnless { result.imageModelResult }
+
+    InspectionSummaryCard(title, badge, style) {
+        ImageSummaryContent(summary, state, onCheckSummary, showFailure = !result.imageModelResult)
     }
     ImageInspectionMetrics(result)
-    ImageInspectionEvidence(result)
-    InspectionGuidance(result.guidance, title = "이미지 대응 안내")
+    val useLegacyDetails = result.imageSummary == null && completed == null
+    ImageInspectionEvidence(result, completed?.detailedReasons.orEmpty(), useLegacyDetails)
+
+    val guides = completed?.actionGuides.orEmpty().filter { it.title.isNotBlank() || it.description.isNotBlank() }
+    if (guides.isNotEmpty()) {
+        InspectionGuidance("대응 수칙") {
+            guides.forEach { InspectionGuidanceItem(it.description, title = it.title) }
+        }
+    } else if (useLegacyDetails) {
+        InspectionGuidance(result.guidance, title = "이미지 대응 안내")
+    }
+    completed?.reassurance?.takeIf(String::isNotBlank)?.let { reassurance ->
+        ResultPanel(color = SoftBlue) {
+            InspectionHeading("안심 조언")
+            InspectionText(reassurance)
+        }
+    }
 }
 
 @Composable
-private fun ImageSummaryContent(summary: String, state: ImageSummaryUiState?, onCheck: (() -> Unit)?) {
-    val completed = (state?.result as? ImageSummaryResult.Completed)?.text ?: summary
-    if (completed.isNotBlank()) {
-        InspectionHeading("분석 요약")
-        InspectionText(completed)
-        return
-    }
-    if (state == null) return
-
-    InspectionHeading("분석 요약")
-    when (state.result) {
-        ImageSummaryResult.Pending, ImageSummaryResult.Unavailable, ImageSummaryResult.LookupError -> {
-            val message = when {
-                state.checking && state.showRetry -> "요약 상태를 확인하고 있어요."
-                state.lookupFailed || state.result == ImageSummaryResult.LookupError -> "요약 상태를 확인하지 못했어요."
-                state.result == ImageSummaryResult.Unavailable && state.showRetry -> "아직 표시할 요약이 없어요."
-                state.result == ImageSummaryResult.Unavailable -> "요약 준비 상태를 확인하고 있어요."
-                else -> "요약을 준비하고 있어요."
-            }
-            InspectionText(message)
-            if (state.showRetry && onCheck != null) {
-                DundueniButton("다시 확인", onCheck, type = DundueniButtonType.SECONDARY, enabled = !state.checking)
-            }
+private fun ImageSummaryContent(
+    summary: String?,
+    state: ImageSummaryUiState?,
+    onCheck: (() -> Unit)?,
+    showFailure: Boolean,
+) {
+    val text = summary?.takeIf(String::isNotBlank) ?: when (state?.result) {
+        ImageSummaryResult.Pending, ImageSummaryResult.LookupError -> when {
+            state.checking && state.showRetry -> "요약 상태를 확인하고 있어요."
+            state.lookupFailed || state.result == ImageSummaryResult.LookupError -> "요약 상태를 확인하지 못했어요."
+            else -> "요약을 준비하고 있어요."
         }
-        ImageSummaryResult.Failed -> InspectionText("요약을 만들지 못했어요.")
-        null -> InspectionText("요약 상태를 확인하고 있어요.")
-        is ImageSummaryResult.Completed -> Unit
+        ImageSummaryResult.Failed -> "요약을 만들지 못했어요.".takeIf { showFailure }
+        else -> null
+    } ?: return
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        InspectionHeading("분석 요약")
+        InspectionText(text)
+        if (state?.showRetry == true && onCheck != null) {
+            DundueniButton("다시 확인", onCheck, type = DundueniButtonType.SECONDARY, enabled = !state.checking)
+        }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ImageInspectionMetrics(result: AnalysisResult) {
-    val generationFailed = result.imageGenerationDetails?.status == "FAILED"
-    val manipulationFailed = result.imageManipulationDetails?.status == "FAILED"
-    val generation = if (generationFailed) "분석 실패" else imageDecisionLabel(result.imageGenerationDecision, generation = true)
-    val manipulation = if (manipulationFailed) "분석 실패" else imageDecisionLabel(result.imageManipulationDecision, generation = false)
-    val generationScore = result.imageGenerationDisplayScore.takeUnless { generationFailed }
-    val manipulationScore = result.imageManipulationDisplayScore.takeUnless { manipulationFailed }
-    if (generation == null && manipulation == null && generationScore == null && manipulationScore == null &&
-        result.aiScore == null
-    ) return
+    val generationDetails = result.imageGenerationDetails
+    val manipulationDetails = result.imageManipulationDetails
+    val generationScore = result.imageGenerationDisplayScore.takeUnless { generationDetails?.status == "FAILED" }
+    val manipulationScore = result.imageManipulationDisplayScore.takeUnless { manipulationDetails?.status == "FAILED" }
+    val showUnanalyzed = result.imageSummary != null && result.aiScore == null
+    val generation = imageInspectionDecision(
+        generationDetails, result.imageGenerationDecision, generationScore, generation = true, showUnanalyzed = showUnanalyzed,
+    )
+    val manipulation = imageInspectionDecision(
+        manipulationDetails, result.imageManipulationDecision, manipulationScore, generation = false, showUnanalyzed = showUnanalyzed,
+    )
+    if (generation == null && manipulation == null && result.aiScore == null) return
 
     ResultPanel {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -277,40 +307,76 @@ private fun ImageInspectionMetrics(result: AnalysisResult) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             maxItemsInEachRow = if (stackCards) 1 else 2,
         ) {
-            ImageInspectionMetric("AI 생성 판정", generation, generationScore, Modifier.weight(1f))
-            ImageInspectionMetric("이미지 변조 판정", manipulation, manipulationScore, Modifier.weight(1f))
+            ImageInspectionMetric(
+                "AI 생성 분석", generation, generationScore, Modifier.weight(1f),
+                showMissingScore = generationDetails?.status == "SUCCEEDED",
+            )
+            ImageInspectionMetric(
+                "이미지 변조 분석", manipulation, manipulationScore, Modifier.weight(1f),
+                showMissingScore = manipulationDetails?.status == "SUCCEEDED",
+            )
         }
         result.aiScore?.let { InspectionText("AI 생성 점수 ${formatScore(it)}/100") }
     }
 }
 
+private fun imageInspectionDecision(
+    details: ImageModelDetails?,
+    decision: String?,
+    score: Double?,
+    generation: Boolean,
+    showUnanalyzed: Boolean,
+): String? {
+    if (details?.status == "FAILED") return "분석 실패"
+    if (decision == "INCONCLUSIVE") return "판단 불가"
+    return imageDecisionLabel(decision, generation) ?: when {
+        details != null || decision != null || score != null -> "판정 정보 없음"
+        showUnanalyzed -> "미분석"
+        else -> null
+    }
+}
+
 @Composable
-private fun ImageInspectionMetric(title: String, verdict: String?, score: Double?, modifier: Modifier) {
+private fun ImageInspectionMetric(
+    title: String,
+    verdict: String?,
+    score: Double?,
+    modifier: Modifier,
+    showMissingScore: Boolean,
+) {
     if (verdict == null && score == null) return
     Surface(modifier = modifier, color = SoftBlue, shape = RoundedCornerShape(12.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             InspectionText(title)
             verdict?.let { InspectionHeading(it) }
-            score?.let {
-                InspectionText("표시 점수 ${formatScore(it)}/100")
-                if (it in 0.0..100.0) {
-                    Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Color.White)) {
-                        Box(Modifier.fillMaxWidth((it / 100).toFloat()).fillMaxHeight().background(ProtectiveBlue))
-                    }
+            if (score != null) {
+                InspectionText("표시 점수 ${score.toString().removeSuffix(".0")}/100")
+                Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Color.White)) {
+                    Box(Modifier.fillMaxWidth((score / 100).toFloat()).fillMaxHeight().background(ProtectiveBlue))
                 }
+            } else if (showMissingScore) {
+                InspectionText("점수 미제공")
             }
         }
     }
 }
 
 @Composable
-private fun ImageInspectionEvidence(result: AnalysisResult) {
-    val generation = result.imageGenerationDetails
-    val manipulation = result.imageManipulationDetails
+private fun ImageInspectionEvidence(
+    result: AnalysisResult,
+    detailedReasons: List<ImageDetailedReason>,
+    useLegacyEvidence: Boolean,
+) {
+    val reasons = detailedReasons.filter { it.title.isNotBlank() || it.description.isNotBlank() }
+    val generation = result.imageGenerationDetails.takeIf { useLegacyEvidence }
+    val manipulation = result.imageManipulationDetails.takeIf { useLegacyEvidence }
     val modelReasons = generation?.reasons.orEmpty() + manipulation?.reasons.orEmpty()
-    val evidence = result.evidence.map { it.description }.filterNot(modelReasons::contains)
-    if (evidence.isEmpty() && modelReasons.isEmpty() &&
-        generation?.limitations.isNullOrEmpty() && manipulation?.limitations.isNullOrEmpty()
+    val evidence = result.evidence.takeIf { useLegacyEvidence }.orEmpty()
+        .map { it.description }.filterNot(modelReasons::contains)
+    val generationLimitations = generation?.limitations.orEmpty().takeUnless { result.imageModelResult }.orEmpty()
+    val manipulationLimitations = manipulation?.limitations.orEmpty().takeUnless { result.imageModelResult }.orEmpty()
+    if (reasons.isEmpty() && evidence.isEmpty() && modelReasons.isEmpty() &&
+        generationLimitations.isEmpty() && manipulationLimitations.isEmpty()
     ) return
 
     ResultPanel {
@@ -318,11 +384,21 @@ private fun ImageInspectionEvidence(result: AnalysisResult) {
             ResultGlyph(ResultIcon.SHIELD_OUTLINE, ProtectiveBlue)
             InspectionHeading("이미지 분석 근거")
         }
+        reasons.forEach { reason ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                when (reason.type) {
+                    "GENERATION" -> InspectionText("AI 생성 분석")
+                    "MANIPULATION" -> InspectionText("이미지 변조 분석")
+                }
+                if (reason.title.isNotBlank()) InspectionHeading(reason.title)
+                if (reason.description.isNotBlank()) InspectionText(reason.description)
+            }
+        }
         evidence.forEach { InspectionText(it) }
         InspectionFindings("AI 생성 판단 근거", generation?.reasons.orEmpty())
-        InspectionFindings("AI 생성 분석 한계", generation?.limitations.orEmpty())
+        InspectionFindings("AI 생성 분석 한계", generationLimitations)
         InspectionFindings("이미지 변조 판단 근거", manipulation?.reasons.orEmpty())
-        InspectionFindings("이미지 변조 분석 한계", manipulation?.limitations.orEmpty())
+        InspectionFindings("이미지 변조 분석 한계", manipulationLimitations)
     }
 }
 
@@ -414,15 +490,28 @@ private fun InspectionSummaryCard(
 @Composable
 private fun InspectionGuidance(guidance: List<String>, title: String = "대응 안내") {
     if (guidance.isEmpty()) return
+    InspectionGuidance(title) {
+        guidance.forEach { InspectionGuidanceItem(it) }
+    }
+}
+
+@Composable
+private fun InspectionGuidance(title: String, content: @Composable ColumnScope.() -> Unit) {
     ResultPanel {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ResultGlyph(ResultIcon.CHECKLIST, ProtectiveBlue)
             InspectionHeading(title)
         }
-        guidance.forEach { instruction ->
-            Surface(color = SoftBlue, shape = RoundedCornerShape(10.dp)) {
-                Box(Modifier.fillMaxWidth().padding(12.dp)) { InspectionText(instruction) }
-            }
+        content()
+    }
+}
+
+@Composable
+private fun InspectionGuidanceItem(description: String, title: String = "") {
+    Surface(color = SoftBlue, shape = RoundedCornerShape(10.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (title.isNotBlank()) InspectionHeading(title)
+            if (description.isNotBlank()) InspectionText(description)
         }
     }
 }

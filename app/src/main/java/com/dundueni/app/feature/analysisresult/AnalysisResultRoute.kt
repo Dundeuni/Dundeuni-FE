@@ -54,12 +54,6 @@ fun AnalysisResultRoute(
     val summaryModel = rememberImageSummaryViewModel(summaryId)
     val summaryState = summaryModel?.uiState?.collectAsStateWithLifecycle()?.value
         ?: initialSummary?.let { ImageSummaryUiState(result = it, checking = it == ImageSummaryResult.Pending) }
-    val visibleSummary = summaryState?.takeUnless {
-        it.result == ImageSummaryResult.Failed || it.result == ImageSummaryResult.Unavailable
-    }
-    val displayedResult = if (initialSummary != null && result.summary.isNotEmpty()) {
-        result.copy(summary = "")
-    } else result
     val scope = rememberCoroutineScope()
     val appSettings = remember(context) { context.getSharedPreferences("dundueni_settings", Context.MODE_PRIVATE) }
     var riskHapticPlayed by rememberSaveable(result.id) { mutableStateOf(false) }
@@ -101,11 +95,11 @@ fun AnalysisResultRoute(
         }, "분석 결과 공유"))
     }
 
-    AnalysisResultScreen(displayedResult, isDemo = isDemo,
+    AnalysisResultScreen(result, isDemo = isDemo,
         imageAnalysisError = imageAnalysisError,
         screenCropError = screenCropError,
         screenResultType = screenResultType,
-        imageSummary = visibleSummary,
+        imageSummary = summaryState,
         onCheckImageSummary = { summaryModel?.checkAgain() },
         onAction = { action ->
         when (action) {
