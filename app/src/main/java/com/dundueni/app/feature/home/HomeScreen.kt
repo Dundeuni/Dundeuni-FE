@@ -455,7 +455,7 @@ fun HomeBottomNavigation(
     val items = if (easy) listOf(
         Triple(HomeDestination.HOME, "protect", "홈"),
         Triple(HomeDestination.REPORT, "history", "검사기록"),
-        Triple(HomeDestination.SETTINGS, "settings", "쉬운설정"),
+        Triple(HomeDestination.MY_SHELTER, "profile", "마이페이지"),
     ) else listOf(
         Triple(HomeDestination.HOME, "home", "홈"),
         Triple(HomeDestination.REPORT, "report", "검사 기록"),

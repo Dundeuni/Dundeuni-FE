@@ -23,6 +23,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.dundueni.app.ui.theme.LocalEasyMode
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -62,9 +65,12 @@ internal fun SharedPreferences.readFamilyContacts(): List<Pair<String, String>>?
 @Composable
 fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     val context = LocalContext.current
-    DisposableEffect(Unit) {
-        FloatingButtonManager.suspendForActivity("settings")
-        onDispose { FloatingButtonManager.resumeForActivity("settings") }
+    val preview = LocalInspectionMode.current
+    if (!preview) {
+        DisposableEffect(Unit) {
+            FloatingButtonManager.suspendForActivity("settings")
+            onDispose { FloatingButtonManager.resumeForActivity("settings") }
+        }
     }
     val prefs = remember { context.getSharedPreferences(FloatingButtonPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE) }
     val initialButtonSize = remember { prefs.getString(FloatingButtonPreferences.KEY_SIZE, "보통") ?: "보통" }
@@ -106,7 +112,7 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     var editingFamily by remember { mutableIntStateOf(-1) }
     var familyName by remember { mutableStateOf("") }
     var familyPhone by remember { mutableStateOf("") }
-    BackHandler { onNavigationSelected(HomeDestination.HOME) }
+    if (!preview) BackHandler { onNavigationSelected(HomeDestination.HOME) }
 
     val hasPendingChanges = buttonSize != appliedButtonSize ||
         edgeSnap != appliedEdgeSnap ||
@@ -160,8 +166,17 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
                 Text(if (easy) "쉬운설정" else "설정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                if (easy) {
-                    DundueniButton("마이페이지", { onNavigationSelected(HomeDestination.MY_SHELTER) }, Modifier.fillMaxWidth())
+                SettingsSection("화면 모드") {
+                    Surface(shape = RoundedCornerShape(16.dp), color = Color.White) {
+                        SettingToggle(
+                            title = if (easy) "쉬운 모드 사용 중" else "쉬운 모드로 전환하기",
+                            subtitle = if (easy) "끄면 일반 모드로 돌아가요." else "글씨를 더 크게, 조작을 더 단순하게 바꿔요.",
+                            checked = easy,
+                            switchModifier = Modifier.semantics { contentDescription = "쉬운 모드" },
+                        ) { enabled ->
+                            if (!preview) prefs.edit().putBoolean(FloatingButtonPreferences.KEY_EASY_MODE, enabled).apply()
+                        }
+                    }
                 }
                 SettingsSection("플로팅 버튼 설정") {
                     Column(Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -358,10 +373,18 @@ fun SettingsScreen(onNavigationSelected: (HomeDestination) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Text(title, Modifier.weight(1f), color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold); trailing?.invoke() }; content() }
 }
 
-@Composable private fun SettingToggle(title: String, subtitle: String, checked: Boolean, badge: String? = null, onChange: (Boolean) -> Unit) {
+@Composable
+private fun SettingToggle(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    badge: String? = null,
+    switchModifier: Modifier = Modifier,
+    onChange: (Boolean) -> Unit,
+) {
     Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) { Row(verticalAlignment = Alignment.CenterVertically) { Text(title, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); if (badge != null) Text(badge, Modifier.padding(start = 8.dp).clip(RoundedCornerShape(5.dp)).background(Pale).padding(horizontal = 7.dp, vertical = 3.dp), color = Blue, fontSize = 10.sp) }; Text(subtitle, color = Muted, fontSize = 11.sp, lineHeight = 16.sp) }
-        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = Blue))
+        Switch(checked, onChange, switchModifier, colors = SwitchDefaults.colors(checkedTrackColor = Blue))
     }
 }
 

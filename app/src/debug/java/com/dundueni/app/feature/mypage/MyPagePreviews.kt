@@ -33,7 +33,6 @@ private fun MyPageLoggedInPreview() = DundueniFETheme {
         onLogoutConfirmed = {},
         onWithdrawalConfirmed = {},
         onUpgrade = {},
-        onChangeMode = {},
         onNavigationSelected = {},
     )
 }
@@ -55,7 +54,6 @@ private fun MyPageLoggedOutPreview() = DundueniFETheme {
         onLogoutConfirmed = {},
         onWithdrawalConfirmed = {},
         onUpgrade = {},
-        onChangeMode = {},
         onNavigationSelected = {},
     )
 }
