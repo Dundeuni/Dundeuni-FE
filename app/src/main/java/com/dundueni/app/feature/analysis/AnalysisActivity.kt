@@ -56,6 +56,13 @@ class AnalysisActivity : ComponentActivity() {
     private lateinit var viewModel: AnalysisViewModel
     private var captureFile: File? = null
     private var redirectingToLogin = false
+    private var movingInspectionToBackground = false
+    private var closingAnalysis = false
+
+    override fun onResume() {
+        movingInspectionToBackground = false
+        super.onResume()
+    }
 
     override fun onStart() {
         super.onStart()
@@ -113,11 +120,13 @@ class AnalysisActivity : ComponentActivity() {
                     val result = state.toPresentedResult(false,
                         if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE) ?: return@collect
                     val key = "image:${viewModel.attemptId}"
+                    if (closingAnalysis || isFinishing) return@collect
                     if (visibility == Lifecycle.State.RESUMED) {
+                        if (movingInspectionToBackground) return@collect
                         viewModel.completionDelivery.claim(key)
                         FloatingButtonService.dismissInspectionCompleted(key)
-                    } else if (visibility != Lifecycle.State.DESTROYED && !isFinishing &&
-                        viewModel.completionDelivery.claim(key)) {
+                    } else if (visibility != Lifecycle.State.DESTROYED &&
+                        !viewModel.completionDelivery.isDelivered(key)) {
                         if (!BasicInspectionQuota(this@AnalysisActivity).recordCompleted(viewModel.attemptId)) return@collect
                         val screen = state as? AnalysisUiState.ScreenSuccess
                         val destination = try {
@@ -133,8 +142,10 @@ class AnalysisActivity : ComponentActivity() {
                             Toast.makeText(this@AnalysisActivity, "결과를 임시 보관하지 못했어요.", Toast.LENGTH_SHORT).show()
                             return@collect
                         }
-                        if (!isFinishing && lifecycle.currentState !in setOf(Lifecycle.State.RESUMED, Lifecycle.State.DESTROYED)) {
-                            FloatingButtonService.showInspectionCompleted(key, destination)
+                        if (!closingAnalysis && !isFinishing &&
+                            lifecycle.currentState !in setOf(Lifecycle.State.RESUMED, Lifecycle.State.DESTROYED) &&
+                            FloatingButtonService.showInspectionCompleted(key, destination)) {
+                            viewModel.completionDelivery.claim(key)
                         }
                     }
                 }
@@ -150,7 +161,8 @@ class AnalysisActivity : ComponentActivity() {
                         if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE) != null)
                     viewModel.attemptId else null
                 LaunchedEffect(resultId, visibility) {
-                    if (visibility != Lifecycle.State.RESUMED) return@LaunchedEffect
+                    if (visibility != Lifecycle.State.RESUMED || movingInspectionToBackground || closingAnalysis)
+                        return@LaunchedEffect
                     if (resultId == null || allowedResultId == resultId) return@LaunchedEffect
                     if (BasicInspectionQuota(this@AnalysisActivity).recordCompleted(resultId)) {
                         allowedResultId = resultId
@@ -163,7 +175,8 @@ class AnalysisActivity : ComponentActivity() {
                     if (resultId == null || allowedResultId == resultId) {
                         AnalysisFlowScreen(state, onRetry = ::startAnalysis, onClose = ::closeAnalysis, onHome = ::returnToHome,
                             historyType = if (captureFile != null) HistoryType.SCREEN else HistoryType.IMAGE,
-                            onRefresh = viewModel::refreshPending, onChoosePhoto = viewModel::choosePhoto)
+                            onRefresh = viewModel::refreshPending, onChoosePhoto = viewModel::choosePhoto,
+                            onContinueInBackground = { movingInspectionToBackground = moveTaskToBack(true) })
                     }
                 }
             }
@@ -183,6 +196,8 @@ class AnalysisActivity : ComponentActivity() {
     }
 
     private fun closeAnalysis() {
+        if (closingAnalysis) return
+        closingAnalysis = true
         lifecycleScope.launch {
             try {
                 if (!viewModel.cancelUpload())

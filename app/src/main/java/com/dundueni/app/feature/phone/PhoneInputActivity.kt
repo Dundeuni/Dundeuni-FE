@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dundueni.app.feature.analysisresult.AnalysisResultActivity
@@ -28,6 +30,12 @@ import kotlinx.coroutines.withContext
 class PhoneInputActivity : ComponentActivity() {
     private val overlayOwner = "phone-input:${UUID.randomUUID()}"
     private lateinit var viewModel: PhoneInspectionViewModel
+    private var movingInspectionToBackground = false
+
+    override fun onResume() {
+        movingInspectionToBackground = false
+        super.onResume()
+    }
 
     override fun onStart() {
         super.onStart()
@@ -46,6 +54,7 @@ class PhoneInputActivity : ComponentActivity() {
         setContent {
             DundueniFETheme {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val visibility by lifecycle.currentStateFlow.collectAsState()
                 var loadingPopupDismissed by rememberSaveable { mutableStateOf(false) }
                 Box(modifier = Modifier.safeDrawingPadding()) {
                     PhoneInputScreen(
@@ -59,7 +68,10 @@ class PhoneInputActivity : ComponentActivity() {
                 }
                 when (state) {
                     PhoneInspectionUiState.Loading -> if (!loadingPopupDismissed) {
-                        InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+                        InspectionLoadingDialog(onDismissPopup = {
+                            loadingPopupDismissed = true
+                            movingInspectionToBackground = moveTaskToBack(true)
+                        })
                     }
                     is PhoneInspectionUiState.Error -> InspectionErrorDialog(
                         message = (state as PhoneInspectionUiState.Error).message,
@@ -72,7 +84,8 @@ class PhoneInputActivity : ComponentActivity() {
                     )
                     else -> Unit
                 }
-                LaunchedEffect(state) {
+                LaunchedEffect(state, visibility) {
+                    if (visibility != Lifecycle.State.RESUMED || movingInspectionToBackground) return@LaunchedEffect
                     when (val current = state) {
                         is PhoneInspectionUiState.Success -> {
                             current.response.analysisId ?: return@LaunchedEffect
@@ -88,6 +101,8 @@ class PhoneInputActivity : ComponentActivity() {
                                 viewModel.onResultOpenFailure()
                                 return@LaunchedEffect
                             }
+                            if (lifecycle.currentState != Lifecycle.State.RESUMED || movingInspectionToBackground)
+                                return@LaunchedEffect
                             startActivity(destination)
                             viewModel.dismiss()
                         }

@@ -34,10 +34,18 @@ internal fun ResultPreview(
 
 @Preview(name = "P1 결과 · 이미지 생성·변조 의심", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ImageResultPreview() {
+private fun ImageResultPreview() = ImageSummaryCompletedPreview(easyMode = false)
+
+@Preview(name = "P1 결과 · 이미지 생성·변조 의심 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
+@Composable
+private fun EasyImageResultPreview() = ImageSummaryCompletedPreview(easyMode = true)
+
+@Composable
+private fun ImageSummaryCompletedPreview(easyMode: Boolean) {
     val detail = previewImageDetail()
     ResultPreview(
         checkNotNull(detail.copy(summary = null).toPb05Result(isDemo = false)),
+        easyMode = easyMode,
         imageSummary = ImageSummaryUiState(ImageSummaryResult.Completed(checkNotNull(detail.summary)), checking = false),
     )
 }
@@ -48,13 +56,21 @@ private fun ImageNoClearSignalPreview() = ResultPreview(
     checkNotNull(previewImageDetail(noClearSignal = true).toPb05Result(isDemo = false)),
 )
 
-@Preview(name = "P1 화면 검사 · 이미지 선택 · AI 요약 완료", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 · 화면 검사 선택 · AI 요약 완료", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ScreenImageSummaryCompletedPreview() {
+private fun ScreenImageSummaryCompletedPreview() = ScreenImageResultPreview(easyMode = false)
+
+@Preview(name = "P1 결과 · 이미지 · 화면 검사 선택 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
+@Composable
+private fun EasyScreenImageResultPreview() = ScreenImageResultPreview(easyMode = true)
+
+@Composable
+private fun ScreenImageResultPreview(easyMode: Boolean) {
     val image = previewImageDetail(noClearSignal = true)
     val state = screenState(image = image.copy(summary = null), text = null, resultType = ScreenResultType.IMAGE)
     ResultPreview(
         checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
+        easyMode = easyMode,
         imageSummary = ImageSummaryUiState(
             ImageSummaryResult.Completed(checkNotNull(image.summary)), checking = false,
         ),
@@ -64,8 +80,16 @@ private fun ScreenImageSummaryCompletedPreview() {
 
 @Preview(name = "P1 결과 · 텍스트 피싱 의심", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun TextResultPreview() = ResultPreview(
+private fun TextResultPreview() = TextPhishingResultPreview(easyMode = false)
+
+@Preview(name = "P1 결과 · 텍스트 피싱 의심 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
+@Composable
+private fun EasyTextResultPreview() = TextPhishingResultPreview(easyMode = true)
+
+@Composable
+private fun TextPhishingResultPreview(easyMode: Boolean) = ResultPreview(
     previewTextDetail(sourceType = "TEXT", decision = "phishing").toTextResult("급하게 송금해 주세요."),
+    easyMode = easyMode,
 )
 
 @Preview(name = "P1 결과 · 일반 텍스트 판정", widthDp = 390, heightDp = 1200, showBackground = true)
@@ -127,15 +151,23 @@ private fun ScreenTextNormalResultPreview() = ScreenOcrResultPreview("normal")
 @Composable
 private fun ScreenTextDeferredResultPreview() = ScreenOcrResultPreview("defer")
 
+@Preview(name = "P1 결과 · OCR · 피싱 의심 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ScreenOcrResultPreview(decision: String) = FlowPreview(
-    screenState(
+private fun EasyScreenTextResultPreview() = ScreenOcrResultPreview("phishing", easyMode = true)
+
+@Composable
+private fun ScreenOcrResultPreview(decision: String, easyMode: Boolean = false) {
+    val state = screenState(
         image = null,
         text = previewTextDetail(decision = decision).toScreenCropAnalysis(),
         resultType = ScreenResultType.TEXT,
-    ),
-    HistoryType.SCREEN,
-)
+    )
+    ResultPreview(
+        checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
+        easyMode = easyMode,
+        screenResultType = state.resultType,
+    )
+}
 
 @Preview(name = "P1 결과 · 구형 이미지 응답", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable

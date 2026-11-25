@@ -17,8 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import com.dundueni.app.R
 import com.dundueni.app.ui.theme.LocalEasyMode
@@ -76,7 +74,11 @@ fun AnalysisResultScreen(
         !isDemo && result.historyType == HistoryType.PHONE -> "전화번호 검사 결과"
         else -> "결과 화면"
     }
-    Scaffold(modifier = modifier, containerColor = PageBackground, topBar = { ResultHeader(onAction, title) }) { padding ->
+    Scaffold(
+        modifier = modifier,
+        containerColor = PageBackground,
+        topBar = { ResultHeader(title) },
+    ) { padding ->
         Column(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp),
@@ -177,7 +179,7 @@ fun AnalysisResultScreen(
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                ResultActions(result, onAction)
+                ResultActions(onAction)
                 Spacer(Modifier.height(8.dp))
             }
         }
@@ -552,30 +554,15 @@ private fun InspectionText(text: String) {
 }
 
 @Composable
-private fun ResultHeader(onAction: (ResultAction) -> Unit, title: String) {
+private fun ResultHeader(title: String) {
     Surface(color = PageBackground, shadowElevation = 1.dp) {
-        Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { onAction(ResultAction.RETURN) },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text("← 원래 화면으로 돌아가기", modifier = Modifier.fillMaxWidth(),
-                        color = Ink, style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold)
-                }
-                IconButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.semantics { contentDescription = "결과 화면 닫기" }) {
-                    ResultGlyph(ResultIcon.CLOSE, Ink, 18.dp)
-                }
-                IconButton(onClick = { onAction(ResultAction.PROFILE) }, modifier = Modifier.semantics { contentDescription = "계정" }) {
-                    Box(Modifier.size(32.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
-                        ResultGlyph(ResultIcon.PROFILE, Color.White, 16.dp)
-                    }
-                }
-            }
-            Text(title, Modifier.padding(start = 20.dp, bottom = 8.dp), color = Ink, fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold)
-        }
+        Text(
+            text = title,
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp),
+            color = Ink,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -918,72 +905,35 @@ private fun SafetyTip(guidance: List<String>? = null) {
 }
 
 @Composable
-private fun ResultActions(result: AnalysisResult, onAction: (ResultAction) -> Unit) {
+private fun ResultActions(onAction: (ResultAction) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        when (result.riskLevel) {
-            RiskLevel.SAFE -> {
-                ActionButton("원래 화면으로 돌아가기", ResultIcon.FORWARD, PrimaryMidnight, Color.White, trailingIcon = true) { onAction(ResultAction.RETURN) }
-            }
-            RiskLevel.CAUTION -> {
-                if (result.historyType != HistoryType.PHONE) {
-                    ActionButton("링크를 열지 않고 인터넷 주소만 보기", ResultIcon.SEARCH, ProtectiveBlue, Color.White,
-                        enabled = result.sourceUrl != null) { onAction(ResultAction.PREVIEW_DOMAIN) }
-                    if (result.sourceUrl == null) Text("확인할 링크가 제공되지 않았어요.", color = Muted, fontSize = 11.sp)
-                }
-                ActionButton("가족·지인에게 물어보기", ResultIcon.FAMILY, Color(0xFFE4E9F7), Ink, iconColor = ProtectiveBlue) { onAction(ResultAction.ASK_FAMILY) }
-                ReturnLink(onAction)
-            }
-            RiskLevel.DANGER -> {
-                ActionButton("가족에게 직접 전화해 확인하기", ResultIcon.PHONE, PrimaryMidnight, Color.White) { onAction(ResultAction.CALL_FAMILY) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SecondaryAction("결과 가족에게 공유", ResultIcon.SHARE, ProtectiveBlue, Modifier.weight(1f)) { onAction(ResultAction.SHARE) }
-                    SecondaryAction("신고 (112/118)", ResultIcon.PHONE, Danger, Modifier.weight(1f)) { onAction(ResultAction.REPORT) }
-                }
-                ReturnLink(onAction)
-            }
-            RiskLevel.UNKNOWN -> ReturnLink(onAction)
+        ActionButton("원래 화면으로 돌아가기", ResultIcon.BACK, PrimaryMidnight) {
+            onAction(ResultAction.RETURN)
         }
-        ActionButton("든든이 홈으로", ResultIcon.SHIELD, ProtectiveBlue, Color.White) {
+        ActionButton("든든이 홈으로", ResultIcon.SHIELD, ProtectiveBlue) {
             onAction(ResultAction.HOME)
         }
     }
 }
 
 @Composable
-private fun SecondaryAction(text: String, icon: ResultIcon, tint: Color, modifier: Modifier, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, CardOutline), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp)) {
-        ResultGlyph(icon, tint, 14.dp)
-        Text(text, Modifier.padding(start = 5.dp), fontSize = if (LocalEasyMode.current) 18.sp else 11.sp,
-            lineHeight = if (LocalEasyMode.current) 26.sp else 16.sp, color = Ink, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun ReturnLink(onAction: (ResultAction) -> Unit) {
-    TextButton(onClick = { onAction(ResultAction.RETURN) }, modifier = Modifier.fillMaxWidth().heightIn(min = if (LocalEasyMode.current) 48.dp else 0.dp)) {
-        Text("원래 화면으로 돌아가기", color = Muted, fontSize = if (LocalEasyMode.current) 18.sp else 12.sp)
-    }
-}
-
-@Composable
-private fun ActionButton(
-    text: String, icon: ResultIcon, background: Color, foreground: Color, enabled: Boolean = true,
-    trailingIcon: Boolean = false, iconColor: Color = foreground, onClick: () -> Unit,
-) {
-    Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(containerColor = background, contentColor = foreground),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp)) {
-        if (!trailingIcon) {
-            ResultGlyph(icon, if (enabled) iconColor else Muted, 16.dp)
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(text, fontSize = if (LocalEasyMode.current) 18.sp else 13.sp, lineHeight = if (LocalEasyMode.current) 26.sp else 18.sp, textAlign = TextAlign.Center)
-        if (trailingIcon) {
-            Spacer(Modifier.width(6.dp))
-            ResultGlyph(icon, foreground, 16.dp)
-        }
+private fun ActionButton(text: String, icon: ResultIcon, background: Color, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+        shape = CircleShape,
+        colors = ButtonDefaults.buttonColors(containerColor = background, contentColor = Color.White),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp),
+    ) {
+        val easy = LocalEasyMode.current
+        ResultGlyph(icon, Color.White, 16.dp)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = text,
+            fontSize = if (easy) 18.sp else 13.sp,
+            lineHeight = if (easy) 26.sp else 18.sp,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

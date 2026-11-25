@@ -7,6 +7,7 @@ import com.dundueni.app.MainActivity
 /** Clears intermediate scan Activities and brings the existing home task to the foreground. */
 fun ComponentActivity.returnToHome() {
     startActivity(Intent(this, MainActivity::class.java).apply {
+        putExtra(MainActivity.EXTRA_OPEN_HOME, true)
         addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or

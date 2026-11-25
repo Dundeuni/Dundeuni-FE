@@ -141,9 +141,8 @@ class FloatingButtonService : Service() {
             }
         }
 
-        fun showInspectionCompleted(id: String, resultIntent: Intent, onOpened: () -> Unit = {}) {
-            activeInstance?.showCompletionWindow(id, resultIntent, onOpened)
-        }
+        fun showInspectionCompleted(id: String, resultIntent: Intent, onHandled: () -> Unit = {}): Boolean =
+            activeInstance?.showCompletionWindow(id, resultIntent, onHandled) == true
 
         fun dismissInspectionCompleted(id: String) {
             activeInstance?.dismissCompletionWindow(id)
@@ -216,9 +215,9 @@ class FloatingButtonService : Service() {
         owner.destroy()
     }
 
-    private fun showCompletionWindow(id: String, resultIntent: Intent, onOpened: () -> Unit) {
-        if (destroyed || !::windowManager.isInitialized || !Settings.canDrawOverlays(this) ||
-            completionWindows.containsKey(id)) return
+    private fun showCompletionWindow(id: String, resultIntent: Intent, onHandled: () -> Unit): Boolean {
+        if (completionWindows.containsKey(id)) return true
+        if (destroyed || !::windowManager.isInitialized || !Settings.canDrawOverlays(this)) return false
         val owner = CompletionWindowOwner()
         val view = ComposeView(this).apply {
             setViewTreeLifecycleOwner(owner)
@@ -233,15 +232,18 @@ class FloatingButtonService : Service() {
                                 startActivity(Intent(resultIntent).addFlags(
                                     Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
                                         Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS))
-                                onOpened()
                                 dismissCompletionWindow(id)
+                                onHandled()
                             } catch (error: RuntimeException) {
                                 Log.w("FloatingButtonService", "완료 결과 화면 실행 실패", error)
                                 Toast.makeText(this@FloatingButtonService,
                                     "결과 화면을 열지 못했어요. 앱에서 다시 확인해 주세요.", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        onClose = { dismissCompletionWindow(id) },
+                        onClose = {
+                            dismissCompletionWindow(id)
+                            onHandled()
+                        },
                     )
                 }
             }
@@ -260,11 +262,13 @@ class FloatingButtonService : Service() {
             dimAmount = InspectionCompletedDimAmount
         }
         completionWindows[id] = view to owner
-        try {
+        return try {
             windowManager.addView(view, params)
+            true
         } catch (error: RuntimeException) {
             Log.w("FloatingButtonService", "완료 오버레이 표시 제한", error)
             dismissCompletionWindow(id)
+            false
         }
     }
 

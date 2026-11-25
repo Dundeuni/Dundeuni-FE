@@ -10,6 +10,7 @@ import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
 import com.dundueni.app.feature.analysis.completedTextAnalysisId
+import com.dundueni.app.feature.analysis.pollPendingInspection
 import com.dundueni.app.feature.analysis.toTextResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
@@ -100,15 +101,8 @@ class TextInspectionViewModel @JvmOverloads constructor(
     }
 
     @MainThread
-    fun cancelPending() {
-        if (mutableUiState.value is TextInspectionUiState.Pending) {
-            pendingAnalysisId = null
-            mutableUiState.value = TextInspectionUiState.Idle
-        }
-    }
-
-    @MainThread
-    fun onResultOpened() {
+    fun onResultHandled(resultJson: String) {
+        if (resultPendingOpen != resultJson) return
         resultPendingOpen = null
         mutableUiState.value = TextInspectionUiState.Idle
     }
@@ -142,11 +136,14 @@ class TextInspectionViewModel @JvmOverloads constructor(
         }
     }
 
-    private suspend fun inspectWithApi(text: String): AnalysisResult {
+    private suspend fun inspectWithApi(text: String): AnalysisResult = try {
         val id = textApi()
             .analyzeText(TextAnalysisRequest(text = text)).completedTextAnalysisId()
         pendingAnalysisId = id
-        return lookupTextResult(id, text)
+        lookupTextResult(id, text)
+    } catch (pending: AnalysisNotCompletedException) {
+        pendingAnalysisId = pending.analysisId
+        pollPendingInspection(pending) { id -> lookupTextResult(id, text) }
     }
 
     private suspend fun lookupTextResult(id: String, text: String): AnalysisResult {
