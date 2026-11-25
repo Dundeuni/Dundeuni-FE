@@ -37,7 +37,7 @@ class HistoryPreviewActivity : ComponentActivity() {
 
 @Preview(name = "PB-06 검사 기록 목록", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
-private fun HistoryListPreview() { DundueniFETheme { HistoryScreen(historySamples(), {}, {}, {}, isDemo = true) } }
+private fun HistoryListPreview() { DundueniFETheme { HistoryScreen(historySamples(), {}, {}, {}, initialEasyMode = false) } }
 
 @Preview(name = "PB-06 기록 없음", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
@@ -45,7 +45,7 @@ private fun HistoryEmptyPreview() { DundueniFETheme { HistoryScreen(emptyList(),
 
 @Preview(name = "PB-06 작은 화면 큰 글씨", widthDp = 320, heightDp = 720, fontScale = 1.3f, showBackground = true)
 @Composable
-private fun HistoryLargeTextPreview() { DundueniFETheme { HistoryScreen(historySamples(), {}, {}, {}, isDemo = true) } }
+private fun HistoryLargeTextPreview() { DundueniFETheme { HistoryScreen(historySamples(), {}, {}, {}, initialEasyMode = false) } }
 
 /** Fictional examples for the three easy-mode states shown in the design. */
 internal fun easyHistorySamples(): List<HistoryRecord> {

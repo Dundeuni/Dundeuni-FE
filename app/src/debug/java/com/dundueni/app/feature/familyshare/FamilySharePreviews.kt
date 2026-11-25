@@ -17,6 +17,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -27,33 +31,38 @@ import com.dundueni.app.ui.theme.BrandInk
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.ui.theme.PageBackground
 
+private const val FAMILY_SHARE_PREVIEW_GROUP = "가족 공유"
+private const val PREVIEW_MONTHLY_INSPECTION_LIMIT = 200
+private val PreviewMemberWithCaution = FamilyMember(name = "엄마", monthlyInspectionCount = 48)
+private val PreviewSettings = FamilyShareSettings(
+    syncInterval = FamilySyncInterval.REAL_TIME,
+    maskSensitiveInfo = true,
+    dangerAlerts = true,
+    cautionAlerts = false,
+    sosAlerts = true,
+)
+
 private val PreviewGroup = FamilyGroup(
     id = "preview-family",
     name = "우리 가족",
     members = listOf(
         FamilyMember(name = "나", monthlyInspectionCount = 62),
-        FamilyMember(name = "엄마", monthlyInspectionCount = 48),
+        PreviewMemberWithCaution,
         FamilyMember(name = "아빠", monthlyInspectionCount = 32),
     ),
     monthlyInspectionCount = 142,
     inviteCode = "DN-8842-FAM",
     passphraseQuestion = "우리 가족이 처음 함께 여행한 곳은?",
-    settings = FamilyShareSettings(
-        syncInterval = FamilySyncInterval.REAL_TIME,
-        maskSensitiveInfo = true,
-        dangerAlerts = true,
-        cautionAlerts = false,
-        sosAlerts = true,
-    ),
+    settings = PreviewSettings,
 )
 
-@Preview(name = "family_share_not_joined", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "미가입", group = FAMILY_SHARE_PREVIEW_GROUP, widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun FamilyShareNotJoinedPreview() = FamilySharePreview {
     FamilySharePlan(onViewPlans = {})
 }
 
-@Preview(name = "family_share_code_share", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "초대 코드 공유", group = FAMILY_SHARE_PREVIEW_GROUP, widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun FamilyShareCodeSharePreview() = FamilySharePreview {
     FamilyShareInvitations(
@@ -63,10 +72,11 @@ private fun FamilyShareCodeSharePreview() = FamilySharePreview {
         onPaste = { null },
         onCopy = {},
         onShare = {},
+        initialTab = InviteTab.SHARE,
     )
 }
 
-@Preview(name = "family_share_code_input", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "초대 코드 입력", group = FAMILY_SHARE_PREVIEW_GROUP, widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun FamilyShareCodeInputPreview() = FamilySharePreview {
     FamilyShareInvitations(
@@ -80,7 +90,7 @@ private fun FamilyShareCodeInputPreview() = FamilySharePreview {
     )
 }
 
-@Preview(name = "family_share_passphrase_setup", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "암구호 설정", group = FAMILY_SHARE_PREVIEW_GROUP, widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 private fun FamilySharePassphraseSetupPreview() = FamilySharePreview(title = "가족 암구호") {
     FamilySharePassphrase(
@@ -91,15 +101,66 @@ private fun FamilySharePassphraseSetupPreview() = FamilySharePreview(title = "�
     )
 }
 
-@Preview(name = "family_share_home", widthDp = 390, heightDp = 1240, showBackground = true)
+@Preview(name = "암구호 수정", group = FAMILY_SHARE_PREVIEW_GROUP, widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
-private fun FamilyShareHomePreview() = FamilySharePreview {
+private fun FamilySharePassphraseEditPreview() = FamilySharePreview(title = "가족 암구호") {
+    FamilySharePassphrase(
+        question = PreviewGroup.passphraseQuestion,
+        submitting = false,
+        onSave = { _, _, _ -> },
+        onCancel = {},
+    )
+}
+
+@Preview(
+    name = "홈 · 3/4명 · 주의 알림 · 실시간 동기화",
+    group = FAMILY_SHARE_PREVIEW_GROUP,
+    widthDp = 390,
+    heightDp = 1600,
+    showBackground = true,
+)
+@Composable
+private fun FamilyShareHomePreview() = FamilyShareDashboardPreview(
+    initialGroup = PreviewGroup,
+    memberWithCaution = PreviewMemberWithCaution,
+)
+
+@Preview(
+    name = "홈 · 4/4명 · 초대 비활성화 · 하루 1회 동기화",
+    group = FAMILY_SHARE_PREVIEW_GROUP,
+    widthDp = 390,
+    heightDp = 1600,
+    showBackground = true,
+)
+@Composable
+private fun FamilyShareFullHomePreview() = FamilyShareDashboardPreview(
+    initialGroup = PreviewGroup.copy(
+        members = PreviewGroup.members + FamilyMember(name = "동생", monthlyInspectionCount = 58),
+        monthlyInspectionCount = PREVIEW_MONTHLY_INSPECTION_LIMIT,
+        passphraseQuestion = null,
+        settings = PreviewSettings.copy(
+            syncInterval = FamilySyncInterval.DAILY,
+            dangerAlerts = false,
+            cautionAlerts = true,
+            sosAlerts = false,
+        ),
+    ),
+)
+
+@Composable
+private fun FamilyShareDashboardPreview(
+    initialGroup: FamilyGroup,
+    memberWithCaution: FamilyMember? = null,
+) = FamilySharePreview {
+    var settings by remember(initialGroup) { mutableStateOf(initialGroup.settings) }
     FamilyShareDashboard(
-        group = PreviewGroup,
+        group = initialGroup.copy(settings = settings),
         submitting = false,
         onInvite = {},
         onEditPassphrase = {},
-        onUpdateSettings = {},
+        onUpdateSettings = { settings = it },
+        monthlyInspectionLimit = PREVIEW_MONTHLY_INSPECTION_LIMIT,
+        hasCautionAlert = { member -> member == memberWithCaution },
     )
 }
 

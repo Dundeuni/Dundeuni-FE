@@ -75,7 +75,7 @@ import com.dundueni.app.BuildConfig
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.time.Instant
+import com.dundueni.app.feature.history.toHistoryRecord
 import com.dundueni.app.feature.payment.BasicInspectionQuota
 import com.dundueni.app.ui.theme.DundueniDefaultShape
 import com.dundueni.app.ui.theme.DundueniDimens
@@ -125,11 +125,9 @@ fun HomeScreen(
     LaunchedEffect(realHistory, recentRevision) {
         if (realHistory) {
             val fetched = withContext(Dispatchers.IO) { runCatching {
-                AnalysisFlowDependencies.createHistoryRepository(context).list(2).mapNotNull { item ->
-                    val id = item.id ?: return@mapNotNull null
-                    val savedAt = item.createdAt?.let { Instant.parse(it).toEpochMilli() } ?: return@mapNotNull null
-                    HomeRecentRecord(id, if (item.type == "PHONE" && item.status == "COMPLETED")
-                        item.phoneResult?.riskLevel ?: "UNKNOWN" else "UNKNOWN", savedAt, null, item.status)
+                AnalysisFlowDependencies.createHistoryRepository(context).list(limit = 2).items.map { item ->
+                    val record = item.toHistoryRecord()
+                    HomeRecentRecord(record.id, record.riskLevel.name, record.savedAt, null, record.status)
                 }
             } }
             fetched.onSuccess { recentRecords = it }.onFailure { recentRecords = emptyList() }
@@ -248,9 +246,14 @@ private fun HomeHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HeaderAction("알림", "notification", onNotifications)
-            HeaderAction("설정", "settings", onSettings)
+            HomeSettingsButton(onClick = onSettings)
         }
     }
+}
+
+@Composable
+internal fun HomeSettingsButton(onClick: () -> Unit) {
+    HeaderAction("설정", "settings", onClick)
 }
 
 @Composable

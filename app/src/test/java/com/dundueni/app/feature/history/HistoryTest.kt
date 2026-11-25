@@ -2,6 +2,10 @@ package com.dundueni.app.feature.history
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.dundueni.app.data.remote.dto.HistoryDetailDto
+import com.dundueni.app.data.remote.dto.HistoryPageItemDto
+import com.dundueni.app.data.repository.ImageSummaryResult
+import com.google.gson.Gson
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import org.junit.Assert.*
 import org.junit.Before
@@ -19,20 +23,74 @@ class HistoryTest {
 
     @Before fun reset() { preferences.edit().clear().commit() }
 
-    @Test fun serverTextHistoryUsesResultIdAndPreservesQuality() {
-        val item = com.google.gson.Gson().fromJson("""{
-            "id":"history-id","type":"TEXT","status":"COMPLETED","createdAt":"2026-11-11T00:00:00Z",
-            "textResult":{"decision":"normal","riskScore":null,"sourceType":"SCREEN_CROP",
-                "quality":{"needsReview":false,"reasonCodes":[],"ocrUsed":true}}
-        }""", com.dundueni.app.data.remote.api.HistoryEntryDto::class.java).toHistoryRecord()
-        assertEquals("history-id", item.id)
-        assertEquals(HistoryType.TEXT, item.type)
-        assertEquals("normal", item.textDecision)
-        assertNull(item.textRiskScore)
-        assertEquals("SCREEN_CROP", item.textSourceType)
-        assertEquals(false, item.textNeedsReview)
-        assertEquals(emptyList<String>(), item.textReasonCodes)
-        assertEquals(true, item.textOcrUsed)
+    @Test fun textHistoryUsesStoredPreviewAndClassifierFields() {
+        val detail = Gson().fromJson("""{
+            "analysisId":"history-id","type":"TEXT","status":"COMPLETED","createdAt":"2026-11-11T00:00:00Z",
+            "detail":{"textPreview":"stored preview","decision":"phishing","riskScore":0.87,"needsReview":false}
+        }""", HistoryDetailDto::class.java).toRecordDetail()
+        val result = requireNotNull(detail.result)
+
+        assertEquals("history-id", detail.record.id)
+        assertEquals(HistoryType.TEXT, detail.record.type)
+        assertEquals(RiskLevel.CAUTION, result.riskLevel)
+        assertEquals("stored preview", result.sourceText)
+        assertEquals(0.87, result.textRiskScore!!, 0.0)
+        assertEquals(false, result.textNeedsReview)
+        assertNull(result.textSourceType)
+        assertNull(result.textOcrUsed)
+    }
+
+    @Test fun imageHistoryKeepsAiRiskSeparateAndReadsStoredSummary() {
+        val payload = """{
+            "analysisId":"image-id","type":"IMAGE","status":"COMPLETED","createdAt":"2026-11-11T00:00:00Z",
+            "aiRiskLevel":"CAUTION","aiGenerationScore":82,
+            "reasons":[{"description":"stored evidence"}],
+            "detail":{"summary":"stored summary","summaryStatus":"COMPLETED"}
+        }"""
+        val detail = Gson().fromJson(payload, HistoryDetailDto::class.java).toRecordDetail()
+        val result = requireNotNull(detail.result)
+        assertEquals(RiskLevel.UNKNOWN, result.riskLevel)
+        assertEquals("CAUTION", result.aiRiskLabel)
+        assertEquals(82.0, result.aiScore!!, 0.0)
+        assertEquals("stored evidence", result.evidence.single().description)
+        assertEquals("stored summary", result.summary)
+
+        val pending = Gson().fromJson(
+            payload.replace("\"summaryStatus\":\"COMPLETED\"", "\"summaryStatus\":\"PENDING\""),
+            HistoryDetailDto::class.java,
+        ).toRecordDetail()
+        assertEquals("", pending.result?.summary)
+        assertEquals(ImageSummaryResult.Pending, pending.imageSummaryStatus)
+
+        val withoutTypeDetail = Gson().fromJson(payload, HistoryDetailDto::class.java)
+            .copy(detail = null).toRecordDetail()
+        assertEquals(82.0, requireNotNull(withoutTypeDetail.result?.aiScore), 0.0)
+
+        val screen = Gson().fromJson(payload, HistoryDetailDto::class.java)
+            .copy(type = "SCREEN").toRecordDetail()
+        assertEquals(HistoryType.SCREEN, screen.result?.historyType)
+    }
+
+    @Test fun phoneHistoryUsesMaskedNumberAndPreservesRangeAndMissingCount() {
+        val listItem = Gson().fromJson("""{
+            "analysisId":"phone-id","type":"PHONE","status":"COMPLETED","targetSummary":"010********",
+            "aiRiskLevel":"DANGER","createdAt":"2026-11-11T00:00:00Z"
+        }""", HistoryPageItemDto::class.java).toHistoryRecord()
+        assertEquals("010********", listItem.preview)
+        assertEquals(RiskLevel.DANGER, listItem.riskLevel)
+
+        val dto = Gson().fromJson("""{
+            "analysisId":"phone-id","type":"PHONE","status":"COMPLETED","createdAt":"2026-11-11T00:00:00Z",
+            "detail":{"maskedPhoneNumber":"010********","riskLevel":"CAUTION","reportCount":1000,
+                "reportCountIsRange":true,"reasons":["stored report"]}
+        }""", HistoryDetailDto::class.java)
+        val result = requireNotNull(dto.toRecordDetail().result)
+        assertEquals("010********", result.targetLabel)
+        assertEquals(RiskLevel.CAUTION, result.riskLevel)
+        assertEquals("신고 건수: 1000+건", result.keyFinding)
+        assertEquals("stored report", result.evidence.single().description)
+        assertNull(dto.copy(detail = dto.detail?.copy(reportCount = null)).toRecordDetail().result?.keyFinding)
+        assertNull(dto.copy(detail = null).toRecordDetail().result)
     }
 
     @Test fun readsExistingPb05RecordsWithoutInventingMissingContent() {

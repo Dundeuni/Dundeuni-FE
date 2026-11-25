@@ -22,6 +22,7 @@ class HomeNavigationTest {
 
         val intent = shadowOf(activity).nextStartedActivity
         assertEquals(MainActivity::class.java.name, intent.component?.className)
+        assertTrue(intent.getBooleanExtra(MainActivity.EXTRA_OPEN_HOME, false))
         assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
         assertTrue(intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
         assertTrue(intent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)

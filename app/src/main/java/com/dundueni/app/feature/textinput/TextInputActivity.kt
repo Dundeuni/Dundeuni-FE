@@ -38,6 +38,12 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 class TextInputActivity : ComponentActivity() {
     private val overlayOwner = "text-input:${java.util.UUID.randomUUID()}"
     private lateinit var viewModel: TextInspectionViewModel
+    private var movingInspectionToBackground = false
+
+    override fun onResume() {
+        movingInspectionToBackground = false
+        super.onResume()
+    }
 
     override fun onStart() {
         super.onStart()
@@ -63,8 +69,8 @@ class TextInputActivity : ComponentActivity() {
                     try {
                         val id = JsonParser.parseString(success.resultJson).asJsonObject.get("id").asString
                         val key = "text:$id"
-                        val foreground = visibility == Lifecycle.State.RESUMED
-                        if (!foreground && !viewModel.completionDelivery.claim(key)) return@collect
+                        if (viewModel.completionDelivery.isDelivered(key) ||
+                            (visibility == Lifecycle.State.RESUMED && movingInspectionToBackground)) return@collect
                         val destination = withContext(Dispatchers.IO) {
                             AnalysisResultActivity.createIntent(applicationContext, success.resultJson,
                                 isDemo = false, suspendFloatingButton = true)
@@ -72,12 +78,16 @@ class TextInputActivity : ComponentActivity() {
                         val currentVisibility = lifecycle.currentState
                         if (isFinishing || currentVisibility == Lifecycle.State.DESTROYED) return@collect
                         if (currentVisibility == Lifecycle.State.RESUMED) {
-                            FloatingButtonService.dismissInspectionCompleted(key)
+                            if (movingInspectionToBackground) return@collect
                             startActivity(destination)
-                            viewModel.onResultOpened()
+                            viewModel.onResultHandled(success.resultJson)
                         } else {
-                            if (foreground && !viewModel.completionDelivery.claim(key)) return@collect
-                            FloatingButtonService.showInspectionCompleted(key, destination, viewModel::onResultOpened)
+                            val model = viewModel
+                            if (FloatingButtonService.showInspectionCompleted(key, destination) {
+                                    model.onResultHandled(success.resultJson)
+                                }) {
+                                viewModel.completionDelivery.claim(key)
+                            }
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
@@ -107,7 +117,10 @@ class TextInputActivity : ComponentActivity() {
                 }
                 when (state) {
                     TextInspectionUiState.Loading -> if (!loadingPopupDismissed) {
-                        InspectionLoadingDialog(onDismissPopup = { loadingPopupDismissed = true })
+                        InspectionLoadingDialog(onDismissPopup = {
+                            loadingPopupDismissed = true
+                            movingInspectionToBackground = moveTaskToBack(true)
+                        })
                     }
                     TextInspectionUiState.Error -> InspectionErrorDialog(
                         message = if (viewModel.hasPendingLookup)
@@ -130,7 +143,7 @@ class TextInputActivity : ComponentActivity() {
                             }) { Text("결과 다시 확인") }
                         },
                         dismissButton = {
-                            TextButton(onClick = viewModel::cancelPending) { Text("닫기") }
+                            TextButton(onClick = { moveTaskToBack(true) }) { Text("닫기") }
                         },
                     )
                     else -> Unit

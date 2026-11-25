@@ -109,7 +109,7 @@ class AnalysisViewModel(
             try {
                 when (screenType) {
                     ScreenResultType.IMAGE -> {
-                        val image = attempt { checkNotNull(photoSelection).select(uploadId, elementId) }
+                        val image = attempt { selectPhotoResult(uploadId, elementId) }
                         ensureActive()
                         screenImage = image
                         if (image.isSuccess || image.exceptionOrNull() is AnalysisLookupException ||
@@ -117,16 +117,13 @@ class AnalysisViewModel(
                         publishScreenResult()
                     }
                     ScreenResultType.TEXT -> {
-                        val text = attempt {
-                            val api = checkNotNull(screenCropApi).invoke()
-                            api.analyzeScreenCrop(checkNotNull(selectionPart)).toCompletedScreenCrop(repository)
-                        }
+                        val text = attempt { analyzeSelectedScreenText() }
                         ensureActive()
                         screenText = text
                         publishScreenResult()
                     }
                     null -> {
-                        val result = checkNotNull(photoSelection).select(uploadId, elementId)
+                        val result = selectPhotoResult(uploadId, elementId)
                         ensureActive()
                         pendingUploadId = null
                         mutableUiState.value = AnalysisUiState.Success(result)
@@ -142,6 +139,20 @@ class AnalysisViewModel(
                 mutableUiState.value = exception.toUiState()
             }
         }
+    }
+
+    private suspend fun selectPhotoResult(uploadId: String, elementId: String): AnalysisResult = try {
+        checkNotNull(photoSelection).select(uploadId, elementId)
+    } catch (pending: AnalysisNotCompletedException) {
+        pendingUploadId = null
+        pollPendingInspection(pending, repository::findResultForDisplay)
+    }
+
+    private suspend fun analyzeSelectedScreenText(): ScreenCropAnalysis = try {
+        val api = checkNotNull(screenCropApi).invoke()
+        api.analyzeScreenCrop(checkNotNull(selectionPart)).toCompletedScreenCrop(repository)
+    } catch (pending: AnalysisNotCompletedException) {
+        pollPendingInspection(pending, repository::findResultForDisplay).toScreenCropAnalysis()
     }
 
     suspend fun cancelUpload(): Boolean {

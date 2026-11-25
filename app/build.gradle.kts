@@ -12,9 +12,8 @@ val localApiConfig = Properties().apply {
 fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
-// Keep analysis transport on this branch independent of untracked local.properties.
 val analysisApiMode = "REAL"
-val analysisApiBaseUrl = "https://suitable-overblown-umbrella.ngrok-free.dev/"
+val analysisApiBaseUrl = localApiConfig.getProperty("analysis.api.baseUrl", "").trim()
 // TODO(BE_CONTRACT): enable HTTP only after the draft contract and deployment URL are confirmed.
 val authApiMode = localApiConfig.getProperty("auth.api.mode", "UNCONNECTED").trim()
 val authApiBaseUrl = localApiConfig.getProperty("auth.api.baseUrl", "").trim()

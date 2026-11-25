@@ -13,16 +13,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -31,8 +27,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -40,9 +34,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -50,13 +41,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dundueni.app.R
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.ImageInspectionContent
+import com.dundueni.app.feature.analysisresult.ImageSummaryUiState
 import com.dundueni.app.feature.analysisresult.PhoneInspectionContent
 import com.dundueni.app.feature.analysisresult.TextInspectionContent
-import com.dundueni.app.feature.analysisresult.imageSummaryLookupId
-import com.dundueni.app.feature.analysisresult.rememberImageSummaryViewModel
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
 import com.dundueni.app.feature.analysisresult.RiskLevel
@@ -76,7 +66,6 @@ import com.dundueni.app.ui.theme.SoftCaution
 import com.dundueni.app.ui.theme.SoftDanger
 import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.ui.theme.SoftBlue
-import com.dundueni.app.ui.component.dundueniOutlinedTextFieldColors
 import com.dundueni.app.ui.theme.LocalEasyMode
 import java.time.Instant
 import java.time.LocalDate
@@ -111,11 +100,14 @@ fun HistoryScreen(
     onNavigationSelected: ((HomeDestination) -> Unit)? = null,
     initialEasyMode: Boolean = LocalEasyMode.current,
     detailContent: (@Composable (String) -> Unit)? = null,
+    serverBacked: Boolean = false,
+    deletedRecordId: String? = null,
+    loadingMore: Boolean = false,
+    loadMoreError: String? = null,
+    onLoadMore: (() -> Unit)? = null,
 ) {
     val easy = initialEasyMode
     var filterName by rememberSaveable { mutableStateOf("ALL") }
-    var query by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
-    var searching by rememberSaveable { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf(initialRecordId) }
     val closeDetail: () -> Unit = { if (onCloseDetail != null) onCloseDetail() else selectedId = null }
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
@@ -137,20 +129,22 @@ fun HistoryScreen(
     val selected = records.firstOrNull { it.id == detailId }
     val showingDetail = selected != null || (detailId != null && detailContent != null)
     val displayRecords = remember(records) { records.filterNot { it.type == HistoryType.LINK } }
-    val searchableRecords = remember(displayRecords, query.text) { filterHistory(displayRecords, null, query.text) }
+    val sortedRecords = remember(displayRecords) { filterHistory(displayRecords, null, "") }
     val activeFilter = HistoryType.entries.firstOrNull { it.name == filterName && it != HistoryType.LINK }
-    val visible = remember(searchableRecords, activeFilter) {
-        searchableRecords.filter { activeFilter == null || it.type == activeFilter }
+    val visible = remember(sortedRecords, activeFilter) {
+        sortedRecords.filter { activeFilter == null || it.type == activeFilter }
     }
     LaunchedEffect(records, loading) {
         if (detailContent == null && !loading && selectedId != null && selected == null && initialRecordId == null) {
             selectedId = null
         }
     }
+    LaunchedEffect(deletedRecordId) {
+        if (deletedRecordId != null && deletedRecordId == selectedId) closeDetail()
+    }
     BackHandler {
         when {
             selectedId != null -> closeDetail()
-            searching -> { searching = false; query = TextFieldValue() }
             else -> onHome()
         }
     }
@@ -172,16 +166,15 @@ fun HistoryScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(if (showingDetail) "검사 기록 상세" else if (easy) "검사 기록" else "든든이",
+                    Text(if (showingDetail) "검사 기록 상세" else "검사 기록",
                         modifier = if (easy) Modifier.weight(1f) else Modifier, color = Ink, fontSize = 18.sp,
                         fontWeight = if (easy) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (!easy) {
-                        if (!showingDetail) Text("History", Modifier.padding(start = 12.dp), color = Muted, fontSize = 11.sp)
-                        Spacer(Modifier.weight(1f))
-                    }
-                    IconButton(onClick = { navigate(HomeDestination.MY_SHELTER) }, modifier = Modifier.semantics { contentDescription = "내 기록 정보" }) {
-                        Box(Modifier.size(if (easy) 28.dp else 32.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
-                            ResultGlyph(ResultIcon.PROFILE, Color.White, 16.dp)
+                    if (showingDetail) {
+                        if (!easy) Spacer(Modifier.weight(1f))
+                        IconButton(onClick = { navigate(HomeDestination.MY_SHELTER) }, modifier = Modifier.semantics { contentDescription = "내 기록 정보" }) {
+                            Box(Modifier.size(if (easy) 28.dp else 32.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
+                                ResultGlyph(ResultIcon.PROFILE, Color.White, 16.dp)
+                            }
                         }
                     }
                 }
@@ -204,26 +197,8 @@ fun HistoryScreen(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (!easy) item {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("검사 기록", color = Ink, fontSize = if (easy) 26.sp else 24.sp, fontWeight = FontWeight.Medium)
-                            Spacer(Modifier.width(8.dp))
-                            Surface(color = Color(0xFFE9EFFF), shape = CircleShape) {
-                                Text("${displayRecords.size}건", Modifier.padding(horizontal = 7.dp, vertical = 2.dp), color = Blue, fontSize = 11.sp)
-                            }
-                            Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { searching = !searching; if (!searching) query = TextFieldValue() },
-                                modifier = Modifier.semantics { contentDescription = "검사 기록 검색" }) { ResultGlyph(ResultIcon.SEARCH, Ink, 19.dp) }
-                            if (allowDelete) IconButton(onClick = onClear, enabled = records.isNotEmpty() && !loading,
-                                modifier = Modifier.semantics { contentDescription = "전체 검사 기록 삭제" }) {
-                                HistoryGlyph(HistoryIcon.TRASH, if (records.isNotEmpty() && !loading) Ink else Muted, 19.dp)
-                            }
-                        }
-                    }
                     if (isDemo) item { Notice("디자인 미리보기 · 샘플 기록", easy = easy) }
-                    item { EmptyNotice(easy) }
-                    if (searching) item { HistorySearchField(query, onValueChange = { query = it }) }
-                    item { HistoryFilters(filterName, searchableRecords, easy) { filterName = it } }
+                    item { HistoryFilters(filterName, sortedRecords, easy) { filterName = it } }
                     when {
                         loading -> item {
                             Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -233,7 +208,7 @@ fun HistoryScreen(
                         }
                         error != null -> item { EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy) }
                         displayRecords.isEmpty() -> item { EmptyPanel("아직 검사 기록이 없어요", "검사를 진행하고 결과를 보관하면\n이곳에서 다시 확인할 수 있어요.", "홈으로 돌아가기", { navigate(HomeDestination.HOME) }, easy) }
-                        visible.isEmpty() -> item { EmptyPanel("조건에 맞는 기록이 없어요", "다른 검사 유형을 선택하거나\n검색어를 바꿔보세요.", "전체 기록 보기", { query = TextFieldValue(); filterName = "ALL" }, easy) }
+                        visible.isEmpty() -> item { EmptyPanel("조건에 맞는 기록이 없어요", "다른 검사 유형을 선택해 보세요.", "전체 기록 보기", { filterName = "ALL" }, easy) }
                         else -> {
                             val today = LocalDate.now()
                             visible.groupBy { it.date() }.forEach { (date, group) ->
@@ -270,6 +245,18 @@ fun HistoryScreen(
                             }
                         }
                     }
+                    if (!loading && error == null && onLoadMore != null) item {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            loadMoreError?.let { Text(it, color = Muted, fontSize = 13.sp) }
+                            TextButton(onClick = onLoadMore, enabled = !loadingMore) {
+                                Text(when {
+                                    loadingMore -> "기록을 더 불러오는 중…"
+                                    loadMoreError != null -> "다시 시도"
+                                    else -> "기록 더 불러오기"
+                                })
+                            }
+                        }
+                    }
                     if (allowDelete && !loading && error == null && records.isNotEmpty()) item {
                         Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (easy) {
@@ -285,7 +272,7 @@ fun HistoryScreen(
                                     HistoryGlyph(HistoryIcon.TRASH, Red, 15.dp)
                                     Text("전체 기록 지우기", Modifier.padding(start = 6.dp), color = Red, fontSize = 12.sp)
                                 }
-                                Text("최근 50건까지 이 기기에 보관돼요", color = Muted, fontSize = 10.sp)
+                                if (!serverBacked) Text("최근 50건까지 이 기기에 보관돼요", color = Muted, fontSize = 10.sp)
                             }
                         }
                     }
@@ -301,8 +288,8 @@ fun HistoryScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(when (current) {
-                        "settings" -> if (allowDelete) "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요." else "서버에 저장된 검사 기록을 확인할 수 있어요."
-                        "profile" -> if (allowDelete) "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요." else "현재 계정의 검사 기록을 서버에서 조회해요."
+                        "settings" -> if (serverBacked || !allowDelete) "현재 계정의 검사 기록을 서버에서 관리해요." else "이 기기에 저장된 기록을 관리할 수 있어요. 화면 모드는 홈에서 바꿀 수 있어요."
+                        "profile" -> if (serverBacked || !allowDelete) "현재 계정의 검사 기록을 서버에서 조회해요." else "현재 기록은 이 기기에 보관돼요. 계정 간 동기화와 회원 로그인은 연결되어 있지 않아요."
                         else -> "검사 기록 화면에는 별도의 알림 내역이 없어요. 실제 앱에서는 기기의 앱 알림 설정을 열 수 있어요."
                     }, fontSize = 14.sp, lineHeight = 22.sp)
                     if (allowDelete && current == "settings") {
@@ -318,38 +305,57 @@ fun HistoryScreen(
 
 @Composable
 private fun HistoryFilters(selected: String, records: List<HistoryRecord>, easy: Boolean, onSelect: (String) -> Unit) {
-    val types = listOf(HistoryType.SCREEN, HistoryType.TEXT, HistoryType.IMAGE, HistoryType.PHONE, HistoryType.UNKNOWN)
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = selected == "ALL" || selected == "LINK" || selected == "TEXT_LINK",
-            onClick = { onSelect("ALL") }, label = { Text("전체 ${records.size}", fontSize = if (easy) 16.sp else 12.sp) },
-            modifier = Modifier.heightIn(min = if (easy) 52.dp else 48.dp), shape = CircleShape,
-            colors = FilterChipDefaults.filterChipColors(containerColor = Color.White, labelColor = Ink,
-                selectedContainerColor = Blue, selectedLabelColor = Color.White))
-        types.forEach { type ->
-            val count = records.count { it.type == type }
-            if (type != HistoryType.UNKNOWN || count > 0) {
-                val label = when (type) {
-                    HistoryType.SCREEN -> "화면 검사"
-                    HistoryType.TEXT -> "문자 검사"
-                    HistoryType.IMAGE -> "사진 검사"
-                    HistoryType.PHONE -> "전화번호 검사"
-                    HistoryType.UNKNOWN -> "기타 검사"
-                    HistoryType.LINK -> ""
-                }
-                FilterChip(selected = selected == type.name, onClick = { onSelect(type.name) },
-                    label = { Text("$label $count", fontSize = if (easy) 16.sp else 12.sp) },
-                    modifier = Modifier.heightIn(min = if (easy) 52.dp else 48.dp), shape = CircleShape,
-                    colors = FilterChipDefaults.filterChipColors(containerColor = Color.White, labelColor = Ink,
-                        selectedContainerColor = Blue, selectedLabelColor = Color.White))
-            }
+    val options = listOf(
+        null to "전체",
+        HistoryType.SCREEN to "화면 검사",
+        HistoryType.TEXT to "문자 검사",
+        HistoryType.IMAGE to "사진 검사",
+        HistoryType.PHONE to "전화번호 검사",
+        HistoryType.UNKNOWN to "기타 검사",
+    )
+    val colors = FilterChipDefaults.filterChipColors(
+        containerColor = Color.White,
+        labelColor = Ink,
+        selectedContainerColor = Blue,
+        selectedLabelColor = Color.White,
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEach { (type, label) ->
+            val count = if (type == null) records.size else records.count { it.type == type }
+            if (type == HistoryType.UNKNOWN && count == 0) return@forEach
+
+            val filterName = type?.name ?: "ALL"
+            val isSelected = selected == filterName || (type == null && (selected == "LINK" || selected == "TEXT_LINK"))
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(filterName) },
+                label = {
+                    Text(
+                        text = buildAnnotatedString {
+                            append("$label ")
+                            withStyle(SpanStyle(
+                                color = if (isSelected) Color.White else Muted,
+                                fontWeight = FontWeight.SemiBold,
+                            )) {
+                                append(count.toString())
+                            }
+                        },
+                        fontSize = if (easy) 16.sp else 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                    )
+                },
+                modifier = Modifier.heightIn(min = if (easy) 52.dp else 48.dp),
+                shape = CircleShape,
+                colors = colors,
+                border = if (isSelected) null else BorderStroke(1.dp, Outline),
+            )
         }
     }
-}
-
-@Composable
-private fun EmptyNotice(easy: Boolean) {
-    Surface(color = if (easy) Color.White else PaleBlue, shape = RoundedCornerShape(if (easy) 16.dp else 14.dp),
-        modifier = Modifier.fillMaxWidth().height(if (easy) 112.dp else 72.dp)) {}
 }
 
 @Composable
@@ -457,26 +463,11 @@ private fun RecordTypeIcon(record: HistoryRecord, size: Dp) {
 }
 
 @Composable
-private fun HistorySearchField(value: TextFieldValue, onValueChange: (TextFieldValue) -> Unit) {
-    val requester = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focus = LocalFocusManager.current
-    LaunchedEffect(Unit) { requester.requestFocus(); keyboard?.show() }
-    OutlinedTextField(value = value, onValueChange = onValueChange,
-        label = { Text("검사 유형 또는 위험 단계 검색", fontSize = 13.sp) }, singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); focus.clearFocus() }),
-        trailingIcon = { if (value.text.isNotEmpty()) IconButton(onClick = { onValueChange(TextFieldValue()) },
-            modifier = Modifier.semantics { contentDescription = "검색어 지우기" }) { ResultGlyph(ResultIcon.CLOSE, Muted, 16.dp) } },
-        modifier = Modifier.fillMaxWidth().testTag("history-search").focusRequester(requester),
-        shape = RoundedCornerShape(12.dp), colors = dundueniOutlinedTextFieldColors())
-}
-
-@Composable
 internal fun HistoryResultDetail(
     detail: HistoryRecordDetail?,
     onRetry: () -> Unit,
-    error: Boolean = false,
+    error: String? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val easy = LocalEasyMode.current
     Column(
@@ -484,8 +475,8 @@ internal fun HistoryResultDetail(
             .verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        if (error) {
-            EmptyPanel("기록을 확인하지 못했어요", "기록 상세를 불러오지 못했어요.", "다시 시도", onRetry, easy)
+        if (error != null) {
+            EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy)
         } else if (detail == null) {
             Column(
                 Modifier.fillMaxWidth().padding(48.dp),
@@ -507,21 +498,48 @@ internal fun HistoryResultDetail(
             val result = detail.result
             when {
                 result?.historyType == HistoryType.TEXT -> TextInspectionContent(result, fromHistory = true)
-                result?.historyType == HistoryType.IMAGE -> {
-                    val summary = rememberImageSummaryViewModel(result.imageSummaryLookupId())
+                result?.historyType == HistoryType.IMAGE || result?.historyType == HistoryType.SCREEN -> {
+                    result.aiRiskLabel?.let { level ->
+                        val label = RiskLevel.entries.firstOrNull { it.name == level }?.label ?: level
+                        Text("AI 분석 단계 · $label", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+                    }
                     ImageInspectionContent(
                         result,
-                        summaryState = summary?.uiState?.collectAsStateWithLifecycle()?.value,
-                        onCheckSummary = { summary?.checkAgain() },
+                        summaryState = detail.imageSummaryStatus?.let {
+                            ImageSummaryUiState(
+                                result = it,
+                                checking = false,
+                                showRetry = it == ImageSummaryResult.Pending,
+                            )
+                        },
+                        onCheckSummary = onRetry,
                     )
                 }
                 result?.historyType == HistoryType.PHONE -> PhoneInspectionContent(result)
                 record.status == "QUEUED" || record.status == "ANALYZING" ->
                     EmptyPanel("분석 중이에요", "분석이 완료되면 결과를 확인할 수 있어요.", "다시 확인", onRetry, easy)
                 record.status == "FAILED" -> Notice("분석에 실패했어요.", easy)
-                else -> Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
+                else -> {
+                    if (record.evidence.isNotEmpty()) {
+                        Panel {
+                            Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
+                            record.evidence.forEach { Text(it, color = Muted) }
+                        }
+                    }
+                    Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
+                }
             }
+            onDelete?.let { DeleteHistoryButton(it) }
         }
+    }
+}
+
+@Composable
+private fun DeleteHistoryButton(onDelete: () -> Unit) {
+    OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
+        border = BorderStroke(1.dp, Red.copy(alpha = .25f))) {
+        HistoryGlyph(HistoryIcon.TRASH, Red, 16.dp)
+        Text("이 기록 삭제하기", Modifier.padding(start = 6.dp), color = Red)
     }
 }
 
@@ -584,11 +602,7 @@ private fun LocalHistoryDetail(record: HistoryRecord, easy: Boolean, error: Stri
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(containerColor = Ink)) { Text("목록으로 돌아가기") }
-                if (allowDelete) OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
-                    border = BorderStroke(1.dp, Red.copy(alpha = .25f))) {
-                    HistoryGlyph(HistoryIcon.TRASH, Red, 16.dp)
-                    Text("이 기록 삭제하기", Modifier.padding(start = 6.dp), color = Red)
-                }
+                if (allowDelete) DeleteHistoryButton(onDelete)
             }
         }
     }

@@ -16,7 +16,7 @@ import java.time.LocalDate
 
 private val PreviewDate = LocalDate.of(2026, 4, 18)
 
-@Preview(name = "마이페이지 · 로그인", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "마이페이지 · 로그인", widthDp = 390, heightDp = 1080, showBackground = true)
 @Composable
 private fun MyPageLoggedInPreview() = DundueniFETheme {
     MyPageScreen(
@@ -38,7 +38,7 @@ private fun MyPageLoggedInPreview() = DundueniFETheme {
     )
 }
 
-@Preview(name = "마이페이지 · 비로그인", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "마이페이지 · 비로그인", widthDp = 390, heightDp = 1080, showBackground = true)
 @Composable
 private fun MyPageLoggedOutPreview() = DundueniFETheme {
     MyPageScreen(

@@ -124,13 +124,16 @@ internal fun MyPageRoute(
 
     val backendSession = session?.takeIf { it.source == AuthSessionSource.BACKEND }
     var serverRecords by remember(backendSession) { mutableStateOf<List<HistoryRecord>?>(null) }
+    var serverHasNext by remember(backendSession) { mutableStateOf(false) }
     LaunchedEffect(backendSession, resumeRevision, inspectionRevision, today) {
         if (backendSession != null && BuildConfig.ANALYSIS_API_MODE.equals("REAL", ignoreCase = true)) {
             serverRecords = try {
-                withContext(Dispatchers.IO) {
-                    AnalysisFlowDependencies.createHistoryRepository(context).list(HISTORY_LIMIT)
-                        .map { it.toHistoryRecord() }
+                val (records, hasNext) = withContext(Dispatchers.IO) {
+                    val page = AnalysisFlowDependencies.createHistoryRepository(context).list(limit = HISTORY_LIMIT)
+                    page.items.map { it.toHistoryRecord() } to page.hasNext
                 }
+                serverHasNext = hasNext
+                records
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -143,7 +146,7 @@ internal fun MyPageRoute(
     val inspections = when {
         records == null -> localStats?.savedInspections
         records.isEmpty() -> null
-        records.size == HISTORY_LIMIT && records.none { it.savedAt < startMillis } -> null
+        serverHasNext && records.none { it.savedAt < startMillis } -> null
         else -> records.count { it.status == "COMPLETED" && it.savedAt in period }
     }
 

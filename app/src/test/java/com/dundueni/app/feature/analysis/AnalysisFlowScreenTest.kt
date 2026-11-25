@@ -4,11 +4,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertCountEquals
 import com.dundueni.app.data.model.AnalysisResult
 import com.dundueni.app.ui.theme.DundueniFETheme
 import org.junit.Assert.assertEquals
@@ -34,7 +31,8 @@ class AnalysisFlowScreenTest {
         compose.onNodeWithText("조금 더 확인해보세요").assertIsDisplayed()
         compose.onNodeWithText("변조 점수 41.2%").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("분석 근거 1").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("링크를 열지 않고 인터넷 주소만 보기").assertDoesNotExist()
+        compose.onNodeWithText("든든이 홈으로").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun dismissingLoadingPopupKeepsRequestVisibleAndResultArrives() {
@@ -66,7 +64,7 @@ class AnalysisFlowScreenTest {
         } }
         compose.onNodeWithText("위험할 가능성이 높아요").assertIsDisplayed()
         compose.onNodeWithText("지금은 절대 돈을 보내지 마세요!").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("신고 (112/118)").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("신고 (112/118)").assertDoesNotExist()
     }
 
     @Test fun realResultUsesSharedPb05LayoutWithoutInventingAnOverallVerdict() {
@@ -184,6 +182,7 @@ class AnalysisFlowScreenTest {
         compose.onNodeWithText("이미지 서버 요약").assertIsDisplayed()
         compose.onNodeWithText("이미지 서버 대응").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("일반 텍스트로 판단").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("텍스트 판정 · 일반").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("현재는 안전해 보여요").assertDoesNotExist()
     }
 
@@ -196,7 +195,8 @@ class AnalysisFlowScreenTest {
         compose.setContent { DundueniFETheme {
             AnalysisFlowScreen(state, {}, {}, {}, isDemo = false)
         } }
-        compose.onAllNodesWithText("피싱 의심").assertCountEquals(2)
+        compose.onNodeWithText("피싱 의심").assertIsDisplayed()
+        compose.onNodeWithText("텍스트 판정 · 의심").assertIsDisplayed()
         compose.onNodeWithText("위험할 가능성이 높아요").assertDoesNotExist()
         compose.onNodeWithText("분석 점수 41.2%").assertDoesNotExist()
     }

@@ -2,8 +2,9 @@ package com.dundueni.app.feature.history
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import com.dundueni.app.data.remote.api.HistoryEntryDto
-import com.dundueni.app.data.remote.dto.TextAnalysisTextResultDto
+import com.dundueni.app.data.remote.dto.HistoryDetailDto
+import com.dundueni.app.data.remote.dto.HistoryReasonDto
+import com.dundueni.app.data.remote.dto.HistoryTypeDetailDto
 import com.dundueni.app.ui.theme.DundueniFETheme
 
 @Preview(name = "P1 기록 · 목록 조회 중", widthDp = 390, heightDp = 844, showBackground = true)
@@ -35,7 +36,7 @@ private fun HistoryDetailErrorPreview() = DundueniFETheme {
     HistoryScreen(
         records = emptyList(), onHome = {}, onDelete = {}, onClear = {},
         initialRecordId = "preview-text", onCloseDetail = {}, allowDelete = false,
-        detailContent = { HistoryResultDetail(detail = null, error = true, onRetry = {}) },
+        detailContent = { HistoryResultDetail(detail = null, error = "기록 상세를 불러오지 못했어요.", onRetry = {}) },
     )
 }
 
@@ -45,13 +46,17 @@ private fun HistoryDetailWithoutEvidencePreview() = TextHistoryDetailPreview(emp
 
 @Composable
 private fun TextHistoryDetailPreview(evidence: List<String>) = DundueniFETheme {
-    val detail = HistoryEntryDto(
-        id = "preview-text",
+    val detail = HistoryDetailDto(
+        analysisId = "preview-text",
         type = "TEXT",
         status = "COMPLETED",
         createdAt = "2026-11-19T05:32:00Z",
-        textPreview = "오늘까지 아래 계좌로 송금해 주세요.",
-        textResult = TextAnalysisTextResultDto(decision = "phishing", riskScore = 0.89, evidence = evidence),
+        reasons = evidence.map { HistoryReasonDto(it) },
+        detail = HistoryTypeDetailDto(
+            textPreview = "오늘까지 아래 계좌로 송금해 주세요.",
+            decision = "phishing",
+            riskScore = 0.89,
+        ),
     ).toRecordDetail()
     HistoryScreen(
         records = listOf(detail.record), onHome = {}, onDelete = {}, onClear = {},

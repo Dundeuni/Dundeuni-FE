@@ -37,6 +37,7 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 
 class MainActivity : ComponentActivity() {
     companion object {
+        const val EXTRA_OPEN_HOME = "com.dundueni.app.extra.OPEN_HOME"
         const val EXTRA_OPEN_SETTINGS = "com.dundueni.app.extra.OPEN_SETTINGS"
         const val EXTRA_OPEN_MY_PAGE = "com.dundueni.app.extra.OPEN_MY_PAGE"
         const val EXTRA_OPEN_FAMILY_SHARE = "com.dundueni.app.extra.OPEN_FAMILY_SHARE"
@@ -203,6 +204,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestedDestination(intent: Intent): HomeDestination? = when {
+        intent.getBooleanExtra(EXTRA_OPEN_HOME, false) -> HomeDestination.HOME
         intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) -> HomeDestination.SETTINGS
         intent.getBooleanExtra(EXTRA_OPEN_MY_PAGE, false) -> HomeDestination.MY_SHELTER
         intent.getBooleanExtra(EXTRA_OPEN_FAMILY_SHARE, false) -> HomeDestination.FAMILY_SHARE

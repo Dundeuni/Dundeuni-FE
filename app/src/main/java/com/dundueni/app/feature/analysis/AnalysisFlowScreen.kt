@@ -88,18 +88,22 @@ fun AnalysisFlowScreen(
     onRefresh: () -> Unit = {},
     initialSelectionElementId: String? = null,
     onChoosePhoto: (String, ScreenResultType?) -> Unit = { _, _ -> },
+    onContinueInBackground: () -> Unit = {},
 ) {
     // The host window is translucent: render only the dialog over the screen that launched inspection.
     when (state) {
         AnalysisUiState.Idle -> return
         AnalysisUiState.Loading -> {
             var dismissed by rememberSaveable { mutableStateOf(false) }
-            if (!dismissed) InspectionLoadingDialog(onDismissPopup = { dismissed = true })
+            if (!dismissed) InspectionLoadingDialog(onDismissPopup = {
+                dismissed = true
+                onContinueInBackground()
+            })
             return
         }
         is AnalysisUiState.Pending -> {
             InspectionLoadingDialog(
-                onDismissPopup = onClose,
+                onDismissPopup = onContinueInBackground,
                 message = AnalysisErrorKind.IN_PROGRESS.message,
                 onCheckResult = onRefresh,
             )
