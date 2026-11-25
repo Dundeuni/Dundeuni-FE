@@ -1,6 +1,8 @@
 package com.dundueni.app.feature.analysis
 
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.remote.network.RetrofitClient
+import com.dundueni.app.data.repository.AnalysisRepository
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -14,34 +16,36 @@ import org.junit.Test
 
 class ScreenCropApiContractTest {
     @Test
-    fun screenCropUsesMultipartAnalysisEndpointAndMapsCompletedPhishingDecision() = runBlocking {
+    fun screenCropUsesMultipartAnalysisEndpointAndKeepsPostPhonesAcrossDetailAndAnEmptyReplay() = runBlocking {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse().setResponseCode(202).setBody(
-                """{"isSuccess":true,"code":"ANALYSIS202","result":{"analysisId":"ocr-id","type":"TEXT","status":"COMPLETED","textResult":{"decision":"phishing","riskScore":0.87,"scoreMeaning":"UNCALIBRATED_CLASSIFIER_SCORE","sourceType":"SCREEN_CROP"}}}"""
-            ))
+            val post = """{"isSuccess":true,"code":"ANALYSIS202","result":{"analysisId":"ocr-id",
+                "type":"TEXT","status":"COMPLETED","textResult":{"decision":"phishing","riskScore":0.87,
+                "scoreMeaning":"UNCALIBRATED_CLASSIFIER_SCORE","sourceType":"SCREEN_CROP"},
+                "extractedPhoneNumbers": [{"phoneNumber":"021234567","displayNumber":"02-123-4567","source":"OCR"}]}}"""
+            server.enqueue(MockResponse().setResponseCode(202).setBody(post))
             val file = MultipartBody.Part.createFormData(
                 "file", "capture.png", "png-bytes".toRequestBody("image/png".toMediaType())
             )
-            val response = RetrofitClient(server.url("/").toString())
-                .textAnalysisApiService.analyzeScreenCrop(file)
+            val client = RetrofitClient(server.url("/").toString())
+            val response = client.textAnalysisApiService.analyzeScreenCrop(file)
             assertEquals(202, response.code())
-            server.enqueue(MockResponse().setResponseCode(200).setBody("""{
+            val detail = """{
                 "isSuccess":true,"code":"ANALYSIS200","result":{
                   "analysisId":"ocr-id","type":"TEXT","sourceType":"SCREEN_CROP","status":"COMPLETED",
                   "result":{"riskLevel":"UNKNOWN","textDecision":"phishing","reasons":["GET reason"],"guidance":["GET guidance"],"summary":"GET summary"}}}
-            """))
-            val client = RetrofitClient(server.url("/").toString())
-            val mapped = response.toCompletedScreenCrop(
-                com.dundueni.app.data.repository.AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)
-            )
+            """
+            server.enqueue(MockResponse().setResponseCode(200).setBody(detail))
+            val repository = AnalysisRepository(client.analysisApiService, client.analysisQueryApiService)
+            val mapped = response.toCompletedScreenCrop(repository)
             assertEquals("GET summary", mapped.detail.summary)
             assertEquals(listOf("GET reason"), mapped.detail.reasons)
             assertEquals(listOf("GET guidance"), mapped.detail.recommendedActions)
             assertEquals("ocr-id", mapped.analysisId)
             assertEquals("phishing", mapped.decision)
             assertEquals("피싱 의심", mapped.label)
+            assertEquals(listOf(ExtractedPhoneNumber("021234567", "02-123-4567", "OCR")), mapped.detail.extractedPhoneNumbers)
 
             val request = server.takeRequest()
             assertEquals("POST", request.method)
@@ -59,6 +63,17 @@ class ScreenCropApiContractTest {
             val get = server.takeRequest()
             assertEquals("GET", get.method)
             assertEquals("/api/analysis/ocr-id", get.path)
+
+            server.enqueue(MockResponse().setResponseCode(202).setBody(
+                """{"isSuccess":true,"code":"ANALYSIS202","result":{"analysisId":"ocr-id",
+                    "type":"TEXT","status":"COMPLETED","extractedPhoneNumbers":[]}}""",
+            ))
+            server.enqueue(MockResponse().setResponseCode(200).setBody(detail))
+            val repeated = client.textAnalysisApiService.analyzeScreenCrop(file)
+                .toCompletedScreenCrop(repository, mapped.detail.textAnalysisPhoneNumbers)
+            assertEquals(mapped.detail.extractedPhoneNumbers, repeated.detail.extractedPhoneNumbers)
+            assertEquals("/api/analysis", server.takeRequest().path)
+            assertEquals("/api/analysis/ocr-id", server.takeRequest().path)
         } finally {
             server.shutdown()
         }

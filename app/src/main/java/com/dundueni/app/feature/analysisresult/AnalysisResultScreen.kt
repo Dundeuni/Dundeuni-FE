@@ -40,6 +40,7 @@ import com.dundueni.app.ui.theme.SoftSafe
 import com.dundueni.app.feature.analysis.ScreenResultType
 import com.dundueni.app.feature.analysis.textDisplayRiskLevel
 import com.dundueni.app.feature.history.HistoryType
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.model.ImageModelDetails
 import com.dundueni.app.data.repository.ImageSummaryResult
@@ -66,6 +67,8 @@ fun AnalysisResultScreen(
     imageSummary: ImageSummaryUiState? = null,
     onCheckImageSummary: () -> Unit = {},
     screenResultType: ScreenResultType? = null,
+    onInspectPhone: ((String) -> Unit)? = null,
+    phoneInspectionInProgress: Boolean = false,
 ) {
     val title = when {
         result.historyType == HistoryType.SCREEN && screenResultType != null -> "화면 검사 결과"
@@ -90,16 +93,25 @@ fun AnalysisResultScreen(
             },
         ) { forImage ->
             val onCheckSummary = onCheckImageSummary.takeUnless { forImage }
+            val selectPhone = onInspectPhone.takeUnless { forImage }
+            val phoneNumbers = result.selectablePhoneNumbers(screenResultType)
             when (result.historyType.takeUnless { isDemo }) {
                 HistoryType.IMAGE -> ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
-                HistoryType.TEXT -> TextInspectionContent(result)
+                HistoryType.TEXT -> TextInspectionContent(
+                    result, phoneNumbers = phoneNumbers, onInspectPhone = selectPhone,
+                    phoneInspectionInProgress = phoneInspectionInProgress,
+                )
                 HistoryType.PHONE -> PhoneInspectionContent(result)
                 HistoryType.SCREEN -> {
                     if (screenResultType != ScreenResultType.TEXT) {
                         ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
                     }
                     if (screenResultType != ScreenResultType.IMAGE) {
-                        TextInspectionContent(result, screenCropError, screenCrop = true)
+                        TextInspectionContent(
+                            result, screenCropError, screenCrop = true,
+                            phoneNumbers = phoneNumbers, onInspectPhone = selectPhone,
+                            phoneInspectionInProgress = phoneInspectionInProgress,
+                        )
                     }
                 }
                 else -> {
@@ -516,12 +528,20 @@ private fun InspectionGuidanceItem(description: String, title: String = "") {
     }
 }
 
+internal fun AnalysisResult.selectablePhoneNumbers(screenResultType: ScreenResultType? = null): List<ExtractedPhoneNumber> =
+    if (historyType == HistoryType.TEXT ||
+        historyType == HistoryType.SCREEN && screenResultType != ScreenResultType.IMAGE
+    ) extractedPhoneNumbers.take(10) else emptyList()
+
 @Composable
 internal fun TextInspectionContent(
     result: AnalysisResult,
     error: String? = null,
     screenCrop: Boolean = false,
     fromHistory: Boolean = false,
+    phoneNumbers: List<ExtractedPhoneNumber> = emptyList(),
+    onInspectPhone: ((String) -> Unit)? = null,
+    phoneInspectionInProgress: Boolean = false,
 ) {
     val title = if (screenCrop) "화면 문자 피싱 분석" else "텍스트 피싱 분석"
     // A combined Screen result stores the image summary and guides in these shared fields.
@@ -540,6 +560,9 @@ internal fun TextInspectionContent(
         return
     }
 
+    if (onInspectPhone != null && phoneNumbers.isNotEmpty()) {
+        ExtractedPhoneNumbersPanel(phoneNumbers, onInspectPhone, enabled = !phoneInspectionInProgress)
+    }
     val evidence = if (screenCrop) result.screenTextEvidence else result.evidence
     if (evidence.isNotEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -575,6 +598,31 @@ internal fun TextInspectionContent(
             guidance.distinct().forEach { instruction ->
                 Surface(color = SoftBlue, shape = RoundedCornerShape(10.dp)) {
                     Box(Modifier.fillMaxWidth().padding(12.dp)) { InspectionText(instruction) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExtractedPhoneNumbersPanel(
+    phoneNumbers: List<ExtractedPhoneNumber>,
+    onInspectPhone: (String) -> Unit,
+    enabled: Boolean,
+) {
+    ResultPanel {
+        InspectionHeading("발견된 전화번호")
+        phoneNumbers.forEach { phone ->
+            Surface(color = SoftBlue, shape = RoundedCornerShape(10.dp)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    InspectionHeading(phone.displayNumber)
+                    DundueniButton(
+                        "전화번호 검사",
+                        onClick = { onInspectPhone(phone.phoneNumber) },
+                        modifier = Modifier.fillMaxWidth(),
+                        type = DundueniButtonType.SECONDARY,
+                        enabled = enabled,
+                    )
                 }
             }
         }

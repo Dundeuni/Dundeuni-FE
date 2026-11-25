@@ -8,6 +8,7 @@ import android.net.Uri
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,7 +28,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.feature.analysis.ScreenResultType
+import com.dundueni.app.feature.phone.PhoneInspectionUiState
+import com.dundueni.app.feature.phone.PhoneInspectionViewModel
+import com.dundueni.app.ui.component.InspectionErrorDialog
+import com.dundueni.app.ui.component.InspectionLoadingDialog
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -44,9 +51,21 @@ fun AnalysisResultRoute(
     screenCropError: String? = null,
     screenResultType: ScreenResultType? = null,
 ) {
-    BackHandler(onBack = onReturn)
     val context = LocalContext.current
     val view = LocalView.current
+    val canInspectPhone = !isDemo && screenCropError == null &&
+        result.selectablePhoneNumbers(screenResultType).isNotEmpty()
+    val phoneModel = rememberExtractedPhoneViewModel(canInspectPhone)
+    val phoneState = phoneModel?.uiState?.collectAsStateWithLifecycle()?.value
+    val phoneBusy = phoneState == PhoneInspectionUiState.Loading || phoneState is PhoneInspectionUiState.Success
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var phoneLoadingDismissed by rememberSaveable { mutableStateOf(false) }
+
+    fun leave(exit: () -> Unit) {
+        phoneModel?.cancel()
+        exit()
+    }
+    BackHandler { leave(onReturn) }
     val initialSummary = result.initialImageSummary().takeIf {
         !isDemo && imageAnalysisError == null && screenResultType != ScreenResultType.TEXT
     }
@@ -101,10 +120,19 @@ fun AnalysisResultRoute(
         screenResultType = screenResultType,
         imageSummary = summaryState,
         onCheckImageSummary = { summaryModel?.checkAgain() },
+        onInspectPhone = phoneModel?.let { model ->
+            { phoneNumber ->
+                if (lifecycle.currentState == Lifecycle.State.RESUMED) {
+                    phoneLoadingDismissed = false
+                    model.inspect(phoneNumber)
+                }
+            }
+        },
+        phoneInspectionInProgress = phoneBusy,
         onAction = { action ->
         when (action) {
-            ResultAction.RETURN -> onReturn()
-            ResultAction.HOME -> onHome()
+            ResultAction.RETURN -> leave(onReturn)
+            ResultAction.HOME -> leave(onHome)
             ResultAction.PROFILE -> Toast.makeText(context, "계정 메뉴를 사용할 수 없어요.", Toast.LENGTH_SHORT).show()
             ResultAction.CALL_FAMILY -> open(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
             ResultAction.SHARE, ResultAction.ASK_FAMILY -> share()
@@ -130,6 +158,24 @@ fun AnalysisResultRoute(
         }
     })
 
+    when (phoneState) {
+        PhoneInspectionUiState.Loading -> if (!phoneLoadingDismissed) {
+            InspectionLoadingDialog(
+                onDismissPopup = { phoneLoadingDismissed = true },
+                message = "선택한 전화번호를 검사하고 있어요.",
+            )
+        }
+        is PhoneInspectionUiState.Error -> InspectionErrorDialog(
+            message = phoneState.message,
+            onRetry = {
+                phoneLoadingDismissed = false
+                phoneModel?.retry()
+            },
+            onCancelInspection = { phoneModel?.dismiss() },
+        )
+        else -> Unit
+    }
+
     if (dialog == "report") {
         AlertDialog(
             onDismissRequest = { dialog = null },
@@ -148,6 +194,47 @@ fun AnalysisResultRoute(
             confirmButton = { TextButton(onClick = { dialog = null }) { Text("확인") } },
         )
     }
+}
+
+@Composable
+private fun rememberExtractedPhoneViewModel(enabled: Boolean): PhoneInspectionViewModel? {
+    if (!enabled || LocalInspectionMode.current) return null
+    val owner = LocalView.current.findViewTreeViewModelStoreOwner() ?: return null
+    val activity = LocalActivity.current ?: return null
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val model = remember(owner) {
+        val factory = viewModelFactory {
+            initializer { PhoneInspectionViewModel.forExtractedPhones(activity.application) }
+        }
+        ViewModelProvider(owner, factory)["extracted-phone-inspection", PhoneInspectionViewModel::class.java]
+    }
+    DisposableEffect(model) {
+        onDispose { model.cancel() }
+    }
+    LaunchedEffect(model, lifecycle, activity) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            model.uiState.collectLatest { state ->
+                if (state is PhoneInspectionUiState.Success && !activity.isFinishing) {
+                    try {
+                        val intent = AnalysisResultActivity.createPhoneResultIntent(activity, state.result)
+                        if (!activity.isFinishing && lifecycle.currentState == Lifecycle.State.RESUMED &&
+                            model.uiState.value === state
+                        ) {
+                            activity.startActivity(intent)
+                            model.dismiss()
+                        }
+                    } catch (_: IOException) {
+                        if (model.uiState.value === state) model.onResultOpenFailure()
+                    } catch (_: ActivityNotFoundException) {
+                        model.onResultOpenFailure()
+                    } catch (_: SecurityException) {
+                        model.onResultOpenFailure()
+                    }
+                }
+            }
+        }
+    }
+    return model
 }
 
 @Composable

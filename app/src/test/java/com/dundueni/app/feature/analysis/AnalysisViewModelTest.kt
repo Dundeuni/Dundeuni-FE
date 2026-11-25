@@ -2,6 +2,11 @@ package com.dundueni.app.feature.analysis
 
 import androidx.lifecycle.ViewModelStore
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.ExtractedPhoneNumber
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
+import com.dundueni.app.data.model.withExtractedPhoneNumbers
+import com.dundueni.app.data.remote.api.ExtractedPhoneNumberDto
+import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.data.repository.AnalysisResultRepository
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
@@ -304,6 +309,7 @@ class AnalysisViewModelTest {
     @Test fun restoredScreenResultRechecksOnlyPendingSide() = runTest {
         val gets = mutableListOf<String>()
         val text = result.copy(analysisId = "ocr-id", type = "TEXT", sourceType = "SCREEN_CROP", textDecision = "phishing")
+        val phones = TextAnalysisPhoneNumbers("ocr-id", listOf(ExtractedPhoneNumber("021234567", "02-123-4567", "OCR")))
         val vm = viewModel(object : AnalysisResultRepository {
             override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult = error("Unexpected upload")
             override suspend fun findResult(analysisId: String): AnalysisResult {
@@ -313,14 +319,16 @@ class AnalysisViewModelTest {
         })
         vm.restoreScreenResult(AnalysisUiState.ScreenSuccess(
             result, null, null, AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "ocr-id"),
+            pendingTextPhoneNumbers = phones,
         ))
         vm.refreshPending()
         runCurrent()
         assertEquals(listOf("ocr-id"), gets)
         val completed = vm.uiState.value as AnalysisUiState.ScreenSuccess
         assertEquals(result, completed.image)
-        assertEquals(text, completed.text?.detail)
+        assertEquals(text.withExtractedPhoneNumbers(phones), completed.text?.detail)
         assertNull(completed.textError)
+        assertNull(completed.pendingTextPhoneNumbers)
     }
 
     @Test fun screenPartialSuccessKeepsCompletedSideAndRetriesOnlyPendingGet() = runTest {
@@ -331,6 +339,8 @@ class AnalysisViewModelTest {
             var refreshing = false
             val text = result.copy(analysisId = "ocr-id", type = "TEXT", sourceType = "SCREEN_CROP",
                 textDecision = "phishing", summary = "OCR GET summary", reasons = listOf("OCR GET reason"))
+            val phone = ExtractedPhoneNumber("021234567", "02-123-4567", "OCR")
+            val phones = TextAnalysisPhoneNumbers("ocr-id", listOf(phone))
             val repository = object : AnalysisResultRepository {
                 override suspend fun analyzeResult(image: MultipartBody.Part): AnalysisResult {
                     imagePosts++
@@ -340,15 +350,22 @@ class AnalysisViewModelTest {
                 override suspend fun findResult(analysisId: String): AnalysisResult {
                     gets += analysisId
                     if (!refreshing && imageSucceeds) throw AnalysisNotCompletedException(AnalysisExecutionStatus.ANALYZING, analysisId, null)
-                    return if (analysisId == "ocr-id") text else result
+                    return if (analysisId == "id-1") result else text.copy(analysisId = analysisId)
                 }
             }
             val api = object : com.dundueni.app.data.remote.api.TextAnalysisApiService {
                 override suspend fun analyzeText(request: com.dundueni.app.data.remote.api.TextAnalysisRequest): retrofit2.Response<com.dundueni.app.data.remote.api.TextAnalysisResponse> = error("Unexpected direct text")
                 override suspend fun analyzeScreenCrop(file: MultipartBody.Part, type: okhttp3.RequestBody, sourceType: okhttp3.RequestBody): retrofit2.Response<com.dundueni.app.data.remote.api.TextAnalysisResponse> {
                     textPosts++
-                    return retrofit2.Response.success(202, com.dundueni.app.data.remote.api.TextAnalysisResponse(
-                        true, "ANALYSIS202", com.dundueni.app.data.remote.api.TextAnalysisResponseResult("ocr-id", "TEXT", "COMPLETED")))
+                    val post = if (textPosts == 1) {
+                        com.dundueni.app.data.remote.api.TextAnalysisResponseResult(
+                            "ocr-id", "TEXT", if (imageSucceeds) "QUEUED" else "COMPLETED",
+                            extractedPhoneNumbers = listOf(
+                                ExtractedPhoneNumberDto(phone.phoneNumber, phone.displayNumber, phone.source),
+                            ),
+                        )
+                    } else com.dundueni.app.data.remote.api.TextAnalysisResponseResult("new-ocr-id", "TEXT", "COMPLETED")
+                    return retrofit2.Response.success(202, com.dundueni.app.data.remote.api.TextAnalysisResponse(true, "ANALYSIS202", post))
                 }
             }
             val vm = AnalysisViewModel(repository) { api }.also { store.put("screen", it) }
@@ -357,18 +374,27 @@ class AnalysisViewModelTest {
             if (imageSucceeds) {
                 assertEquals(result, partial.image); assertNull(partial.text)
                 assertEquals("ocr-id", partial.textError?.pendingAnalysisId)
+                assertEquals(phones, partial.pendingTextPhoneNumbers)
+                assertTrue(gets.isEmpty())
             } else {
                 assertNull(partial.image); assertEquals("OCR GET summary", partial.text?.detail?.summary)
+                assertEquals(listOf(phone), partial.text?.detail?.extractedPhoneNumbers)
                 assertEquals("id-1", partial.imageError?.pendingAnalysisId)
             }
             refreshing = true
             vm.refreshPending(); runCurrent()
             val complete = vm.uiState.value as AnalysisUiState.ScreenSuccess
             assertEquals(result, complete.image)
-            assertEquals(text, complete.text?.detail)
+            assertEquals(text.withExtractedPhoneNumbers(phones), complete.text?.detail)
+            assertEquals(listOf(phone), complete.toPresentedResult(false, HistoryType.SCREEN)?.extractedPhoneNumbers)
             assertNull(complete.imageError); assertNull(complete.textError)
             assertEquals(1, imagePosts); assertEquals(1, textPosts)
-            assertEquals(if (imageSucceeds) listOf("ocr-id", "ocr-id") else listOf("ocr-id", "id-1"), gets)
+            assertEquals(if (imageSucceeds) listOf("ocr-id") else listOf("ocr-id", "id-1"), gets)
+
+            vm.analyzePrepared(true) { part }; runCurrent()
+            val next = vm.uiState.value as AnalysisUiState.ScreenSuccess
+            assertEquals("new-ocr-id", next.text?.analysisId)
+            assertTrue(checkNotNull(next.text).detail.extractedPhoneNumbers.isEmpty())
         }
     }
 

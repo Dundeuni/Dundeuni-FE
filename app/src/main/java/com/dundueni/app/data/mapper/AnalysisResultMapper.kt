@@ -1,10 +1,12 @@
 package com.dundueni.app.data.mapper
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.model.ImageActionGuide
 import com.dundueni.app.data.model.ImageAnalysisSummary
 import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.model.ImageModelDetails
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
 import com.dundueni.app.data.remote.api.TextAnalysisResponseResult
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisResponseResultDto
@@ -96,6 +98,16 @@ private fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
     limitations = limitations.orEmpty().filterNotNull().filter(String::isNotBlank),
 )
 
+internal fun TextAnalysisResponseResult.toPhoneNumbers(id: String) = TextAnalysisPhoneNumbers(
+    analysisId = id,
+    numbers = extractedPhoneNumbers.orEmpty().mapNotNull { phone ->
+        val phoneNumber = phone?.phoneNumber ?: return@mapNotNull null
+        val displayNumber = phone.displayNumber ?: return@mapNotNull null
+        val source = phone.source ?: return@mapNotNull null
+        ExtractedPhoneNumber(phoneNumber, displayNumber, source)
+    },
+)
+
 /** Text POST contains a classifier decision, not a normalized final fraud verdict. */
 fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(
     analysisId = analysisId, type = type ?: "TEXT", status = status,
@@ -110,4 +122,5 @@ fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(
     summary = textResult?.summary,
     textEvidence = textResult?.evidence.orEmpty().filter { it.isNotBlank() },
     textLimitations = textResult?.limitations.orEmpty().filter { it.isNotBlank() },
+    textAnalysisPhoneNumbers = analysisId?.let { toPhoneNumbers(it).takeIf { phones -> phones.numbers.isNotEmpty() } },
 )

@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.mapper.toDomain
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.model.ImageActionGuide
 import com.dundueni.app.data.model.ImageAnalysisSummary
 import com.dundueni.app.data.model.ImageDetailedReason
@@ -208,6 +209,36 @@ class AnalysisResultMappingPipelineTest {
         assertEquals("", presented.summary)
         assertEquals(RiskLevel.CAUTION, presented.riskLevel)
         assertNull(presented.fraudScore)
+    }
+
+    @Test fun textAndOcrPostPhonesKeepServerOrderAndFormatting() {
+        for (source in listOf("TEXT", "OCR")) {
+            val response = gson.fromJson(
+                """{"result":{"analysisId":"text-id","type":"TEXT","status":"COMPLETED",
+                    "extractedPhoneNumbers":[
+                        {"phoneNumber":"021234567","displayNumber":"02-123-4567","source":"$source"},
+                        {"phoneNumber":"01012345678","displayNumber":"010-1234-5678","source":"$source"}
+                    ]}}""",
+                TextAnalysisResponse::class.java,
+            )
+            val domain = checkNotNull(response.result).toDomain()
+            val expected = listOf(
+                ExtractedPhoneNumber("021234567", "02-123-4567", source),
+                ExtractedPhoneNumber("01012345678", "010-1234-5678", source),
+            )
+            assertEquals(expected, domain.extractedPhoneNumbers)
+            assertEquals(expected, domain.toTextResult().extractedPhoneNumbers)
+        }
+    }
+
+    @Test fun missingNullAndEmptyPostPhoneArraysBecomeEmptyLists() {
+        for (fields in listOf("", ""","extractedPhoneNumbers":null""", ""","extractedPhoneNumbers":[]""")) {
+            val response = gson.fromJson(
+                """{"result":{"analysisId":"text-id","type":"TEXT","status":"COMPLETED"$fields}}""",
+                TextAnalysisResponse::class.java,
+            )
+            assertTrue(checkNotNull(response.result).toDomain().toTextResult().extractedPhoneNumbers.isEmpty())
+        }
     }
 
     @Test fun textDetailKeepsEvidenceSeparateFromQualityCodes() {

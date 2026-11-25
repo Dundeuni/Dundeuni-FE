@@ -4,6 +4,9 @@ import android.util.Base64
 import com.dundueni.app.data.auth.AuthSession
 import com.dundueni.app.data.auth.AuthSessionSource
 import com.dundueni.app.data.auth.AuthSessionStore
+import com.dundueni.app.data.remote.api.TextAnalysisRequest
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -51,6 +54,23 @@ class BearerAuthInterceptorTest {
         server.enqueue(MockResponse().setResponseCode(200))
         api.publicCall().body()?.close()
         assertNull(server.takeRequest().getHeader("Authorization"))
+    }
+
+    @Test fun textAndScreenCropPostsUseTheExistingBackendBearerSession() = runTest {
+        val backend = session(AuthSessionSource.BACKEND)
+        sessions.save(backend)
+        val textApi = RetrofitClient(server.url("/").toString(), sessions).textAnalysisApiService
+        repeat(2) { server.enqueue(MockResponse().setResponseCode(202).setBody("{}")) }
+        textApi.analyzeText(TextAnalysisRequest(text = "original text"))
+        val capture = MultipartBody.Part.createFormData("file", "capture.png", byteArrayOf(1).toRequestBody())
+        textApi.analyzeScreenCrop(capture)
+        repeat(2) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/api/analysis", request.path)
+            assertEquals("Bearer ${backend.accessToken}", request.getHeader("Authorization"))
+            assertNull(request.getHeader(BearerAuthInterceptor.REQUIRES_AUTH_HEADER))
+        }
     }
 
     @Test fun onlyAuthFailuresForProtectedCallsWithBackendTokenInvalidateTheSession() = runTest {

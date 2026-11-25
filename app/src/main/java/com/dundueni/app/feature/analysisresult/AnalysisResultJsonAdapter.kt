@@ -1,5 +1,6 @@
 package com.dundueni.app.feature.analysisresult
 
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.model.ImageActionGuide
 import com.dundueni.app.data.model.ImageAnalysisSummary
 import com.dundueni.app.data.model.ImageDetailedReason
@@ -57,6 +58,16 @@ object AnalysisResultJsonAdapter {
             screenTextEvidence = value.evidence("screenTextEvidence"),
             imageOverallDecision = value.optionalText("imageOverallDecision"),
             imageSummary = value.optJSONObject("imageSummary")?.toImageSummary(),
+            extractedPhoneNumbers = value.optJSONArray("extractedPhoneNumbers")?.let { phones ->
+                List(phones.length()) { index ->
+                    val phone = phones.getJSONObject(index)
+                    ExtractedPhoneNumber(
+                        phone.getString("phoneNumber"),
+                        phone.getString("displayNumber"),
+                        phone.getString("source"),
+                    )
+                }
+            }.orEmpty(),
         )
     }
 

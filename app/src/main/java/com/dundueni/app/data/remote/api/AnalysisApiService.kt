@@ -112,4 +112,11 @@ data class TextAnalysisResponseResult(
     val type: String? = null,
     val status: String? = null,
     val textResult: TextAnalysisTextResultDto? = null,
+    val extractedPhoneNumbers: List<ExtractedPhoneNumberDto?>? = emptyList(),
+)
+
+data class ExtractedPhoneNumberDto(
+    val phoneNumber: String? = null,
+    val displayNumber: String? = null,
+    val source: String? = null,
 )

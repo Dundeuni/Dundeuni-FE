@@ -21,11 +21,8 @@ import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.ui.component.InspectionErrorDialog
 import com.dundueni.app.ui.component.InspectionLoadingDialog
-import com.google.gson.Gson
 import java.io.IOException
 import java.util.UUID
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class PhoneInputActivity : ComponentActivity() {
     private val overlayOwner = "phone-input:${UUID.randomUUID()}"
@@ -91,12 +88,7 @@ class PhoneInputActivity : ComponentActivity() {
                             current.response.analysisId ?: return@LaunchedEffect
                             val result = current.result
                             val destination = try {
-                                withContext(Dispatchers.IO) {
-                                    AnalysisResultActivity.createIntent(
-                                        applicationContext, Gson().toJson(result),
-                                        isDemo = false, suspendFloatingButton = true,
-                                    )
-                                }
+                                AnalysisResultActivity.createPhoneResultIntent(this@PhoneInputActivity, result)
                             } catch (_: IOException) {
                                 viewModel.onResultOpenFailure()
                                 return@LaunchedEffect

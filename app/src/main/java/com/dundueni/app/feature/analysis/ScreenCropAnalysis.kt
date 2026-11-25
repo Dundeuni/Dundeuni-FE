@@ -1,6 +1,9 @@
 package com.dundueni.app.feature.analysis
 
+import com.dundueni.app.data.mapper.toPhoneNumbers
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
+import com.dundueni.app.data.model.withExtractedPhoneNumbers
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.api.TextAnalysisResponse
@@ -11,7 +14,7 @@ import com.dundueni.app.data.repository.AnalysisResultRepository
 import com.dundueni.app.data.repository.findResultForDisplay
 import retrofit2.Response
 
-/** A screen OCR result always comes from the detail GET, never from POST metadata. */
+/** The detail GET supplies findings. Phone numbers come from the accepted OCR POST. */
 data class ScreenCropAnalysis(val analysisId: String, val decision: String?, val detail: AnalysisResult) {
     val label: String
         get() = when (decision) {
@@ -24,20 +27,34 @@ data class ScreenCropAnalysis(val analysisId: String, val decision: String?, val
 
 internal suspend fun Response<TextAnalysisResponse>.toCompletedScreenCrop(
     repository: AnalysisResultRepository,
+    previousPhones: TextAnalysisPhoneNumbers? = null,
+    onAccepted: (TextAnalysisPhoneNumbers) -> Unit = {},
 ): ScreenCropAnalysis {
-    val id = completedTextAnalysisId()
-    return repository.findResultForDisplay(id).toScreenCropAnalysis()
+    val accepted = acceptedTextAnalysis()
+    val phones = accepted.phones.retaining(previousPhones)
+    onAccepted(phones)
+    val id = accepted.completedAnalysisId()
+    return repository.findResultForDisplay(id).toScreenCropAnalysis(phones)
 }
 
-internal fun AnalysisResult.toScreenCropAnalysis(): ScreenCropAnalysis {
+internal fun AnalysisResult.toScreenCropAnalysis(phones: TextAnalysisPhoneNumbers? = null): ScreenCropAnalysis {
     if (status != "COMPLETED" || type != "TEXT" || sourceType !in setOf(null, "SCREEN_CROP")) {
         throw AnalysisProtocolException("Unexpected screen crop detail")
     }
-    return ScreenCropAnalysis(requireNotNull(analysisId), textDecision, this)
+    return ScreenCropAnalysis(requireNotNull(analysisId), textDecision, withExtractedPhoneNumbers(phones))
 }
 
-/** POST completion authorizes one GET, but does not supply final findings. */
-internal fun Response<TextAnalysisResponse>.completedTextAnalysisId(): String {
+internal data class AcceptedTextAnalysis(val status: AnalysisExecutionStatus, val phones: TextAnalysisPhoneNumbers) {
+    fun completedAnalysisId(): String {
+        if (status != AnalysisExecutionStatus.COMPLETED) {
+            throw AnalysisNotCompletedException(status, phones.analysisId, null)
+        }
+        return phones.analysisId
+    }
+}
+
+/** Read POST-only data before the caller checks whether the analysis is pending. */
+internal fun Response<TextAnalysisResponse>.acceptedTextAnalysis(): AcceptedTextAnalysis {
     if (code() != 202) {
         errorBody()?.close()
         throw AnalysisHttpException(code(), null, null)
@@ -51,9 +68,8 @@ internal fun Response<TextAnalysisResponse>.completedTextAnalysisId(): String {
         ?: throw AnalysisProtocolException("Text analysis ID is missing")
     if (result.type != "TEXT") throw AnalysisProtocolException("Unexpected text type")
     when (result.status) {
-        "COMPLETED" -> return id
-        "QUEUED", "ANALYZING" -> throw AnalysisNotCompletedException(
-            AnalysisExecutionStatus.valueOf(result.status), id, null,
+        "COMPLETED", "QUEUED", "ANALYZING" -> return AcceptedTextAnalysis(
+            AnalysisExecutionStatus.valueOf(result.status), result.toPhoneNumbers(id),
         )
         "FAILED" -> throw AnalysisFailedException(null, null)
         else -> throw AnalysisProtocolException("Unknown text status")

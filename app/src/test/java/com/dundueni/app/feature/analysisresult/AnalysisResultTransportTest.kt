@@ -5,9 +5,11 @@ import com.dundueni.app.feature.analysis.AnalysisErrorKind
 import com.dundueni.app.feature.analysis.AnalysisUiState
 import com.dundueni.app.data.remote.dto.AnalysisDetailDto
 import com.dundueni.app.data.mapper.toDomain
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.model.ImageActionGuide
 import com.dundueni.app.data.model.ImageAnalysisSummary
 import com.dundueni.app.data.model.ImageDetailedReason
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
 import com.google.gson.Gson
 import org.junit.Assert.*
 import org.junit.Test
@@ -53,6 +55,9 @@ class AnalysisResultTransportTest {
             .copy(imageSummary = imageSummary, imageOverallDecision = "NO_CLEAR_SIGNAL")
         val partial = AnalysisUiState.ScreenSuccess(
             image, null, null, AnalysisUiState.Error(AnalysisErrorKind.IN_PROGRESS, pendingAnalysisId = "ocr-id"),
+            pendingTextPhoneNumbers = TextAnalysisPhoneNumbers(
+                "ocr-id", listOf(ExtractedPhoneNumber("021234567", "02-123-4567", "OCR")),
+            ),
         )
         val intent = AnalysisResultActivity.createScreenIntent(context, partial)
         assertEquals(partial, AnalysisResultActivity.readDelivery(context, intent)?.screen)
@@ -81,8 +86,20 @@ class AnalysisResultTransportTest {
     @Test fun textMetadataSurvivesResultActivityJsonTransport() {
         val source = AnalysisResult("text-id", RiskLevel.UNKNOWN, "summary", historyType = HistoryType.TEXT,
             textDecision = "defer", textRiskScore = 0.37, textSourceType = "SCREEN_CROP",
-            textNeedsReview = true, textReasonCodes = listOf("LOW_CONFIDENCE"), textOcrUsed = true)
+            textNeedsReview = true, textReasonCodes = listOf("LOW_CONFIDENCE"), textOcrUsed = true,
+            extractedPhoneNumbers = listOf(
+                ExtractedPhoneNumber("021234567", "02-123-4567", "OCR"),
+                ExtractedPhoneNumber("01012345678", "010-1234-5678", "OCR"),
+            ),
+        )
         assertEquals(source, AnalysisResultJsonAdapter.decode(Gson().toJson(source)))
+    }
+
+    @Test fun missingOrNullPhoneArraysInResultJsonDecodeAsEmpty() {
+        for (fields in listOf("", ""","extractedPhoneNumbers":null""")) {
+            val result = AnalysisResultJsonAdapter.decode("""{"id":"text-id","riskLevel":"UNKNOWN"$fields}""")
+            assertTrue(result.extractedPhoneNumbers.isEmpty())
+        }
     }
 
     @Test fun pb05ActivityTransportPreservesKnownAndUnknownRiskAndServerContent() {

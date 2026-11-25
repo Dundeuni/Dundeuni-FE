@@ -10,6 +10,7 @@ import com.dundueni.app.data.remote.api.TextAnalysisApiService
 import com.dundueni.app.data.repository.AnalysisLookupException
 import com.dundueni.app.data.repository.findResultForDisplay
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
 import com.dundueni.app.data.repository.AnalysisFailedException
 import com.dundueni.app.data.repository.AnalysisNotCompletedException
 import com.dundueni.app.data.repository.PhotoSelectionRepository
@@ -49,6 +50,7 @@ class AnalysisViewModel(
     private var requestJob: Job? = null
     private var screenImage: Result<AnalysisResult>? = null
     private var screenText: Result<ScreenCropAnalysis>? = null
+    private var screenTextPhoneNumbers: TextAnalysisPhoneNumbers? = null
     private var screenResultType: ScreenResultType? = null
     private var selectionPart: MultipartBody.Part? = null
     private var selectionScreenCrop = false
@@ -103,6 +105,7 @@ class AnalysisViewModel(
         screenResultType = screenType
         screenImage = null
         screenText = null
+        screenTextPhoneNumbers = null
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
             mutableUiState.value = AnalysisUiState.Loading
@@ -149,11 +152,20 @@ class AnalysisViewModel(
     }
 
     private suspend fun analyzeSelectedScreenText(): ScreenCropAnalysis = try {
-        val api = checkNotNull(screenCropApi).invoke()
-        api.analyzeScreenCrop(checkNotNull(selectionPart)).toCompletedScreenCrop(repository)
+        analyzeScreenText(checkNotNull(selectionPart))
     } catch (pending: AnalysisNotCompletedException) {
-        pollPendingInspection(pending, repository::findResultForDisplay).toScreenCropAnalysis()
+        pollPendingInspection(pending, ::findScreenText)
     }
+
+    private suspend fun analyzeScreenText(image: MultipartBody.Part): ScreenCropAnalysis {
+        val api = checkNotNull(screenCropApi) { "Screen crop API is unavailable" }.invoke()
+        return api.analyzeScreenCrop(image).toCompletedScreenCrop(repository, screenTextPhoneNumbers) {
+            screenTextPhoneNumbers = it
+        }
+    }
+
+    private suspend fun findScreenText(id: String): ScreenCropAnalysis =
+        repository.findResultForDisplay(id).toScreenCropAnalysis(screenTextPhoneNumbers)
 
     suspend fun cancelUpload(): Boolean {
         val id = pendingUploadId ?: return true
@@ -212,6 +224,7 @@ class AnalysisViewModel(
         if (requestJob?.isActive == true || mutableUiState.value is AnalysisUiState.Pending) return
         screenImage = null
         screenText = null
+        screenTextPhoneNumbers = null
         screenResultType = null
         attemptId = UUID.randomUUID().toString()
         requestJob = viewModelScope.launch {
@@ -224,10 +237,7 @@ class AnalysisViewModel(
                 if (screenCrop) {
                     val (imageOutcome, textOutcome) = coroutineScope {
                         val imageRequest = async { attempt { checkNotNull(repository.analyzeResult(image)) } }
-                        val textRequest = async { attempt {
-                            val api = checkNotNull(screenCropApi) { "Screen crop API is unavailable" }.invoke()
-                            api.analyzeScreenCrop(image).toCompletedScreenCrop(repository)
-                        } }
+                        val textRequest = async { attempt { analyzeScreenText(image) } }
                         imageRequest.await() to textRequest.await()
                     }
                     ensureActive()
@@ -275,6 +285,9 @@ class AnalysisViewModel(
             ?: result.imageError?.let { Result.failure(RestoredScreenError(it)) }
         screenText = result.text?.let { Result.success(it) }
             ?: result.textError?.let { Result.failure(RestoredScreenError(it)) }
+        screenTextPhoneNumbers = result.pendingTextPhoneNumbers?.takeIf {
+            it.analysisId == result.textError?.pendingAnalysisId
+        }
         screenResultType = result.resultType
         mutableUiState.value = result
     }
@@ -295,7 +308,7 @@ class AnalysisViewModel(
                     }
                     val textRequest = async {
                         screenText?.exceptionOrNull()?.lookupId()?.let { id ->
-                            screenText = attempt { repository.findResultForDisplay(id).toScreenCropAnalysis() }
+                            screenText = attempt { findScreenText(id) }
                         }
                     }
                     imageRequest.await()
@@ -316,9 +329,13 @@ class AnalysisViewModel(
         val imageError = image?.exceptionOrNull()
         val textError = text?.exceptionOrNull()
         mutableUiState.value = if (image?.isSuccess == true || text?.isSuccess == true) {
+            val textLookupError = textError?.toPartialError()
             AnalysisUiState.ScreenSuccess(
-                image?.getOrNull(), text?.getOrNull(), imageError?.toPartialError(), textError?.toPartialError(),
+                image?.getOrNull(), text?.getOrNull(), imageError?.toPartialError(), textLookupError,
                 resultType = screenResultType,
+                pendingTextPhoneNumbers = screenTextPhoneNumbers?.takeIf {
+                    it.analysisId == textLookupError?.pendingAnalysisId && it.numbers.isNotEmpty()
+                },
             )
         } else {
             val errors = listOfNotNull(imageError, textError)

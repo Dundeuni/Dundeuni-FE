@@ -82,6 +82,7 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
         targetLabel = if (isText) "입력한 텍스트 내용" else "선택한 이미지 또는 캡처 화면",
         imageOverallDecision = imageOverallDecision,
         imageSummary = imageSummary,
+        extractedPhoneNumbers = if (isText) extractedPhoneNumbers else emptyList(),
     )
 }
 
