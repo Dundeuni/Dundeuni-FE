@@ -24,6 +24,7 @@ import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.feature.analysis.ScreenResultType
 import kotlinx.coroutines.Dispatchers
@@ -46,9 +47,19 @@ fun AnalysisResultRoute(
     BackHandler(onBack = onReturn)
     val context = LocalContext.current
     val view = LocalView.current
-    val summaryId = result.imageSummaryLookupId().takeIf { !isDemo && imageAnalysisError == null }
+    val initialSummary = result.initialImageSummary().takeIf {
+        !isDemo && imageAnalysisError == null && screenResultType != ScreenResultType.TEXT
+    }
+    val summaryId = result.id.takeIf { initialSummary == ImageSummaryResult.Pending }
     val summaryModel = rememberImageSummaryViewModel(summaryId)
     val summaryState = summaryModel?.uiState?.collectAsStateWithLifecycle()?.value
+        ?: initialSummary?.let { ImageSummaryUiState(result = it, checking = it == ImageSummaryResult.Pending) }
+    val visibleSummary = summaryState?.takeUnless {
+        it.result == ImageSummaryResult.Failed || it.result == ImageSummaryResult.Unavailable
+    }
+    val displayedResult = if (initialSummary != null && result.summary.isNotEmpty()) {
+        result.copy(summary = "")
+    } else result
     val scope = rememberCoroutineScope()
     val appSettings = remember(context) { context.getSharedPreferences("dundueni_settings", Context.MODE_PRIVATE) }
     var riskHapticPlayed by rememberSaveable(result.id) { mutableStateOf(false) }
@@ -90,11 +101,11 @@ fun AnalysisResultRoute(
         }, "분석 결과 공유"))
     }
 
-    AnalysisResultScreen(result, isDemo = isDemo,
+    AnalysisResultScreen(displayedResult, isDemo = isDemo,
         imageAnalysisError = imageAnalysisError,
         screenCropError = screenCropError,
         screenResultType = screenResultType,
-        imageSummary = summaryState,
+        imageSummary = visibleSummary,
         onCheckImageSummary = { summaryModel?.checkAgain() },
         onAction = { action ->
         when (action) {
@@ -154,7 +165,9 @@ internal fun rememberImageSummaryViewModel(analysisId: String?): ImageSummaryVie
     val model = remember(owner, analysisId) {
         val factory = viewModelFactory {
             initializer {
-                ImageSummaryViewModel.forResult(analysisId, AnalysisFlowDependencies.createRepository(context))
+                ImageSummaryViewModel.forResult(
+                    analysisId, AnalysisFlowDependencies.createRepository(context), ImageSummaryResult.Pending,
+                )
             }
         }
         ViewModelProvider(owner, factory)["image-summary:$analysisId", ImageSummaryViewModel::class.java]

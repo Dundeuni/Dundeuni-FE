@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysisresult
 
 import java.util.Locale
+import com.dundueni.app.data.model.ImageAnalysisSummary
 import com.dundueni.app.data.model.ImageModelDetails
 import com.dundueni.app.feature.history.HistoryType
 
@@ -58,6 +59,8 @@ data class AnalysisResult(
     val imageGenerationDetails: ImageModelDetails? = null,
     val imageManipulationDetails: ImageModelDetails? = null,
     val screenTextEvidence: List<RiskEvidence> = emptyList(),
+    val imageOverallDecision: String? = null,
+    val imageSummary: ImageAnalysisSummary? = null,
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }

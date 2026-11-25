@@ -33,10 +33,27 @@ data class AnalysisResult(
     val imageGenerationDetails: ImageModelDetails? = null,
     val imageManipulationDetails: ImageModelDetails? = null,
     val hasImageModels: Boolean = false,
+    val imageOverallDecision: String? = null,
+    /** Integrated IMAGE detail summary. The legacy summary remains available to existing callers. */
+    val imageSummary: ImageAnalysisSummary? = null,
 ) {
     /** Compatibility accessor for the existing result screen; only the normalized final verdict is exposed. */
     val riskLevel: String? get() = normalizedRiskLevel
 }
+
+data class ImageAnalysisSummary(
+    val summaryStatus: String? = null,
+    val summary: String? = null,
+    val detailedReasons: List<ImageDetailedReason> = emptyList(),
+    val actionGuides: List<ImageActionGuide> = emptyList(),
+    val reassurance: String? = null,
+    val summaryModel: String? = null,
+    val summarizedAt: String? = null,
+)
+
+data class ImageDetailedReason(val type: String, val title: String, val description: String)
+
+data class ImageActionGuide(val title: String, val description: String)
 
 data class ImageModelDetails(
     val status: String? = null,

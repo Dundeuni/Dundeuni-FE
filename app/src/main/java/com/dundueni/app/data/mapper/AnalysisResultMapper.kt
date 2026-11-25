@@ -1,6 +1,9 @@
 package com.dundueni.app.data.mapper
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.ImageActionGuide
+import com.dundueni.app.data.model.ImageAnalysisSummary
+import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.model.ImageModelDetails
 import com.dundueni.app.data.remote.api.TextAnalysisResponseResult
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
@@ -63,8 +66,29 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
         imageGenerationDetails = if (type == "IMAGE") models?.generation?.toDetails() else null,
         imageManipulationDetails = if (type == "IMAGE") models?.manipulation?.toDetails() else null,
         hasImageModels = type == "IMAGE" && models != null,
+        imageOverallDecision = if (type == "IMAGE") overallResult?.decision else null,
+        imageSummary = if (type == "IMAGE") toImageSummary() else null,
     )
 }
+
+private fun AnalysisDetailDto.toImageSummary() = ImageAnalysisSummary(
+    summaryStatus = summaryStatus,
+    summary = summary,
+    detailedReasons = detailedReasons.orEmpty().mapNotNull { reason ->
+        val type = reason?.type ?: return@mapNotNull null
+        val title = reason.title ?: return@mapNotNull null
+        val description = reason.description ?: return@mapNotNull null
+        ImageDetailedReason(type, title, description)
+    },
+    actionGuides = actionGuides.orEmpty().mapNotNull { guide ->
+        val title = guide?.title ?: return@mapNotNull null
+        val description = guide.description ?: return@mapNotNull null
+        ImageActionGuide(title, description)
+    },
+    reassurance = reassurance,
+    summaryModel = summaryModel,
+    summarizedAt = summarizedAt,
+)
 
 private fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
     status = status,

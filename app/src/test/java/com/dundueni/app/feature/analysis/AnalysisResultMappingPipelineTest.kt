@@ -1,6 +1,9 @@
 package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.mapper.toDomain
+import com.dundueni.app.data.model.ImageActionGuide
+import com.dundueni.app.data.model.ImageAnalysisSummary
+import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
 import com.dundueni.app.data.remote.api.TextAnalysisResponse
@@ -34,6 +37,96 @@ class AnalysisResultMappingPipelineTest {
             assertNull(result.fraudScore)
             if (type == "TEXT") assertNull(result.aiScore)
         }
+    }
+
+    @Test fun integratedImageDetailPreservesOrderedSummaryAndServerDecision() {
+        val domain = detail(
+            """{
+                "analysisId":"id","type":"IMAGE","status":"COMPLETED",
+                "overallResult":{"decision":"GENERATION_OR_MANIPULATION_SUSPECTED","decisionLabel":"위험"},
+                "models":{"generation":{"status":"SUCCEEDED","displayScore":82.5},"manipulation":null},
+                "summaryStatus":"COMPLETED","summary":"이미지 분석 요약",
+                "detailedReasons":[
+                    {"type":"MANIPULATION","title":"변조 근거","description":"변조 설명"},
+                    {"type":"GENERATION","title":"생성 근거","description":"생성 설명"}],
+                "actionGuides":[
+                    {"title":"첫 수칙","description":"첫 설명"},
+                    {"title":"둘째 수칙","description":"둘째 설명"},
+                    {"title":"셋째 수칙","description":"셋째 설명"}],
+                "reassurance":"안심 조언","summaryModel":"configured-gemini-model",
+                "summarizedAt":"2026-11-25T06:30:00.000Z"
+            }""",
+        )
+        val expected = ImageAnalysisSummary(
+            summaryStatus = "COMPLETED",
+            summary = "이미지 분석 요약",
+            detailedReasons = listOf(
+                ImageDetailedReason("MANIPULATION", "변조 근거", "변조 설명"),
+                ImageDetailedReason("GENERATION", "생성 근거", "생성 설명"),
+            ),
+            actionGuides = listOf(
+                ImageActionGuide("첫 수칙", "첫 설명"),
+                ImageActionGuide("둘째 수칙", "둘째 설명"),
+                ImageActionGuide("셋째 수칙", "셋째 설명"),
+            ),
+            reassurance = "안심 조언",
+            summaryModel = "configured-gemini-model",
+            summarizedAt = "2026-11-25T06:30:00.000Z",
+        )
+        val presented = checkNotNull(domain.toPb05Result(false))
+        assertEquals(expected, domain.imageSummary)
+        assertEquals(expected, presented.imageSummary)
+        assertNull(domain.summary)
+        assertEquals("GENERATION_OR_MANIPULATION_SUSPECTED", presented.imageOverallDecision)
+        assertEquals("위험", presented.imageOverallDecisionLabel)
+        assertEquals(RiskLevel.UNKNOWN, presented.riskLevel)
+        assertEquals(82.5, presented.imageGenerationDisplayScore!!, 0.0)
+        assertNull(presented.imageManipulationDetails)
+        assertNull(presented.imageManipulationDisplayScore)
+    }
+
+    @Test fun absentUnfinishedAndLegacyImageSummariesKeepNullsAndEmptyLists() {
+        val cases = listOf(
+            "" to ImageAnalysisSummary(),
+            ""","summaryStatus":null,"summary":null,"detailedReasons":[],"actionGuides":[]""" to
+                ImageAnalysisSummary(),
+            ""","summaryStatus":"PENDING","summary":null,"detailedReasons":[],"actionGuides":[]""" to
+                ImageAnalysisSummary(summaryStatus = "PENDING"),
+            ""","summaryStatus":"FAILED","detailedReasons":null,"actionGuides":null""" to
+                ImageAnalysisSummary(summaryStatus = "FAILED"),
+            ""","summaryStatus":"COMPLETED","summary":"기존 요약"""" to
+                ImageAnalysisSummary(summaryStatus = "COMPLETED", summary = "기존 요약"),
+        )
+        for ((fields, expected) in cases) {
+            val domain = detail(
+                """{"analysisId":"id","type":"IMAGE","status":"COMPLETED",
+                    "overallResult":{"decision":"INCONCLUSIVE","decisionLabel":"주의"},
+                    "models":{"generation":null,
+                        "manipulation":{"status":"FAILED","decision":null,"displayScore":null}}$fields}""",
+            )
+            val presented = checkNotNull(domain.toPb05Result(false))
+            assertEquals(expected, presented.imageSummary)
+            assertEquals("INCONCLUSIVE", presented.imageOverallDecision)
+            assertEquals("주의", presented.imageOverallDecisionLabel)
+            assertNull(presented.imageGenerationDetails)
+            assertNull(presented.imageGenerationDisplayScore)
+            assertEquals("FAILED", presented.imageManipulationDetails?.status)
+            assertNull(presented.imageManipulationDecision)
+            assertNull(presented.imageManipulationDisplayScore)
+        }
+    }
+
+    @Test fun overallFailureRemainsDistinctFromImageSummaryFailure() {
+        val domain = detail(
+            """{"analysisId":"id","type":"IMAGE","status":"FAILED","errorCode":"ANALYSIS503",
+                "overallResult":{"decision":"INCONCLUSIVE","decisionLabel":"판단 불가"},
+                "summaryStatus":null,"detailedReasons":[],"actionGuides":[]}""",
+        )
+        assertEquals("FAILED", domain.status)
+        assertEquals("ANALYSIS503", domain.errorCode)
+        assertEquals("판단 불가", domain.imageOverallDecisionLabel)
+        assertEquals(ImageAnalysisSummary(), domain.imageSummary)
+        assertNull(domain.toPb05Result(false))
     }
 
     @Test fun missingNullAndEmptyContentStayNeutralWithoutSampleContent() {
@@ -124,9 +217,14 @@ class AnalysisResultMappingPipelineTest {
             AnalysisDetailResponseDto::class.java).result!!.toDomain()
         val presented = domain.toTextResult()
         assertEquals("판단 보류", presented.keyFinding)
+        assertNull(presented.imageSummary)
         assertEquals(listOf("맥락이 부족합니다."), presented.evidence.map { it.description })
         assertEquals(listOf("OCR 일부가 흐립니다."), presented.textLimitations)
         assertEquals(listOf("POOR_OCR"), presented.textReasonCodes)
         assertNull(presented.textRiskScore)
     }
+
+    private fun detail(payload: String) = checkNotNull(
+        gson.fromJson("""{"result":$payload}""", AnalysisDetailResponseDto::class.java).result,
+    ).toDomain()
 }

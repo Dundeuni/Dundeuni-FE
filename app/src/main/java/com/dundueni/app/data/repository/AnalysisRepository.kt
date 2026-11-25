@@ -114,34 +114,15 @@ class AnalysisRepository(
         }
     }
 
-    /** Read a single status without waiting for summary generation or reloading the analysis. */
-    override suspend fun findImageSummary(analysisId: String): ImageSummaryResult = withContext(ioDispatcher) {
-        val service = queryApiService ?: return@withContext ImageSummaryResult.Unavailable
-        try {
-            val response = service.getSummary(analysisId)
-            if (response.code() != HTTP_OK) {
-                response.errorBody()?.close()
-                return@withContext ImageSummaryResult.LookupError
-            }
-            val envelope = response.body()
-            val summary = envelope?.result
-            if (envelope?.isSuccess != true || envelope.code != DETAIL_SUCCESS_CODE ||
-                summary?.analysisId != analysisId
-            ) return@withContext ImageSummaryResult.LookupError
-
-            when (summary.summaryStatus) {
-                "COMPLETED" -> summary.summary?.takeIf { it.isNotBlank() }
-                    ?.let { ImageSummaryResult.Completed(it) } ?: ImageSummaryResult.LookupError
-                "PENDING" -> ImageSummaryResult.Pending
-                "FAILED" -> ImageSummaryResult.Failed
-                null, "DISABLED" -> ImageSummaryResult.Unavailable
-                else -> ImageSummaryResult.LookupError
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            ImageSummaryResult.LookupError
-        }
+    /** Refresh the summary from the same detail resource without starting a new analysis. */
+    override suspend fun findImageSummary(analysisId: String): ImageSummaryResult = try {
+        val detail = findResult(analysisId)
+        if (detail.type == "IMAGE") detail.imageSummary.toImageSummaryResult()
+        else ImageSummaryResult.Unavailable
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        ImageSummaryResult.LookupError
     }
 
     private fun parseEnvelope(json: String): AnalysisResponseDto = try {

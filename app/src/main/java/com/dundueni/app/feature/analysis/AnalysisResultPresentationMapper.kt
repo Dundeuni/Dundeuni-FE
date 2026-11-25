@@ -80,6 +80,8 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
             RiskEvidence("분석 근거 ${index + 1}", description)
         },
         targetLabel = if (isText) "입력한 텍스트 내용" else "선택한 이미지 또는 캡처 화면",
+        imageOverallDecision = imageOverallDecision,
+        imageSummary = imageSummary,
     )
 }
 
