@@ -46,10 +46,13 @@ import com.dundueni.app.feature.analysisresult.AiLikelihood
 import com.dundueni.app.feature.analysisresult.ImageInspectionContent
 import com.dundueni.app.feature.analysisresult.ImageSummaryUiState
 import com.dundueni.app.feature.analysisresult.PhoneInspectionContent
+import com.dundueni.app.feature.analysisresult.ResultImageLayout
 import com.dundueni.app.feature.analysisresult.TextInspectionContent
 import com.dundueni.app.feature.analysisresult.ResultGlyph
 import com.dundueni.app.feature.analysisresult.ResultIcon
 import com.dundueni.app.feature.analysisresult.RiskLevel
+import com.dundueni.app.feature.analysisresult.SaveResultImageColor
+import com.dundueni.app.feature.analysisresult.SaveResultImageLabel
 import com.dundueni.app.feature.analysisresult.formatScore
 import com.dundueni.app.feature.home.HomeBottomNavigation
 import com.dundueni.app.feature.home.HomeDestination
@@ -470,66 +473,82 @@ internal fun HistoryResultDetail(
     onDelete: (() -> Unit)? = null,
 ) {
     val easy = LocalEasyMode.current
-    Column(
-        Modifier.testTag("history-detail").widthIn(max = 512.dp).fillMaxSize()
-            .verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (error != null) {
-            EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy)
-        } else if (detail == null) {
-            Column(
-                Modifier.fillMaxWidth().padding(48.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                CircularProgressIndicator(color = Blue)
-                Text("기록 상세를 불러오고 있어요", color = Muted)
+    val detailModifier = Modifier.testTag("history-detail")
+    if (error != null || detail == null) {
+        Column(
+            detailModifier.widthIn(max = 512.dp).fillMaxSize()
+                .verticalScroll(rememberScrollState()).padding(16.dp),
+        ) {
+            if (error != null) {
+                EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy)
+            } else {
+                Column(
+                    Modifier.fillMaxWidth().padding(48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    CircularProgressIndicator(color = Blue)
+                    Text("기록 상세를 불러오고 있어요", color = Muted)
+                }
             }
-        } else {
-            val record = detail.record
-            val date = Instant.ofEpochMilli(record.savedAt).atZone(ZoneId.systemDefault())
-                .format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm"))
-            Text("검사 일시 · $date", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
-            if (record.textSourceType == "SCREEN_CROP") {
-                Text("분석 출처 · 화면 캡처", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
-            }
+        }
+        return
+    }
 
-            val result = detail.result
-            when {
-                result?.historyType == HistoryType.TEXT -> TextInspectionContent(result, fromHistory = true)
-                result?.historyType == HistoryType.IMAGE || result?.historyType == HistoryType.SCREEN -> {
-                    result.aiRiskLabel?.let { level ->
-                        val label = RiskLevel.entries.firstOrNull { it.name == level }?.label ?: level
-                        Text("AI 분석 단계 · $label", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
-                    }
-                    ImageInspectionContent(
-                        result,
-                        summaryState = detail.imageSummaryStatus?.let {
-                            ImageSummaryUiState(
-                                result = it,
-                                checking = false,
-                                showRetry = it == ImageSummaryResult.Pending,
-                            )
-                        },
-                        onCheckSummary = onRetry,
-                    )
-                }
-                result?.historyType == HistoryType.PHONE -> PhoneInspectionContent(result)
-                record.status == "QUEUED" || record.status == "ANALYZING" ->
-                    EmptyPanel("분석 중이에요", "분석이 완료되면 결과를 확인할 수 있어요.", "다시 확인", onRetry, easy)
-                record.status == "FAILED" -> Notice("분석에 실패했어요.", easy)
-                else -> {
-                    if (record.evidence.isNotEmpty()) {
-                        Panel {
-                            Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
-                            record.evidence.forEach { Text(it, color = Muted) }
-                        }
-                    }
-                    Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
-                }
+    val record = detail.record
+    ResultImageLayout(
+        title = "${record.title} 결과",
+        maxWidth = 512.dp,
+        contentPadding = PaddingValues(16.dp),
+        modifier = detailModifier,
+        actions = { onSave, canSave ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                onDelete?.let { DeleteHistoryButton(it) }
+                HistorySaveImageButton(onSave, canSave)
             }
-            onDelete?.let { DeleteHistoryButton(it) }
+        },
+    ) { forImage ->
+        val date = Instant.ofEpochMilli(record.savedAt).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm"))
+        Text("검사 일시 · $date", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+        if (record.textSourceType == "SCREEN_CROP") {
+            Text("분석 출처 · 화면 캡처", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+        }
+
+        val result = detail.result
+        val retry = onRetry.takeUnless { forImage }
+        when {
+            result?.historyType == HistoryType.TEXT -> TextInspectionContent(result, fromHistory = true)
+            result?.historyType == HistoryType.IMAGE || result?.historyType == HistoryType.SCREEN -> {
+                result.aiRiskLabel?.let { level ->
+                    val label = RiskLevel.entries.firstOrNull { it.name == level }?.label ?: level
+                    Text("AI 분석 단계 · $label", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+                }
+                ImageInspectionContent(
+                    result,
+                    summaryState = detail.imageSummaryStatus?.let {
+                        ImageSummaryUiState(
+                            result = it,
+                            checking = false,
+                            showRetry = it == ImageSummaryResult.Pending,
+                        )
+                    },
+                    onCheckSummary = retry,
+                )
+            }
+            result?.historyType == HistoryType.PHONE -> PhoneInspectionContent(result)
+            record.status == "QUEUED" || record.status == "ANALYZING" ->
+                EmptyPanel("분석 중이에요", "분석이 완료되면 결과를 확인할 수 있어요.", "다시 확인", retry, easy)
+            record.status == "FAILED" -> Notice("분석에 실패했어요.", easy)
+            else -> {
+                if (record.evidence.isNotEmpty()) {
+                    Panel {
+                        Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
+                        record.evidence.forEach { Text(it, color = Muted) }
+                    }
+                }
+                Notice("이 기록의 검사 결과를 열 수 없어요.", easy)
+            }
         }
     }
 }
@@ -544,67 +563,96 @@ private fun DeleteHistoryButton(onDelete: () -> Unit) {
 }
 
 @Composable
+private fun HistoryActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    colors: ButtonColors = ButtonDefaults.buttonColors(containerColor = Ink),
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        enabled = enabled,
+        shape = CircleShape,
+        colors = colors,
+    ) {
+        Text(text)
+    }
+}
+
+@Composable
+private fun HistorySaveImageButton(onSave: () -> Unit, canSave: Boolean) {
+    HistoryActionButton(
+        text = SaveResultImageLabel,
+        onClick = onSave,
+        enabled = canSave,
+        colors = ButtonDefaults.buttonColors(containerColor = SaveResultImageColor, contentColor = Color.White),
+    )
+}
+
+@Composable
 private fun LocalHistoryDetail(record: HistoryRecord, easy: Boolean, error: String?, onRetry: () -> Unit, onBack: () -> Unit, onDelete: () -> Unit, allowDelete: Boolean) {
-    LazyColumn(Modifier.testTag("history-detail").widthIn(max = 600.dp).fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (error != null) item { EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy) }
-        item {
-            Panel {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RecordTypeIcon(record, 48.dp)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(record.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                        Text(Instant.ofEpochMilli(record.savedAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")), fontSize = 12.sp, color = Muted)
-                    }
-                    RiskBadge(record)
-                }
-                HorizontalDivider(color = Outline)
-                Text("최종 위험 단계: ${record.riskLevel.label}", color = riskColor(record.riskLevel), fontSize = 13.sp)
-                Text("저장된 검사 내용", color = Muted, fontSize = 12.sp)
-                Text(record.preview ?: "이 기록에는 위험 단계와 제공된 분석 점수가 보관되어 있어요.", color = Ink, fontSize = if (easy) 17.sp else 14.sp, lineHeight = 23.sp)
+    ResultImageLayout(
+        title = "검사 기록 상세",
+        maxWidth = 600.dp,
+        contentPadding = PaddingValues(20.dp),
+        modifier = Modifier.testTag("history-detail"),
+        actions = { onSave, canSave ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HistoryActionButton("목록으로 돌아가기", onBack)
+                if (allowDelete) DeleteHistoryButton(onDelete)
+                HistorySaveImageButton(onSave, canSave)
             }
+        },
+    ) { forImage ->
+        if (error != null && !forImage) {
+            EmptyPanel("기록을 확인하지 못했어요", error, "다시 시도", onRetry, easy)
+        }
+        Panel {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                RecordTypeIcon(record, 48.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(record.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                    Text(Instant.ofEpochMilli(record.savedAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")), fontSize = 12.sp, color = Muted)
+                }
+                RiskBadge(record)
+            }
+            HorizontalDivider(color = Outline)
+            Text("최종 위험 단계: ${record.riskLevel.label}", color = riskColor(record.riskLevel), fontSize = 13.sp)
+            Text("저장된 검사 내용", color = Muted, fontSize = 12.sp)
+            Text(record.preview ?: "이 기록에는 위험 단계와 제공된 분석 점수가 보관되어 있어요.", color = Ink, fontSize = if (easy) 17.sp else 14.sp, lineHeight = 23.sp)
         }
         if (record.fraudScore != null || record.aiScore != null || record.aiLikelihood != AiLikelihood.UNKNOWN) {
-            item {
-                Panel {
-                    Text("분석 지표", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
-                    record.fraudScore?.let { ScoreRow("사기 위험도", it, riskColor(record.riskLevel)) }
-                    record.aiScore?.let {
-                        if (record.type == HistoryType.IMAGE) {
-                            ScoreRow("AI 생성 점수", it, Purple, unit = "/100")
-                        } else {
-                            ScoreRow("AI 생성·변조", it, Purple)
-                        }
-                    }
-                    if (record.aiLikelihood != AiLikelihood.UNKNOWN) Text("AI 분석 단계: ${record.aiLikelihood.label}", color = Muted, fontSize = 12.sp)
-                    if (record.fraudScore != null && record.aiScore != null) {
-                        Text("두 지표는 서로 독립적이며, AI 점수가 사기 위험 판정을 의미하지는 않아요.", color = Muted, fontSize = 12.sp, lineHeight = 20.sp)
-                    }
-                }
-            }
-        }
-        item {
             Panel {
-                Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
-                if (record.evidence.isEmpty()) {
-                    Text(if (allowDelete) "이 기록에는 세부 근거가 저장되어 있지 않아요. 원문·링크·근거 내용은 기기에 보관하지 않습니다." else "서버에서 제공한 세부 근거가 없어요.", color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
-                } else record.evidence.forEach { reason ->
-                    Text(reason, color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
+                Text("분석 지표", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
+                record.fraudScore?.let { ScoreRow("사기 위험도", it, riskColor(record.riskLevel)) }
+                record.aiScore?.let {
+                    if (record.type == HistoryType.IMAGE) {
+                        ScoreRow("AI 생성 점수", it, Purple, unit = "/100")
+                    } else {
+                        ScoreRow("AI 생성·변조", it, Purple)
+                    }
+                }
+                if (record.aiLikelihood != AiLikelihood.UNKNOWN) Text("AI 분석 단계: ${record.aiLikelihood.label}", color = Muted, fontSize = 12.sp)
+                if (record.fraudScore != null && record.aiScore != null) {
+                    Text("두 지표는 서로 독립적이며, AI 점수가 사기 위험 판정을 의미하지는 않아요.", color = Muted, fontSize = 12.sp, lineHeight = 20.sp)
                 }
             }
         }
-        item { Notice(when (record.riskLevel) {
+        Panel {
+            Text("분석 근거", fontWeight = FontWeight.SemiBold, color = Ink, fontSize = 16.sp)
+            if (record.evidence.isEmpty()) {
+                Text(if (allowDelete) "이 기록에는 세부 근거가 저장되어 있지 않아요. 원문·링크·근거 내용은 기기에 보관하지 않습니다." else "서버에서 제공한 세부 근거가 없어요.", color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
+            } else record.evidence.forEach { reason ->
+                Text(reason, color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = 22.sp)
+            }
+        }
+        Notice(when (record.riskLevel) {
             RiskLevel.SAFE -> "안전 판정이어도 개인정보나 인증번호를 요구하는 요청은 공식 연락처로 다시 확인하세요."
             RiskLevel.CAUTION -> "의심스러운 링크를 열기 전에 공식 창구나 믿을 수 있는 사람에게 확인하세요."
             RiskLevel.DANGER -> "송금이나 개인정보 입력을 멈추고 공식 연락처로 사실 여부를 확인하세요."
             RiskLevel.UNKNOWN -> "사기 위험 판정이 없는 기록이에요. 분석 정보와 공식 연락처를 함께 확인하세요."
-        }, easy) }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Ink)) { Text("목록으로 돌아가기") }
-                if (allowDelete) DeleteHistoryButton(onDelete)
-            }
-        }
+        }, easy)
     }
 }
 
@@ -643,7 +691,7 @@ private fun Notice(message: String, easy: Boolean = false) {
 }
 
 @Composable
-private fun EmptyPanel(title: String, message: String, action: String, onAction: () -> Unit, easy: Boolean) {
+private fun EmptyPanel(title: String, message: String, action: String, onAction: (() -> Unit)?, easy: Boolean) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = if (easy) 72.dp else 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (easy) 20.dp else 16.dp)) {
         Box(Modifier.size(if (easy) 88.dp else 72.dp).background(PaleBlue, CircleShape), contentAlignment = Alignment.Center) {
@@ -651,9 +699,11 @@ private fun EmptyPanel(title: String, message: String, action: String, onAction:
         }
         Text(title, color = Ink, fontSize = if (easy) 22.sp else 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(message, color = Muted, fontSize = if (easy) 16.sp else 13.sp, lineHeight = if (easy) 25.sp else 22.sp, textAlign = TextAlign.Center)
-        Button(onClick = onAction, modifier = (if (easy) Modifier.fillMaxWidth() else Modifier.widthIn(min = 192.dp)).heightIn(min = if (easy) 56.dp else 48.dp),
-            shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
-            Text(action, fontSize = if (easy) 16.sp else 14.sp)
+        if (onAction != null) {
+            Button(onClick = onAction, modifier = (if (easy) Modifier.fillMaxWidth() else Modifier.widthIn(min = 192.dp)).heightIn(min = if (easy) 56.dp else 48.dp),
+                shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                Text(action, fontSize = if (easy) 16.sp else 14.sp)
+            }
         }
     }
 }
