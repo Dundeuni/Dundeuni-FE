@@ -515,6 +515,8 @@ internal fun AnalysisUiState.toPresentedResult(isDemo: Boolean, historyType: His
             textOcrUsed = textPresented?.textOcrUsed,
             textLimitations = textPresented?.textLimitations.orEmpty(),
             extractedPhoneNumbers = textPresented?.extractedPhoneNumbers.orEmpty(),
+            analyzedAt = primary.analyzedAt ?: textPresented?.analyzedAt,
+            textSummary = textPresented?.textSummary,
             targetLabel = "캡처 화면",
         )
     }

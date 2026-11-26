@@ -63,6 +63,8 @@ data class AnalysisResult(
     val imageOverallDecision: String? = null,
     val imageSummary: ImageAnalysisSummary? = null,
     val extractedPhoneNumbers: List<ExtractedPhoneNumber> = emptyList(),
+    val analyzedAt: String? = null,
+    val textSummary: String? = null,
 ) {
     init {
         require(id.isNotBlank()) { "결과 ID가 필요합니다." }

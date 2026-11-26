@@ -92,6 +92,7 @@ internal fun HistoryDetailDto.toRecordDetail(): HistoryRecordDetail {
                     },
                     evidence = phoneReasons.map { reason -> RiskEvidence("전화번호 분석 근거", reason) },
                     targetLabel = it.maskedPhoneNumber.orEmpty(),
+                    analyzedAt = it.analyzedAt ?: completedAt ?: createdAt,
                 )
             }
             HistoryRecordDetail(record, result)

@@ -187,5 +187,6 @@ internal fun HistoryEntryDto.toPhoneResult(): AnalysisResult {
             phone.reportCount?.let { "신고 건수: ${it}건" }).joinToString(" · ").ifBlank { null },
         evidence = reasons.map { RiskEvidence("전화번호 분석 근거", it) },
         targetLabel = phone.phoneNumber.orEmpty(),
+        analyzedAt = phone.analyzedAt,
     )
 }

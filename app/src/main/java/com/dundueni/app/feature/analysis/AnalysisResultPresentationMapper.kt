@@ -83,6 +83,8 @@ private fun AnalysisResult.toRealPb05Result(): PresentedResult {
         imageOverallDecision = imageOverallDecision,
         imageSummary = imageSummary,
         extractedPhoneNumbers = if (isText) extractedPhoneNumbers else emptyList(),
+        analyzedAt = completedAt ?: createdAt,
+        textSummary = summary?.takeIf { isText && it.isNotBlank() },
     )
 }
 

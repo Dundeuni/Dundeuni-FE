@@ -69,6 +69,7 @@ class AnalysisResultTransportTest {
             imageOverallDecision = "NO_CLEAR_SIGNAL",
             imageOverallDecisionLabel = "안전",
             imageSummary = imageSummary,
+            analyzedAt = "2026-11-25T06:25:00Z",
         )
         val context = RuntimeEnvironment.getApplication()
         val intent = AnalysisResultActivity.createIntent(context, Gson().toJson(source))
@@ -87,6 +88,8 @@ class AnalysisResultTransportTest {
         val source = AnalysisResult("text-id", RiskLevel.UNKNOWN, "summary", historyType = HistoryType.TEXT,
             textDecision = "defer", textRiskScore = 0.37, textSourceType = "SCREEN_CROP",
             textNeedsReview = true, textReasonCodes = listOf("LOW_CONFIDENCE"), textOcrUsed = true,
+            analyzedAt = "2026-11-25T06:25:00Z",
+            textSummary = "서버가 제공한 텍스트 분석 요약",
             extractedPhoneNumbers = listOf(
                 ExtractedPhoneNumber("021234567", "02-123-4567", "OCR"),
                 ExtractedPhoneNumber("01012345678", "010-1234-5678", "OCR"),

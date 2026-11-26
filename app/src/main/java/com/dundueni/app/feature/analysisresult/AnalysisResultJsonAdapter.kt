@@ -58,6 +58,8 @@ object AnalysisResultJsonAdapter {
             screenTextEvidence = value.evidence("screenTextEvidence"),
             imageOverallDecision = value.optionalText("imageOverallDecision"),
             imageSummary = value.optJSONObject("imageSummary")?.toImageSummary(),
+            analyzedAt = value.optionalText("analyzedAt"),
+            textSummary = value.optionalText("textSummary"),
             extractedPhoneNumbers = value.optJSONArray("extractedPhoneNumbers")?.let { phones ->
                 List(phones.length()) { index ->
                     val phone = phones.getJSONObject(index)

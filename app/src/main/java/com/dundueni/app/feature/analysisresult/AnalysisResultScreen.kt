@@ -77,6 +77,13 @@ fun AnalysisResultScreen(
         !isDemo && result.historyType == HistoryType.PHONE -> "전화번호 검사 결과"
         else -> "결과 화면"
     }
+    val hasExportableContent = when (result.historyType) {
+        HistoryType.IMAGE -> imageAnalysisError == null
+        HistoryType.SCREEN ->
+            (screenResultType != ScreenResultType.TEXT && imageAnalysisError == null) ||
+                (screenResultType != ScreenResultType.IMAGE && screenCropError == null)
+        else -> true
+    }
     Scaffold(
         modifier = modifier,
         containerColor = PageBackground,
@@ -91,109 +98,149 @@ fun AnalysisResultScreen(
                 Spacer(Modifier.height(2.dp))
                 ResultActions(onAction, onSave, canSave)
             },
-        ) { forImage ->
-            val onCheckSummary = onCheckImageSummary.takeUnless { forImage }
-            val selectPhone = onInspectPhone.takeUnless { forImage }
-            val phoneNumbers = result.selectablePhoneNumbers(screenResultType)
-            when (result.historyType.takeUnless { isDemo }) {
-                HistoryType.IMAGE -> ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
-                HistoryType.TEXT -> TextInspectionContent(
-                    result, phoneNumbers = phoneNumbers, onInspectPhone = selectPhone,
-                    phoneInspectionInProgress = phoneInspectionInProgress,
+            saveEnabled = hasExportableContent && (isDemo || imageAnalysisError != null ||
+                !result.waitsForImageSummary(imageSummary, screenResultType)),
+            imageContentAtClick = {
+                val resultAtClick = result
+                val summaryAtClick = imageSummary
+                val exportContent: @Composable () -> Unit = {
+                    AnalysisResultContent(
+                        resultAtClick.toImageExport(summaryAtClick),
+                        isDemo, imageAnalysisError, screenCropError, screenResultType,
+                        forImage = true,
+                    )
+                }
+                exportContent
+            },
+        ) {
+            AnalysisResultContent(
+                result, isDemo, imageAnalysisError, screenCropError, screenResultType,
+                imageSummary, onCheckImageSummary, onInspectPhone, phoneInspectionInProgress,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnalysisResultContent(
+    result: AnalysisResult,
+    isDemo: Boolean,
+    imageAnalysisError: String?,
+    screenCropError: String?,
+    screenResultType: ScreenResultType?,
+    imageSummary: ImageSummaryUiState? = null,
+    onCheckImageSummary: (() -> Unit)? = null,
+    onInspectPhone: ((String) -> Unit)? = null,
+    phoneInspectionInProgress: Boolean = false,
+    forImage: Boolean = false,
+) {
+    if (forImage) {
+        formatImageInspectionTime(result.analyzedAt)?.let { InspectionText("검사 일시 · $it") }
+    }
+    val onCheckSummary = onCheckImageSummary.takeUnless { forImage }
+    val selectPhone = onInspectPhone.takeUnless { forImage }
+    val phoneNumbers = if (forImage) emptyList() else result.selectablePhoneNumbers(screenResultType)
+    when (result.historyType.takeUnless { isDemo }) {
+        HistoryType.IMAGE -> if (!forImage || imageAnalysisError == null) {
+            ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
+        }
+        HistoryType.TEXT -> TextInspectionContent(
+            result, phoneNumbers = phoneNumbers, onInspectPhone = selectPhone,
+            phoneInspectionInProgress = phoneInspectionInProgress, forImage = forImage,
+        )
+        HistoryType.PHONE -> PhoneInspectionContent(result)
+        HistoryType.SCREEN -> {
+            if (screenResultType != ScreenResultType.TEXT && (!forImage || imageAnalysisError == null)) {
+                ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
+            }
+            if (screenResultType != ScreenResultType.IMAGE && (!forImage || screenCropError == null)) {
+                TextInspectionContent(
+                    result, screenCropError, screenCrop = true,
+                    phoneNumbers = phoneNumbers, onInspectPhone = selectPhone,
+                    phoneInspectionInProgress = phoneInspectionInProgress, forImage = forImage,
                 )
-                HistoryType.PHONE -> PhoneInspectionContent(result)
-                HistoryType.SCREEN -> {
-                    if (screenResultType != ScreenResultType.TEXT) {
-                        ImageInspectionContent(result, imageAnalysisError, imageSummary, onCheckSummary)
+            }
+        }
+        else -> {
+            if (isDemo) {
+                Surface(color = Color(0xFFFFF2D8), shape = RoundedCornerShape(12.dp)) {
+                    Text("디자인 미리보기 · 샘플 데이터", Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFF795700), fontSize = 12.sp)
+                }
+            }
+            if (!LocalEasyMode.current) result.sourceText?.let { MessageQuote(it) }
+            if (result.historyType == HistoryType.PHONE && !LocalEasyMode.current && result.targetLabel.isNotBlank()) {
+                TargetRow(result.targetLabel)
+            }
+            if (LocalEasyMode.current) {
+                EasyResultContent(result, isDemo)
+            } else when (result.riskLevel) {
+                RiskLevel.SAFE -> {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF0F3FF), Color.White)))
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
+                        ResultHero(result)
+                        if (result.historyType != HistoryType.PHONE && result.targetLabel.isNotBlank()) {
+                            TargetRow(result.targetLabel)
+                        }
                     }
-                    if (screenResultType != ScreenResultType.IMAGE) {
-                        TextInspectionContent(
-                            result, screenCropError, screenCrop = true,
-                            phoneNumbers = phoneNumbers, onInspectPhone = selectPhone,
-                            phoneInspectionInProgress = phoneInspectionInProgress,
-                        )
+                    MetricsRow(result)
+                    if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
+                    LimitationsPanel(result)
+                    if (isDemo) SafetyTip()
+                }
+                RiskLevel.CAUTION -> {
+                    ResultHero(result)
+                    Spacer(Modifier.height(8.dp))
+                    if (result.summary.isNotBlank() || isDemo)
+                        SummaryBanner(if (isDemo) result.keyFinding ?: result.summary else result.summary, urgent = false)
+                    if (isDemo || result.historyType == HistoryType.PHONE ||
+                        result.historyType == HistoryType.TEXT && result.textRiskScore != null ||
+                        result.imageModelResult && (result.imageGenerationDecision != null || result.imageManipulationDecision != null)) ResultPanel {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(when (result.historyType) {
+                                HistoryType.PHONE -> "전화번호 검사 결과"
+                                HistoryType.TEXT -> "텍스트 분류 결과"
+                                else -> "이미지 분석 결과"
+                            }, fontSize = 13.sp, color = Ink)
+                            Text("분석 엔진 결과", fontSize = 10.sp, color = Muted)
+                        }
+                        MetricsRow(result, nested = true)
+                    }
+                    if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
+                    LimitationsPanel(result)
+                }
+                RiskLevel.DANGER -> {
+                    ResultHero(result)
+                    if (result.summary.isNotBlank() || isDemo)
+                        SummaryBanner(if (isDemo) "지금은 절대 돈을 보내지 마세요!" else result.summary, urgent = true)
+                    Spacer(Modifier.height(4.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricsRow(result)
+                        if (isDemo) Text("* 사기 위험과 AI 생성·변조 가능성은 각각 독립적으로 분석됩니다.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                    }
+                    if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
+                    LimitationsPanel(result)
+                }
+                RiskLevel.UNKNOWN -> {
+                    ResultHero(result)
+                    MetricsRow(result)
+                    if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
+                    LimitationsPanel(result)
+                }
+            }
+            if (result.historyType == HistoryType.PHONE) {
+                result.keyFinding?.takeIf { it.isNotBlank() }?.let { finding ->
+                    ResultPanel {
+                        Text("신고 관련 정보", color = Ink, fontWeight = FontWeight.SemiBold)
+                        Text(finding, color = Muted)
                     }
                 }
-                else -> {
-                    if (isDemo) {
-                        Surface(color = Color(0xFFFFF2D8), shape = RoundedCornerShape(12.dp)) {
-                            Text("디자인 미리보기 · 샘플 데이터", Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFF795700), fontSize = 12.sp)
-                        }
-                    }
-                    if (!LocalEasyMode.current) result.sourceText?.let { MessageQuote(it) }
-                    if (result.historyType == HistoryType.PHONE && !LocalEasyMode.current && result.targetLabel.isNotBlank()) {
-                        TargetRow(result.targetLabel)
-                    }
-                    if (LocalEasyMode.current) {
-                        EasyResultContent(result, isDemo)
-                    } else when (result.riskLevel) {
-                        RiskLevel.SAFE -> {
-                            Column(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                                    .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF0F3FF), Color.White)))
-                                    .padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(18.dp),
-                            ) {
-                                ResultHero(result)
-                                if (result.historyType != HistoryType.PHONE) TargetRow(result.targetLabel)
-                            }
-                            MetricsRow(result)
-                            if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
-                            LimitationsPanel(result)
-                            if (isDemo) SafetyTip()
-                        }
-                        RiskLevel.CAUTION -> {
-                            ResultHero(result)
-                            Spacer(Modifier.height(8.dp))
-                            if (result.summary.isNotBlank() || isDemo)
-                                SummaryBanner(if (isDemo) result.keyFinding ?: result.summary else result.summary, urgent = false)
-                            if (isDemo || result.historyType == HistoryType.PHONE ||
-                                result.historyType == HistoryType.TEXT && result.textRiskScore != null ||
-                                result.imageModelResult && (result.imageGenerationDecision != null || result.imageManipulationDecision != null)) ResultPanel {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Text(when (result.historyType) {
-                                        HistoryType.PHONE -> "전화번호 검사 결과"
-                                        HistoryType.TEXT -> "텍스트 분류 결과"
-                                        else -> "이미지 분석 결과"
-                                    }, fontSize = 13.sp, color = Ink)
-                                    Text("분석 엔진 결과", fontSize = 10.sp, color = Muted)
-                                }
-                                MetricsRow(result, nested = true)
-                            }
-                            if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
-                            LimitationsPanel(result)
-                        }
-                        RiskLevel.DANGER -> {
-                            ResultHero(result)
-                            if (result.summary.isNotBlank() || isDemo)
-                                SummaryBanner(if (isDemo) "지금은 절대 돈을 보내지 마세요!" else result.summary, urgent = true)
-                            Spacer(Modifier.height(4.dp))
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                MetricsRow(result)
-                                if (isDemo) Text("* 사기 위험과 AI 생성·변조 가능성은 각각 독립적으로 분석됩니다.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
-                            }
-                            if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
-                            LimitationsPanel(result)
-                        }
-                        RiskLevel.UNKNOWN -> {
-                            ResultHero(result)
-                            MetricsRow(result)
-                            if (result.evidence.isNotEmpty() || isDemo) EvidencePanel(result, isDemo)
-                            LimitationsPanel(result)
-                        }
-                    }
-                    if (result.historyType == HistoryType.PHONE) {
-                        result.keyFinding?.takeIf { it.isNotBlank() }?.let { finding ->
-                            ResultPanel {
-                                Text("신고 관련 정보", color = Ink, fontWeight = FontWeight.SemiBold)
-                                Text(finding, color = Muted)
-                            }
-                        }
-                    }
-                    if (!isDemo && result.guidance.isNotEmpty()) {
-                        SafetyTip(result.guidance)
-                    }
-                }
+            }
+            if (!isDemo && result.guidance.isNotEmpty()) {
+                SafetyTip(result.guidance)
             }
         }
     }
@@ -544,10 +591,11 @@ internal fun TextInspectionContent(
     phoneNumbers: List<ExtractedPhoneNumber> = emptyList(),
     onInspectPhone: ((String) -> Unit)? = null,
     phoneInspectionInProgress: Boolean = false,
+    forImage: Boolean = false,
 ) {
     val title = if (screenCrop) "화면 문자 피싱 분석" else "텍스트 피싱 분석"
     // A combined Screen result stores the image summary and guides in these shared fields.
-    val summary = result.summary.takeUnless { screenCrop }.orEmpty()
+    val summary = (result.textSummary.takeIf { forImage } ?: result.summary.takeUnless { screenCrop }).orEmpty()
     if (error == null) {
         TextInspectionSummary(result.textDecision, result.keyFinding ?: title, summary)
     }
@@ -1051,7 +1099,7 @@ private fun ResultActions(onAction: (ResultAction) -> Unit, onSave: () -> Unit, 
         ActionButton("든든이 홈으로", ResultIcon.SHIELD, ProtectiveBlue) {
             onAction(ResultAction.HOME)
         }
-        ActionButton(SaveResultImageLabel, null, SaveResultImageColor, enabled = canSave, onClick = onSave)
+        ActionButton("검사 결과 이미지 저장하기", null, SaveResultImageColor, enabled = canSave, onClick = onSave)
     }
 }
 

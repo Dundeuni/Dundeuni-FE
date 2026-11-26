@@ -39,7 +39,7 @@ internal fun ResultPreview(
     }
 }
 
-@Preview(name = "P1 결과 · 이미지 위험 · 통합 요약", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 위험 · 통합 요약 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImageResultPreview() = ImageSummaryCompletedPreview(easyMode = false)
 
@@ -85,7 +85,7 @@ private fun ScreenImageResultPreview(easyMode: Boolean) {
     )
 }
 
-@Preview(name = "P1 결과 · 텍스트 피싱 의심 · 전화번호 1개", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 텍스트 피싱 의심 · 전화번호 1개 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun TextResultPreview() = TextPhishingResultPreview(easyMode = false)
 
@@ -112,7 +112,7 @@ private fun TextNormalResultPreview() = ResultPreview(
 private fun PhoneSafeResultPreview() =
     ResultPreview(previewPhoneResult(RiskLevel.SAFE))
 
-@Preview(name = "P1 결과 · 전화번호 기본 모드 · 주의", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 전화번호 기본 모드 · 주의 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun PhoneResultPreview() =
     ResultPreview(previewPhoneResult(RiskLevel.CAUTION))
@@ -160,7 +160,7 @@ private fun ScreenTextNormalResultPreview() = ScreenOcrResultPreview("normal")
 @Composable
 private fun ScreenTextDeferredResultPreview() = ScreenOcrResultPreview("defer")
 
-@Preview(name = "P1 결과 · 이미지와 OCR · 전화번호 여러 개 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지와 OCR · 전화번호 여러 개 · 쉬운 모드 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun EasyScreenTextResultPreview() = ScreenOcrResultPreview("phishing", easyMode = true, includeImage = true)
 

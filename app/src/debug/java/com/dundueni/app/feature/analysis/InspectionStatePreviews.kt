@@ -227,7 +227,7 @@ private fun ImageSummaryManualRetryPreview() = ImageSummaryStatusPreview(
 @Composable
 private fun ImageSummaryFailedPreview() = ImageSummaryStatusPreview("FAILED")
 
-@Preview(name = "P1 결과 · 이미지 요약 생성 중", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 요약 생성 중 · PNG 저장 대기", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImageSummaryPendingResultPreview() = ImageSummaryStatusPreview("PENDING")
 
