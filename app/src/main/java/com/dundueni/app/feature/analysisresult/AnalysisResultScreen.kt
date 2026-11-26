@@ -205,6 +205,7 @@ internal fun ImageInspectionContent(
     error: String? = null,
     summaryState: ImageSummaryUiState? = null,
     onCheckSummary: (() -> Unit)? = null,
+    fromHistory: Boolean = false,
 ) {
     if (error != null) {
         ResultPanel {
@@ -245,9 +246,9 @@ internal fun ImageInspectionContent(
     InspectionSummaryCard(title, badge, style) {
         ImageSummaryContent(summary, state, onCheckSummary, showFailure = !result.imageModelResult)
     }
-    ImageInspectionMetrics(result)
+    ImageInspectionMetrics(result, fromHistory)
     val useLegacyDetails = result.imageSummary == null && completed == null
-    ImageInspectionEvidence(result, completed?.detailedReasons.orEmpty(), useLegacyDetails)
+    ImageInspectionEvidence(result, completed?.detailedReasons.orEmpty(), useLegacyDetails || fromHistory)
 
     val guides = completed?.actionGuides.orEmpty().filter { it.title.isNotBlank() || it.description.isNotBlank() }
     if (guides.isNotEmpty()) {
@@ -293,12 +294,13 @@ private fun ImageSummaryContent(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ImageInspectionMetrics(result: AnalysisResult) {
+private fun ImageInspectionMetrics(result: AnalysisResult, fromHistory: Boolean) {
     val generationDetails = result.imageGenerationDetails
     val manipulationDetails = result.imageManipulationDetails
     val generationScore = result.imageGenerationDisplayScore.takeUnless { generationDetails?.status == "FAILED" }
     val manipulationScore = result.imageManipulationDisplayScore.takeUnless { manipulationDetails?.status == "FAILED" }
-    val showUnanalyzed = result.imageSummary != null && result.aiScore == null
+    val showUnanalyzed = if (fromHistory) generationDetails != null || manipulationDetails != null
+        else result.imageSummary != null && result.aiScore == null
     val generation = imageInspectionDecision(
         generationDetails, result.imageGenerationDecision, generationScore, generation = true, showUnanalyzed = showUnanalyzed,
     )

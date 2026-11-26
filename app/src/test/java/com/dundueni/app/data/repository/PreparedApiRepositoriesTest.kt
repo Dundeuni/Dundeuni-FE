@@ -5,7 +5,9 @@ import com.dundueni.app.data.remote.api.HistoryApiService
 import com.dundueni.app.data.remote.api.HomeDraftApiService
 import com.dundueni.app.data.remote.api.UserSettingsApiService
 import com.dundueni.app.data.remote.dto.SettingsPatchRequestDto
+import com.dundueni.app.feature.history.toRecordDetail
 import com.google.gson.JsonParser
+import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -97,6 +99,35 @@ class PreparedApiRepositoriesTest {
                 assertEquals(code, error.apiCode)
             }
         }
+    }
+
+    @Test fun imageHistoryDetailUsesOnlyTheExistingGetAndPreservesCommon404() = runBlocking {
+        val stub = StubTransport()
+        val repository = HistoryApiRepository(stub.service<HistoryApiService>())
+        val id = "587b0a5b-4e91-4d85-96fc-a73931e30a0d"
+        stub.reply(200, envelope("ANALYSIS200", """{
+            "analysisId":"$id","type":"IMAGE","status":"COMPLETED","createdAt":"2026-11-25T07:00:00Z",
+            "expiresAt":"2026-11-26T07:00:00Z",
+            "detail":{"summaryStatus":"PENDING","modelResults":[
+                {"kind":"GENERATION","status":"SUCCEEDED","decision":"INCONCLUSIVE","displayScore":null}]}
+        }"""))
+        val detail = repository.detail(id).toRecordDetail()
+        assertEquals(Instant.parse("2026-11-26T07:00:00Z"), detail.expiresAt)
+        assertEquals("INCONCLUSIVE", detail.result?.imageGenerationDecision)
+        assertEquals(ImageSummaryResult.Pending, detail.imageSummaryStatus)
+        assertEquals(1, stub.requests.size)
+
+        stub.reply(404, """{"isSuccess":false,"code":"COMMON404","message":"unavailable","result":null}""")
+        try {
+            repository.detail(id)
+            fail("Missing detail was accepted")
+        } catch (error: PreparedApiHttpException) {
+            assertEquals(404, error.httpStatus)
+            assertEquals("COMMON404", error.apiCode)
+        }
+        assertEquals(listOf("GET", "GET"), stub.requests.map { it.method })
+        assertEquals(List(2) { "/api/analysis/history/$id" }, stub.requests.map { it.url.encodedPath })
+        assertTrue(stub.requests.all { it.header("X-Dundeuni-Auth-Required") == "true" })
     }
 
     @Test fun settingsApisValidatePatchAndDoNotTouchLocalPreferences() = runBlocking {

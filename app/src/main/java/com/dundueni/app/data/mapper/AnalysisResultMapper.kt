@@ -92,7 +92,7 @@ private fun AnalysisDetailDto.toImageSummary() = ImageAnalysisSummary(
     summarizedAt = summarizedAt,
 )
 
-private fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
+internal fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
     status = status,
     reasons = reasons.orEmpty().mapNotNull { it?.description?.takeIf(String::isNotBlank) },
     limitations = limitations.orEmpty().filterNotNull().filter(String::isNotBlank),

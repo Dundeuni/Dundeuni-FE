@@ -35,6 +35,7 @@ data class HistoryDetailDto(
     val createdAt: String? = null,
     val completedAt: String? = null,
     val detail: HistoryTypeDetailDto? = null,
+    val expiresAt: String? = null,
 )
 
 data class HistoryReasonDto(val description: String? = null)
@@ -61,6 +62,9 @@ data class HistoryTypeDetailDto(
     val reportCountIsRange: Boolean? = null,
     val reasons: List<String>? = null,
     val analyzedAt: String? = null,
+    // IMAGE model results are stored as an array in history detail.
+    val imageResultStatus: String? = null,
+    val modelResults: List<AnalysisModelResultDto?>? = null,
 )
 
 data class DeleteHistoryDto(val deletedCount: Int? = null)
