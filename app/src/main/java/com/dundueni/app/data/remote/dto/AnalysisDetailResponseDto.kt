@@ -29,6 +29,24 @@ data class AnalysisDetailDto(
     val updatedAt: String? = null,
     val completedAt: String? = null,
     val expiresAt: String? = null,
+    val summaryStatus: String? = null,
+    val summary: String? = null,
+    val detailedReasons: List<AnalysisDetailedReasonDto?>? = emptyList(),
+    val actionGuides: List<AnalysisActionGuideDto?>? = emptyList(),
+    val reassurance: String? = null,
+    val summaryModel: String? = null,
+    val summarizedAt: String? = null,
+)
+
+data class AnalysisDetailedReasonDto(
+    val type: String? = null,
+    val title: String? = null,
+    val description: String? = null,
+)
+
+data class AnalysisActionGuideDto(
+    val title: String? = null,
+    val description: String? = null,
 )
 
 data class AnalysisImageModelsDto(

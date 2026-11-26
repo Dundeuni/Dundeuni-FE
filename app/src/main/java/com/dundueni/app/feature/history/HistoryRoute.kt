@@ -10,6 +10,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dundueni.app.BuildConfig
+import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.data.repository.PreparedApiHttpException
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.feature.home.HomeDestination
@@ -168,6 +169,7 @@ private fun ServerHistoryDetail(
 ) {
     var attempt by remember { mutableIntStateOf(0) }
     var response by remember(revision, attempt) { mutableStateOf<Result<HistoryRecordDetail>?>(null) }
+    var pendingSnapshot by remember(revision) { mutableStateOf<HistoryRecordDetail?>(null) }
     LaunchedEffect(revision, attempt) {
         response = try {
             Result.success(withContext(Dispatchers.IO) { load() })
@@ -177,11 +179,16 @@ private fun ServerHistoryDetail(
             Result.failure(error)
         }
     }
+    val refreshing = response == null && pendingSnapshot != null
     HistoryResultDetail(
-        detail = response?.getOrNull(),
+        detail = response?.getOrNull() ?: pendingSnapshot.takeIf { refreshing },
         error = response?.exceptionOrNull()?.historyMessage("기록 상세를 불러오지 못했어요."),
-        onRetry = { attempt++ },
+        onRetry = {
+            pendingSnapshot = response?.getOrNull()?.takeIf { it.imageSummaryStatus == ImageSummaryResult.Pending }
+            attempt++
+        },
         onDelete = onDelete,
+        refreshingImageSummary = refreshing,
     )
 }
 

@@ -4,7 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.dundueni.app.data.mapper.toDomain
 import com.dundueni.app.data.model.AnalysisResult as BackendResult
+import com.dundueni.app.data.remote.dto.AnalysisActionGuideDto
 import com.dundueni.app.data.remote.dto.AnalysisDetailDto
+import com.dundueni.app.data.remote.dto.AnalysisDetailedReasonDto
 import com.dundueni.app.data.remote.dto.AnalysisImageModelsDto
 import com.dundueni.app.data.remote.dto.AnalysisModelResultDto
 import com.dundueni.app.data.remote.dto.AnalysisOverallResultDto
@@ -25,59 +27,74 @@ import com.dundueni.app.ui.theme.DundueniFETheme
 // No ViewModel, repository, or network client is created by these previews.
 internal fun previewImageDetail(
     partialFailure: Boolean = false,
-    summaryReady: Boolean = true,
+    summaryStatus: String? = "COMPLETED",
     noClearSignal: Boolean = false,
+    missingModel: Boolean = false,
 ): BackendResult {
-    val generationReasons = listOf(AnalysisReasonDto("뚜렷한 생성 흔적을 찾지 못했습니다."))
+    val inconclusive = partialFailure || missingModel
+    val suspicious = !inconclusive && !noClearSignal
+    val summaryReady = summaryStatus == "COMPLETED"
     val overallResult = when {
-        partialFailure -> AnalysisOverallResultDto(decision = "INCONCLUSIVE", decisionLabel = "판단 불가")
-        noClearSignal -> AnalysisOverallResultDto(decision = "NO_CLEAR_SIGNAL", decisionLabel = "뚜렷한 신호 없음")
+        inconclusive -> AnalysisOverallResultDto(decision = "INCONCLUSIVE", decisionLabel = "주의")
+        noClearSignal -> AnalysisOverallResultDto(decision = "NO_CLEAR_SIGNAL", decisionLabel = "안전")
         else -> AnalysisOverallResultDto(
-            decision = "GENERATION_OR_MANIPULATION_SUSPECTED", decisionLabel = "생성·변조 의심",
+            decision = "GENERATION_OR_MANIPULATION_SUSPECTED", decisionLabel = "위험",
         )
     }
     return AnalysisDetailDto(
         analysisId = "preview-image", type = "IMAGE", status = "COMPLETED",
-        aiGenerationScore = 12.0, reasons = generationReasons,
         overallResult = overallResult,
         models = AnalysisImageModelsDto(
             status = if (partialFailure) "PARTIAL_FAILED" else "COMPLETED",
             generation = AnalysisModelResultDto(
-                status = "SUCCEEDED", decision = "NO_CLEAR_GENERATION_SIGNAL", displayScore = 12.0,
-                reasons = generationReasons, limitations = listOf("압축된 이미지에서는 세부 흔적이 흐려질 수 있습니다."),
+                status = "SUCCEEDED",
+                decision = when {
+                    missingModel -> "INCONCLUSIVE"
+                    suspicious -> "AI_GENERATED_SUSPECTED"
+                    else -> "NO_CLEAR_GENERATION_SIGNAL"
+                },
+                displayScore = if (missingModel) null else if (suspicious) 84.0 else 12.0,
+                reasons = listOf(AnalysisReasonDto("모델 내부 분석 근거")),
+                limitations = listOf("압축된 이미지에서는 세부 흔적이 흐려질 수 있습니다."),
             ),
-            manipulation = if (partialFailure) {
-                AnalysisModelResultDto(status = "FAILED", retryable = true)
-            } else {
-                AnalysisModelResultDto(
+            manipulation = when {
+                missingModel -> null
+                partialFailure -> AnalysisModelResultDto(status = "FAILED", retryable = true)
+                else -> AnalysisModelResultDto(
                     status = "SUCCEEDED",
-                    decision = if (noClearSignal) "NO_CLEAR_MANIPULATION_SIGNAL" else "MANIPULATION_SUSPECTED",
-                    displayScore = if (noClearSignal) 9.0 else 82.0,
-                    reasons = listOf(AnalysisReasonDto(
-                        if (noClearSignal) "이미지 경계에서 뚜렷한 편집 흔적을 찾지 못했습니다."
-                        else "이미지 일부에서 합성 흔적이 감지됐습니다.",
-                    )),
+                    decision = if (suspicious) "MANIPULATION_SUSPECTED" else "NO_CLEAR_MANIPULATION_SIGNAL",
+                    displayScore = if (suspicious) 82.0 else 9.0,
                 )
             },
         ),
-        guides = if (partialFailure) listOf("이미지 변조 분석에 실패해 수정 여부를 판단할 수 없습니다.")
-        else listOf("사진이나 정보의 출처를 확인해 주세요."),
-    ).toDomain().copy(
-        // Sample COMPLETED response from the separate image summary endpoint.
-        summary = when {
-            !summaryReady || partialFailure -> null
-            noClearSignal -> "두 모델에서 뚜렷한 생성 또는 변조 신호가 확인되지 않았습니다."
-            else -> "뚜렷한 생성 신호는 없지만 이미지 변조 의심 신호가 확인됐습니다."
+        summaryStatus = summaryStatus,
+        summary = if (!summaryReady) null else when {
+            inconclusive -> "일부 모델의 결과가 충분하지 않아 이미지 변조 여부를 판단하기 어렵습니다."
+            noClearSignal -> "이번 검사에서 뚜렷한 생성 또는 변조 신호가 확인되지 않았습니다."
+            else -> "이미지에서 AI 생성과 변조 의심 신호가 확인됐습니다."
         },
-    )
+        detailedReasons = if (summaryReady && suspicious) listOf(
+            AnalysisDetailedReasonDto("GENERATION", "AI 생성 의심 신호", "생성 분석에서 의심 신호가 확인되었습니다."),
+            AnalysisDetailedReasonDto("MANIPULATION", "이미지 변조 의심 신호", "이미지 일부에서 편집 흔적이 확인되었습니다."),
+        ) else emptyList(),
+        actionGuides = if (summaryReady) listOf(
+            AnalysisActionGuideDto("공식 연락처로 확인하기", "요청을 보낸 기관의 공식 홈페이지에서 연락처를 찾아 확인하세요."),
+            AnalysisActionGuideDto("이미지 출처 확인하기", "공식 게시물이나 원본 이미지와 비교해 보세요."),
+            AnalysisActionGuideDto("정보 제공 전에 확인하기", "요청의 출처와 용도가 확인될 때까지 개인정보를 보내지 마세요."),
+        ) else emptyList(),
+        reassurance = "판단이 어렵다면 신뢰하는 사람과 함께 확인해 보세요.".takeIf { summaryReady },
+        summaryModel = "preview-model".takeIf { summaryReady },
+        summarizedAt = "2026-11-25T06:30:00.000Z".takeIf { summaryReady },
+    ).toDomain()
 }
 
 internal fun previewLegacyImageDetail() = AnalysisDetailDto(
     analysisId = "preview-legacy-image", type = "IMAGE", status = "COMPLETED",
     aiGenerationScore = 82.4,
     reasons = listOf(AnalysisReasonDto("이미지 일부에서 생성 흔적이 감지됐습니다.")),
-    overallResult = AnalysisOverallResultDto(decision = "INCONCLUSIVE", decisionLabel = "판단 불가"),
-    guides = listOf("현재 분석만으로는 판단하기 어렵습니다.", "원본 사진이나 추가 자료를 확인해 주세요."),
+    overallResult = AnalysisOverallResultDto(decision = "INCONCLUSIVE", decisionLabel = "주의"),
+    summaryStatus = "COMPLETED",
+    summary = "현재 분석만으로는 판단하기 어렵습니다. 원본 사진이나 추가 자료를 확인해 주세요.",
 ).toDomain()
 
 internal fun previewTextDetail(
@@ -136,9 +153,9 @@ private fun InspectionPendingPreview() = FlowPreview(
     AnalysisUiState.Pending("preview-analysis", AnalysisExecutionStatus.ANALYZING),
 )
 
-@Preview(name = "P1 검사 · 일반 실패", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "P1 검사 · 이미지 전체 분석 실패", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
-private fun InspectionErrorPreview() = FlowPreview(AnalysisUiState.Error())
+private fun ImageAnalysisFailedPreview() = FlowPreview(AnalysisUiState.Error(AnalysisErrorKind.SERVER))
 
 @Preview(name = "P1 검사 · 연결 오류", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
@@ -188,35 +205,35 @@ private fun ScreenPartialRefreshPreview() = FlowPreview(
     HistoryType.SCREEN,
 )
 
-@Preview(name = "P1 결과 · 이미지 판단 불가 · 모델 부분 실패", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 주의 · 모델 부분 실패", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImagePartialFailureResultPreview() = ResultPreview(
     checkNotNull(previewImageDetail(partialFailure = true).toPb05Result(isDemo = false)),
 )
 
-@Preview(name = "P1 결과 · 이미지 요약 등록 대기", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 요약 데이터 누락 및 모델 미분석", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ImageSummaryPendingResultPreview() =
-    ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Unavailable), noClearSignal = true)
+private fun ImageSummaryMissingPreview() = ResultPreview(
+    checkNotNull(previewImageDetail(summaryStatus = null, missingModel = true).toPb05Result(isDemo = false)),
+)
 
-@Preview(name = "P1 결과 · 이미지 요약 다시 확인", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 요약 조회 오류 및 다시 확인", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ImageSummaryManualRetryPreview() =
-    ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Unavailable, checking = false, showRetry = true))
+private fun ImageSummaryManualRetryPreview() = ImageSummaryStatusPreview(
+    "PENDING", ImageSummaryUiState(ImageSummaryResult.Pending, checking = false, showRetry = true, lookupFailed = true),
+)
 
 @Preview(name = "P1 결과 · 이미지 요약 생성 실패", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ImageSummaryFailedPreview() =
-    ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Failed, checking = false))
+private fun ImageSummaryFailedPreview() = ImageSummaryStatusPreview("FAILED")
 
-@Preview(name = "P1 결과 · 이미지 요약 생성 중", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 요약 생성 중 · PNG 저장 대기", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ImageSummaryRegisteredPendingPreview() =
-    ImageSummaryStatusPreview(ImageSummaryUiState(ImageSummaryResult.Pending))
+private fun ImageSummaryPendingResultPreview() = ImageSummaryStatusPreview("PENDING")
 
 @Composable
-private fun ImageSummaryStatusPreview(state: ImageSummaryUiState, noClearSignal: Boolean = false) = ResultPreview(
-    checkNotNull(previewImageDetail(summaryReady = false, noClearSignal = noClearSignal).toPb05Result(isDemo = false)),
+private fun ImageSummaryStatusPreview(summaryStatus: String, state: ImageSummaryUiState? = null) = ResultPreview(
+    checkNotNull(previewImageDetail(summaryStatus = summaryStatus).toPb05Result(isDemo = false)),
     imageSummary = state,
 )
 
@@ -238,10 +255,12 @@ private fun BackgroundScreenPartialRefreshPreview() {
 @Preview(name = "P1 화면 검사 · AI 요약 다시 확인", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ScreenSummaryManualRetryPreview() {
-    val state = screenState(image = previewImageDetail(summaryReady = false), resultType = ScreenResultType.IMAGE)
+    val state = screenState(image = previewImageDetail(summaryStatus = "PENDING"), resultType = ScreenResultType.IMAGE)
     ResultPreview(
         checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
-        imageSummary = ImageSummaryUiState(ImageSummaryResult.Unavailable, checking = false, showRetry = true),
+        imageSummary = ImageSummaryUiState(
+            ImageSummaryResult.Pending, checking = false, showRetry = true, lookupFailed = true,
+        ),
         screenResultType = state.resultType,
     )
 }

@@ -6,10 +6,12 @@ import androidx.annotation.MainThread
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
+import com.dundueni.app.data.model.withExtractedPhoneNumbers
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.api.AnalysisProtocolException
 import com.dundueni.app.data.remote.api.TextAnalysisRequest
-import com.dundueni.app.feature.analysis.completedTextAnalysisId
+import com.dundueni.app.feature.analysis.acceptedTextAnalysis
 import com.dundueni.app.feature.analysis.pollPendingInspection
 import com.dundueni.app.feature.analysis.toTextResult
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
@@ -54,6 +56,7 @@ class TextInspectionViewModel @JvmOverloads constructor(
     private var submittedText: String? = null
     private var resultPendingOpen: String? = null
     private var pendingAnalysisId: String? = null
+    private var postPhoneNumbers: TextAnalysisPhoneNumbers? = null
     val hasResultPendingOpen: Boolean get() = resultPendingOpen != null
     val hasPendingLookup: Boolean get() = pendingAnalysisId != null
 
@@ -96,6 +99,7 @@ class TextInspectionViewModel @JvmOverloads constructor(
     fun cancelError() {
         if (mutableUiState.value == TextInspectionUiState.Error) {
             pendingAnalysisId = null
+            postPhoneNumbers = null
             mutableUiState.value = TextInspectionUiState.Idle
         }
     }
@@ -115,6 +119,7 @@ class TextInspectionViewModel @JvmOverloads constructor(
     private fun startInspection(text: String) {
         if (requestJob?.isActive == true) return
         pendingAnalysisId = null
+        postPhoneNumbers = null
         resultPendingOpen = null
         mutableUiState.value = TextInspectionUiState.Loading
         requestJob = viewModelScope.launch {
@@ -137,10 +142,10 @@ class TextInspectionViewModel @JvmOverloads constructor(
     }
 
     private suspend fun inspectWithApi(text: String): AnalysisResult = try {
-        val id = textApi()
-            .analyzeText(TextAnalysisRequest(text = text)).completedTextAnalysisId()
-        pendingAnalysisId = id
-        lookupTextResult(id, text)
+        val accepted = textApi().analyzeText(TextAnalysisRequest(text = text)).acceptedTextAnalysis()
+        postPhoneNumbers = accepted.phones.retaining(postPhoneNumbers)
+        pendingAnalysisId = accepted.phones.analysisId
+        lookupTextResult(accepted.completedAnalysisId(), text)
     } catch (pending: AnalysisNotCompletedException) {
         pendingAnalysisId = pending.analysisId
         pollPendingInspection(pending) { id -> lookupTextResult(id, text) }
@@ -151,8 +156,9 @@ class TextInspectionViewModel @JvmOverloads constructor(
         if (detail.type != "TEXT" || detail.sourceType !in setOf(null, "TEXT", "DIRECT")) {
             error("Unexpected text analysis type")
         }
-        val result = detail.toTextResult(text)
+        val result = detail.withExtractedPhoneNumbers(postPhoneNumbers).toTextResult(text)
         pendingAnalysisId = null
+        postPhoneNumbers = null
         return result
     }
 

@@ -7,6 +7,7 @@ import com.dundueni.app.data.remote.dto.HistoryPageItemDto
 import com.dundueni.app.data.repository.ImageSummaryResult
 import com.google.gson.Gson
 import com.dundueni.app.feature.analysisresult.RiskLevel
+import java.time.Instant
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -54,6 +55,10 @@ class HistoryTest {
         assertEquals(82.0, result.aiScore!!, 0.0)
         assertEquals("stored evidence", result.evidence.single().description)
         assertEquals("stored summary", result.summary)
+        assertEquals("판단 불가", result.imageOverallDecisionLabel)
+        assertNull(result.imageOverallDecision)
+        assertNull(detail.expiresAt)
+        assertNull(detail.completedAt)
 
         val pending = Gson().fromJson(
             payload.replace("\"summaryStatus\":\"COMPLETED\"", "\"summaryStatus\":\"PENDING\""),
@@ -69,6 +74,89 @@ class HistoryTest {
         val screen = Gson().fromJson(payload, HistoryDetailDto::class.java)
             .copy(type = "SCREEN").toRecordDetail()
         assertEquals(HistoryType.SCREEN, screen.result?.historyType)
+    }
+
+    @Test fun imageDetailUsesStoredExpiryAndMapsModelsByKindRegardlessOfOrder() {
+        val dto = Gson().fromJson(
+            """{
+                "analysisId":"image-id","type":"IMAGE","status":"COMPLETED",
+                "createdAt":"2026-11-25T07:00:00Z","completedAt":"2026-11-25T07:00:30Z",
+                "expiresAt":"2026-11-27T16:00:00+09:00","reasons":[{"description":"stored record evidence"}],
+                "detail":{"imageResultStatus":"COMPLETED","summaryStatus":"COMPLETED","summary":"stored summary",
+                    "summaryModel":"gemini","summarizedAt":"2026-11-25T07:00:35Z","modelResults":[
+                        {"kind":"MANIPULATION","status":"SUCCEEDED","displayScore":84,
+                            "decision":"MANIPULATION_SUSPECTED","reasons":[{"description":"stored edit evidence"}],
+                            "limitations":["stored limit"],"modelName":"TruFor","modelVersion":"v1","policyVersion":"internal"},
+                        {"kind":"GENERATION","status":"SUCCEEDED","displayScore":12,"decision":"NO_CLEAR_GENERATION_SIGNAL"}]}}
+            """,
+            HistoryDetailDto::class.java,
+        )
+        val stored = requireNotNull(dto.detail)
+        val models = requireNotNull(stored.modelResults)
+        val detail = dto.toRecordDetail()
+        val result = requireNotNull(detail.result)
+
+        assertEquals(detail, dto.copy(detail = stored.copy(modelResults = models.reversed())).toRecordDetail())
+        assertEquals(Instant.parse("2026-11-27T07:00:00Z"), detail.expiresAt)
+        assertEquals(Instant.parse("2026-11-25T07:00:30Z"), detail.completedAt)
+        assertEquals("COMPLETED", detail.imageResultStatus)
+        assertEquals("GENERATION_OR_MANIPULATION_SUSPECTED", result.imageOverallDecision)
+        assertEquals("NO_CLEAR_GENERATION_SIGNAL", result.imageGenerationDecision)
+        assertEquals(12.0, result.imageGenerationDisplayScore!!, 0.0)
+        assertEquals("SUCCEEDED", result.imageManipulationDetails?.status)
+        assertEquals("MANIPULATION_SUSPECTED", result.imageManipulationDecision)
+        assertEquals(84.0, result.imageManipulationDisplayScore!!, 0.0)
+        assertEquals(listOf("stored edit evidence"), result.imageManipulationDetails?.reasons)
+        assertEquals(listOf("stored limit"), result.imageManipulationDetails?.limitations)
+        assertEquals("stored record evidence", result.evidence.single().description)
+        assertEquals("TruFor", models.first()?.modelName)
+        val summary = (detail.imageSummaryStatus as ImageSummaryResult.Completed).details
+        assertEquals("stored summary", summary.summary)
+        assertEquals("gemini", summary.summaryModel)
+        assertEquals("2026-11-25T07:00:35Z", summary.summarizedAt)
+        assertTrue(summary.detailedReasons.isEmpty())
+        assertTrue(summary.actionGuides.isEmpty())
+        assertNull(summary.reassurance)
+    }
+
+    @Test fun imageHistoryHandlesPartialFailureMissingModelsAndSummaryStates() {
+        val dto = Gson().fromJson(
+            """{
+                "analysisId":"image-id","type":"IMAGE","status":"COMPLETED","createdAt":"2026-11-25T07:00:00Z",
+                "aiGenerationScore":82,"detail":{"imageResultStatus":"PARTIAL_FAILED","summaryStatus":"FAILED",
+                    "modelResults":[
+                      {"kind":"MANIPULATION","status":"FAILED","displayScore":null,"decision":null,
+                          "errorCode":"MODEL_ERROR","retryable":true},
+                      {"kind":"GENERATION","status":"SUCCEEDED","displayScore":null,"decision":"NO_CLEAR_GENERATION_SIGNAL"}]}}
+            """,
+            HistoryDetailDto::class.java,
+        )
+        val stored = requireNotNull(dto.detail)
+        val models = requireNotNull(stored.modelResults).filterNotNull()
+        val history = dto.toRecordDetail()
+        val result = requireNotNull(history.result)
+        assertEquals("PARTIAL_FAILED", history.imageResultStatus)
+        assertEquals("INCONCLUSIVE", result.imageOverallDecision)
+        assertNull(result.aiScore)
+        assertNull(result.imageGenerationDisplayScore)
+        assertNull(result.imageManipulationDisplayScore)
+        assertEquals("FAILED", result.imageManipulationDetails?.status)
+        assertEquals(ImageSummaryResult.Failed, history.imageSummaryStatus)
+        assertTrue(result.summary.isEmpty())
+
+        val missing = dto.copy(detail = stored.copy(summaryStatus = null, modelResults = models.drop(1))).toRecordDetail()
+        assertEquals("INCONCLUSIVE", missing.result?.imageOverallDecision)
+        assertNull(missing.result?.imageManipulationDetails)
+        assertEquals(ImageSummaryResult.Unavailable, missing.imageSummaryStatus)
+
+        val success = models.first().copy(status = "SUCCEEDED", decision = "NO_CLEAR_MANIPULATION_SIGNAL")
+        val clear = dto.copy(detail = stored.copy(modelResults = listOf(success, models.last()))).toRecordDetail()
+        assertEquals("NO_CLEAR_SIGNAL", clear.result?.imageOverallDecision)
+        val suspected = models.last().copy(decision = "AI_GENERATED_SUSPECTED")
+        val partial = dto.copy(detail = stored.copy(modelResults = listOf(models.first(), suspected))).toRecordDetail()
+        assertEquals("GENERATION_OR_MANIPULATION_SUSPECTED", partial.result?.imageOverallDecision)
+        assertNull(dto.copy(status = "FAILED").toRecordDetail().result)
+        assertNull(dto.copy(detail = stored.copy(imageResultStatus = "FAILED")).toRecordDetail().result)
     }
 
     @Test fun phoneHistoryUsesMaskedNumberAndPreservesRangeAndMissingCount() {

@@ -16,7 +16,6 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.DELETE
 import com.dundueni.app.data.remote.dto.AnalysisDetailResponseDto
-import com.dundueni.app.data.remote.dto.AnalysisSummaryResponseDto
 import com.dundueni.app.data.remote.dto.TextAnalysisTextResultDto
 
 /**
@@ -42,10 +41,6 @@ interface AnalysisQueryApiService {
     @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
     @GET("/api/analysis/{analysisId}")
     suspend fun getAnalysis(@Path("analysisId") analysisId: String): Response<AnalysisDetailResponseDto>
-
-    @retrofit2.http.Headers("${BearerAuthInterceptor.REQUIRES_AUTH_HEADER}: true")
-    @GET("/api/analysis/{analysisId}/summary")
-    suspend fun getSummary(@Path("analysisId") analysisId: String): Response<AnalysisSummaryResponseDto>
 }
 
 interface PhotoSelectionApiService {
@@ -117,4 +112,11 @@ data class TextAnalysisResponseResult(
     val type: String? = null,
     val status: String? = null,
     val textResult: TextAnalysisTextResultDto? = null,
+    val extractedPhoneNumbers: List<ExtractedPhoneNumberDto?>? = emptyList(),
+)
+
+data class ExtractedPhoneNumberDto(
+    val phoneNumber: String? = null,
+    val displayNumber: String? = null,
+    val source: String? = null,
 )

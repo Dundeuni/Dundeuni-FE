@@ -1,7 +1,12 @@
 package com.dundueni.app.data.mapper
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.ExtractedPhoneNumber
+import com.dundueni.app.data.model.ImageActionGuide
+import com.dundueni.app.data.model.ImageAnalysisSummary
+import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.model.ImageModelDetails
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
 import com.dundueni.app.data.remote.api.TextAnalysisResponseResult
 import com.dundueni.app.data.remote.dto.AnalysisResponseDto
 import com.dundueni.app.data.remote.dto.AnalysisResponseResultDto
@@ -63,13 +68,44 @@ fun AnalysisDetailDto.toDomain(): AnalysisResult {
         imageGenerationDetails = if (type == "IMAGE") models?.generation?.toDetails() else null,
         imageManipulationDetails = if (type == "IMAGE") models?.manipulation?.toDetails() else null,
         hasImageModels = type == "IMAGE" && models != null,
+        imageOverallDecision = if (type == "IMAGE") overallResult?.decision else null,
+        imageSummary = if (type == "IMAGE") toImageSummary() else null,
     )
 }
 
-private fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
+private fun AnalysisDetailDto.toImageSummary() = ImageAnalysisSummary(
+    summaryStatus = summaryStatus,
+    summary = summary,
+    detailedReasons = detailedReasons.orEmpty().mapNotNull { reason ->
+        val type = reason?.type ?: return@mapNotNull null
+        val title = reason.title ?: return@mapNotNull null
+        val description = reason.description ?: return@mapNotNull null
+        ImageDetailedReason(type, title, description)
+    },
+    actionGuides = actionGuides.orEmpty().mapNotNull { guide ->
+        val title = guide?.title ?: return@mapNotNull null
+        val description = guide.description ?: return@mapNotNull null
+        ImageActionGuide(title, description)
+    },
+    reassurance = reassurance,
+    summaryModel = summaryModel,
+    summarizedAt = summarizedAt,
+)
+
+internal fun AnalysisModelResultDto.toDetails() = ImageModelDetails(
     status = status,
     reasons = reasons.orEmpty().mapNotNull { it?.description?.takeIf(String::isNotBlank) },
     limitations = limitations.orEmpty().filterNotNull().filter(String::isNotBlank),
+)
+
+internal fun TextAnalysisResponseResult.toPhoneNumbers(id: String) = TextAnalysisPhoneNumbers(
+    analysisId = id,
+    numbers = extractedPhoneNumbers.orEmpty().mapNotNull { phone ->
+        val phoneNumber = phone?.phoneNumber ?: return@mapNotNull null
+        val displayNumber = phone.displayNumber ?: return@mapNotNull null
+        val source = phone.source ?: return@mapNotNull null
+        ExtractedPhoneNumber(phoneNumber, displayNumber, source)
+    },
 )
 
 /** Text POST contains a classifier decision, not a normalized final fraud verdict. */
@@ -86,4 +122,5 @@ fun TextAnalysisResponseResult.toDomain(): AnalysisResult = AnalysisResult(
     summary = textResult?.summary,
     textEvidence = textResult?.evidence.orEmpty().filter { it.isNotBlank() },
     textLimitations = textResult?.limitations.orEmpty().filter { it.isNotBlank() },
+    textAnalysisPhoneNumbers = analysisId?.let { toPhoneNumbers(it).takeIf { phones -> phones.numbers.isNotEmpty() } },
 )

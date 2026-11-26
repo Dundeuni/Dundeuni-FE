@@ -4,6 +4,7 @@ import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import com.dundueni.app.data.repository.AnalysisResultRepository
 import com.dundueni.app.data.repository.ImageSummaryResult
+import com.dundueni.app.data.repository.toImageSummaryResult
 import com.dundueni.app.feature.history.HistoryType
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -19,11 +20,10 @@ data class ImageSummaryUiState(
     val lookupFailed: Boolean = false,
 )
 
-internal fun AnalysisResult.imageSummaryLookupId(): String? =
-    id.takeIf {
-        imageModelResult && summary.isBlank() &&
-            (historyType == HistoryType.IMAGE || historyType == HistoryType.SCREEN)
-    }
+internal fun AnalysisResult.initialImageSummary(): ImageSummaryResult? =
+    if (imageModelResult && (historyType == HistoryType.IMAGE || historyType == HistoryType.SCREEN)) {
+        imageSummary.toImageSummaryResult()
+    } else null
 
 internal class ImageSummaryViewModel private constructor(
     private val analysisId: String,
@@ -44,28 +44,31 @@ internal class ImageSummaryViewModel private constructor(
 
         /** Reopening the same result in this app process reuses its status and budget. */
         @MainThread
-        fun forResult(analysisId: String, repository: AnalysisResultRepository): ImageSummaryViewModel {
-            val lookup = lookupsById.getOrPut(analysisId) { ImageSummaryLookup() }
+        fun forResult(
+            analysisId: String,
+            repository: AnalysisResultRepository,
+            initial: ImageSummaryResult,
+        ): ImageSummaryViewModel {
+            val lookup = lookupsById.getOrPut(analysisId) { ImageSummaryLookup(initial) }
             return ImageSummaryViewModel(analysisId, repository, lookup)
         }
     }
 }
 
-/** With the current Repository, Unavailable includes the BE's initial null status. */
-private fun ImageSummaryResult?.canRecheck() =
-    this == ImageSummaryResult.Pending ||
-        this == ImageSummaryResult.Unavailable ||
-        this == ImageSummaryResult.LookupError
+private fun ImageSummaryResult.canRecheck() =
+    this == ImageSummaryResult.Pending || this == ImageSummaryResult.LookupError
 
-private class ImageSummaryLookup {
-    private val state = MutableStateFlow(ImageSummaryUiState())
+private class ImageSummaryLookup(initial: ImageSummaryResult) {
+    private val state = MutableStateFlow(
+        ImageSummaryUiState(result = initial, checking = initial == ImageSummaryResult.Pending),
+    )
     val uiState = state.asStateFlow()
     private val observation = Mutex()
     private val manualRequests = Channel<Unit>(Channel.CONFLATED)
     private var visible = false
     private var automaticAttempts = 0
     private var automaticFinished = false
-    private var result: ImageSummaryResult? = null
+    private var result = initial
     private var lookupFailed = false
 
     @MainThread
@@ -74,10 +77,10 @@ private class ImageSummaryLookup {
         try {
             if (!automaticFinished) {
                 while (automaticAttempts < MAX_AUTOMATIC_LOOKUPS && !lookupFailed &&
-                    (result == null || result.canRecheck())
+                    result == ImageSummaryResult.Pending
                 ) {
                     publish(checking = true)
-                    if (automaticAttempts > 0) delay(AUTOMATIC_INTERVAL_MS)
+                    delay(AUTOMATIC_INTERVAL_MS)
                     automaticAttempts++
                     lookup(fetch)
                 }

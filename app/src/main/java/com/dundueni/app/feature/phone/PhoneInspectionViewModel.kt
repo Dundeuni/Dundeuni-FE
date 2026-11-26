@@ -4,16 +4,23 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dundueni.app.data.remote.api.AnalysisHttpException
+import com.dundueni.app.data.remote.api.PhoneAnalysisApiService
 import com.dundueni.app.data.remote.api.PhoneAnalysisRequestDto
 import com.dundueni.app.data.remote.api.PhoneAnalysisResponseDto
+import com.dundueni.app.data.repository.HistoryApiRepository
+import com.dundueni.app.data.repository.PreparedApiHttpException
+import com.dundueni.app.data.repository.PreparedApiProtocolException
 import com.dundueni.app.feature.analysis.AnalysisFlowDependencies
 import com.dundueni.app.feature.analysisresult.AnalysisResult
 import com.dundueni.app.feature.analysisresult.RiskLevel
 import com.dundueni.app.feature.history.HistoryType
+import com.dundueni.app.feature.history.toRecordDetail
 import com.dundueni.app.data.remote.api.HistoryEntryDto
 import com.dundueni.app.feature.analysisresult.RiskEvidence
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,33 +33,44 @@ sealed interface PhoneInspectionUiState {
     data class Error(val message: String) : PhoneInspectionUiState
 }
 
-class PhoneInspectionViewModel(application: Application) : AndroidViewModel(application) {
+class PhoneInspectionViewModel private constructor(
+    application: Application,
+    private val phoneApi: () -> PhoneAnalysisApiService,
+    private val findPhoneResult: suspend (String) -> AnalysisResult,
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(
+        application,
+        { AnalysisFlowDependencies.createPhoneApiService(application) },
+        { id -> AnalysisFlowDependencies.createDemoPhoneResultRepository(application).detail(id).toPhoneResult() },
+    )
+
     private val mutableUiState = MutableStateFlow<PhoneInspectionUiState>(PhoneInspectionUiState.Idle)
     val uiState: StateFlow<PhoneInspectionUiState> = mutableUiState.asStateFlow()
     private var submittedPhone: String? = null
     private var completedAnalysisId: String? = null
+    private var requestJob: Job? = null
 
     fun inspect(phone: String) {
-        if (mutableUiState.value == PhoneInspectionUiState.Loading || PhoneInputValidator.phoneError(phone) != null || phone.isBlank()) return
+        if (requestJob?.isActive == true || mutableUiState.value == PhoneInspectionUiState.Loading ||
+            mutableUiState.value is PhoneInspectionUiState.Success ||
+            phone.isBlank() || PhoneInputValidator.phoneError(phone) != null
+        ) return
         submittedPhone = phone
         completedAnalysisId = null
         mutableUiState.value = PhoneInspectionUiState.Loading
-        viewModelScope.launch {
-            try {
-                val context = getApplication<Application>()
-                val response = AnalysisFlowDependencies.createPhoneApiService(context)
-                    .analyzePhone(PhoneAnalysisRequestDto(phone))
+        requestJob = viewModelScope.launch {
+            val next = try {
+                val response = phoneApi().analyzePhone(PhoneAnalysisRequestDto(phone))
+                ensureActive()
                 val serverCode = if (response.code() != 201) response.errorBody()?.use { body ->
                     runCatching { org.json.JSONObject(body.string()).optString("code") }.getOrNull()
                 } else null
-                mutableUiState.value = when (response.code()) {
+                when (response.code()) {
                     201 -> {
                         val body = response.body()
                         if (body?.isCompleted() == true) {
                             completedAnalysisId = body.analysisId
-                            val detail = AnalysisFlowDependencies.createDemoPhoneResultRepository(context)
-                                .detail(requireNotNull(body.analysisId))
-                            PhoneInspectionUiState.Success(body, detail.toPhoneResult())
+                            PhoneInspectionUiState.Success(body, findPhoneResult(requireNotNull(body.analysisId)))
                         }
                         else PhoneInspectionUiState.Error("서버 응답에 올바른 분석 ID 또는 완료 상태가 없어요.")
                     }
@@ -68,17 +86,18 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
                     else -> PhoneInspectionUiState.Error("검사를 완료하지 못했어요 (HTTP ${response.code()}).")
                 }
             } catch (cancelled: CancellationException) {
-                mutableUiState.value = PhoneInspectionUiState.Idle
                 throw cancelled
             } catch (error: AnalysisHttpException) {
-                mutableUiState.value = PhoneInspectionUiState.Error(
-                    "검사 결과를 조회하지 못했어요 (HTTP ${error.httpStatus}${error.code?.let { ", $it" }.orEmpty()}). 다시 시도해 주세요."
-                )
+                detailHttpError(error.httpStatus, error.code)
+            } catch (error: PreparedApiHttpException) {
+                detailHttpError(error.httpStatus, error.apiCode)
             } catch (_: IOException) {
-                mutableUiState.value = PhoneInspectionUiState.Error("네트워크 연결을 확인한 뒤 다시 시도해 주세요.")
+                PhoneInspectionUiState.Error("네트워크 연결을 확인한 뒤 다시 시도해 주세요.")
             } catch (_: Exception) {
-                mutableUiState.value = PhoneInspectionUiState.Error("검사를 완료하지 못했어요. 다시 시도해 주세요.")
+                PhoneInspectionUiState.Error("검사를 완료하지 못했어요. 다시 시도해 주세요.")
             }
+            ensureActive()
+            mutableUiState.value = next
         }
     }
 
@@ -87,30 +106,51 @@ class PhoneInspectionViewModel(application: Application) : AndroidViewModel(appl
         val id = completedAnalysisId
         if (id == null) { submittedPhone?.let(::inspect); return }
         mutableUiState.value = PhoneInspectionUiState.Loading
-        viewModelScope.launch {
-            try {
-                val detail = AnalysisFlowDependencies.createDemoPhoneResultRepository(getApplication<Application>())
-                    .detail(id)
-                mutableUiState.value = PhoneInspectionUiState.Success(
-                    PhoneAnalysisResponseDto(id, "COMPLETED"), detail.toPhoneResult(),
+        requestJob = viewModelScope.launch {
+            val next = try {
+                PhoneInspectionUiState.Success(
+                    PhoneAnalysisResponseDto(id, "COMPLETED"), findPhoneResult(id),
                 )
             } catch (cancelled: CancellationException) {
-                mutableUiState.value = PhoneInspectionUiState.Idle
                 throw cancelled
-            } catch (error: Exception) {
-                mutableUiState.value = PhoneInspectionUiState.Error(
-                    "검사 결과를 조회하지 못했어요. 다시 시도해 주세요."
-                )
+            } catch (_: Exception) {
+                PhoneInspectionUiState.Error("검사 결과를 조회하지 못했어요. 다시 시도해 주세요.")
             }
+            ensureActive()
+            mutableUiState.value = next
         }
     }
+
+    private fun detailHttpError(status: Int, code: String?): PhoneInspectionUiState.Error =
+        PhoneInspectionUiState.Error(
+            "검사 결과를 조회하지 못했어요 (HTTP $status${code?.let { ", $it" }.orEmpty()}). 다시 시도해 주세요.",
+        )
 
     fun onResultOpenFailure() {
         mutableUiState.value = PhoneInspectionUiState.Error("결과를 임시 보관하지 못했어요. 다시 시도해 주세요.")
     }
 
     fun dismiss() {
-        if (mutableUiState.value != PhoneInspectionUiState.Loading) mutableUiState.value = PhoneInspectionUiState.Idle
+        if (mutableUiState.value != PhoneInspectionUiState.Loading) cancel()
+    }
+
+    internal fun cancel() {
+        requestJob?.cancel()
+        requestJob = null
+        submittedPhone = null
+        completedAnalysisId = null
+        mutableUiState.value = PhoneInspectionUiState.Idle
+    }
+
+    companion object {
+        internal fun forExtractedPhones(
+            application: Application,
+            phoneApi: () -> PhoneAnalysisApiService = { AnalysisFlowDependencies.createPhoneApiService(application) },
+            history: () -> HistoryApiRepository = { AnalysisFlowDependencies.createHistoryRepository(application) },
+        ): PhoneInspectionViewModel = PhoneInspectionViewModel(application, phoneApi) { id ->
+            history().detail(id).toRecordDetail().result?.takeIf { it.historyType == HistoryType.PHONE }
+                ?: throw PreparedApiProtocolException("Unexpected phone detail")
+        }
     }
 }
 
@@ -147,5 +187,6 @@ internal fun HistoryEntryDto.toPhoneResult(): AnalysisResult {
             phone.reportCount?.let { "신고 건수: ${it}건" }).joinToString(" · ").ifBlank { null },
         evidence = reasons.map { RiskEvidence("전화번호 분석 근거", it) },
         targetLabel = phone.phoneNumber.orEmpty(),
+        analyzedAt = phone.analyzedAt,
     )
 }

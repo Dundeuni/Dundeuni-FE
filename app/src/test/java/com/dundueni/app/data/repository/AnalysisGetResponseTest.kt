@@ -1,5 +1,8 @@
 package com.dundueni.app.data.repository
 
+import com.dundueni.app.data.model.ImageActionGuide
+import com.dundueni.app.data.model.ImageAnalysisSummary
+import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.remote.api.AnalysisHttpException
 import com.dundueni.app.data.remote.network.RetrofitClient
 import kotlinx.coroutines.runBlocking
@@ -39,7 +42,7 @@ class AnalysisGetResponseTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun currentDetailSchemaMapsGuidesWithoutWaitingForSummary() = runBlocking {
+    @Test fun initialCompletedDetailReturnsSummaryWithASingleGet() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {
             server.enqueue(MockResponse().setResponseCode(200).setBody("""{
@@ -51,12 +54,8 @@ class AnalysisGetResponseTest {
                         "manipulation":{"status":"SUCCEEDED","displayScore":37.5}},
                     "overallResult":{"decision":"INCONCLUSIVE","decisionLabel":"Pending policy",
                         "policyVersion":"image-overall-v1","suspectedKinds":[],"uncertainKinds":[]},
-                    "guides":["server guide"]
-                }
-            }"""))
-            server.enqueue(MockResponse().setResponseCode(200).setBody("""{
-                "isSuccess":true,"code":"ANALYSIS200","result":{
-                    "analysisId":"$id","summaryStatus":"COMPLETED","summary":"Gemini summary"
+                    "guides":["server guide"],
+                    "summaryStatus":"COMPLETED","summary":"Gemini summary"
                 }
             }"""))
             val repository = repository(server)
@@ -67,8 +66,7 @@ class AnalysisGetResponseTest {
             assertNull(result.normalizedRiskLevel)
             assertEquals("/api/analysis/$id", server.takeRequest().path)
             assertEquals(1, server.requestCount)
-            assertEquals(ImageSummaryResult.Completed("Gemini summary"), repository.findImageSummary(id))
-            assertEquals("/api/analysis/$id/summary", server.takeRequest().path)
+            assertEquals(ImageAnalysisSummary(summaryStatus = "COMPLETED", summary = "Gemini summary"), result.imageSummary)
         } finally { server.shutdown() }
     }
 
@@ -175,21 +173,42 @@ class AnalysisGetResponseTest {
         Unit
     }
 
-    @Test fun historyImageKeepsItsExistingSummaryLookup() = runBlocking {
+    @Test fun pendingSummaryRefreshUsesTheSameDetailGetAndReturnsAllSummaryFields() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {
-            server.enqueue(MockResponse().setResponseCode(200)
-                .setBody(detail("COMPLETED").replace("\"저장된 요약\"", "null")))
-            server.enqueue(MockResponse().setResponseCode(200).setBody(summary("COMPLETED")))
-            val result = repository(server).findHistoryImageResult(id)
-            assertEquals("Gemini 요약", result.summary)
-            assertEquals(listOf("저장된 모델 근거"), result.reasons)
-            assertEquals("UNKNOWN", result.normalizedRiskLevel)
-            server.takeRequest()
-            val request = server.takeRequest()
-            assertEquals("GET", request.method)
-            assertEquals("/api/analysis/$id/summary", request.path)
-            assertNull(request.getHeader("X-Dundeuni-Auth-Required"))
+            val completedFields = """,
+                "summary":"Gemini 요약","summaryModel":"gemini","summarizedAt":"2026-11-25T06:30:00.000Z",
+                "detailedReasons":[{"type":"GENERATION","title":"생성 근거","description":"근거 설명"}],
+                "actionGuides":[{"title":"공식 연락처","description":"공식 홈페이지에서 확인하세요."}],
+                "reassurance":"서두르지 않아도 됩니다."
+            """
+            server.enqueue(MockResponse().setBody(summary("PENDING")))
+            server.enqueue(MockResponse().setBody(summary("COMPLETED", completedFields)))
+            val repository = repository(server)
+            val original = repository.findResult(id)
+            assertEquals(ImageAnalysisSummary(summaryStatus = "PENDING"), original.imageSummary)
+            assertEquals(listOf("서버 모델 근거"), original.reasons)
+            val refreshed = repository.findImageSummary(id)
+            assertEquals(
+                ImageSummaryResult.Completed(
+                    ImageAnalysisSummary(
+                        summaryStatus = "COMPLETED",
+                        summary = "Gemini 요약",
+                        detailedReasons = listOf(ImageDetailedReason("GENERATION", "생성 근거", "근거 설명")),
+                        actionGuides = listOf(ImageActionGuide("공식 연락처", "공식 홈페이지에서 확인하세요.")),
+                        reassurance = "서두르지 않아도 됩니다.",
+                        summaryModel = "gemini",
+                        summarizedAt = "2026-11-25T06:30:00.000Z",
+                    ),
+                ),
+                refreshed,
+            )
+            assertEquals(2, server.requestCount)
+            repeat(2) {
+                val request = server.takeRequest()
+                assertEquals("GET", request.method)
+                assertEquals("/api/analysis/$id", request.path)
+            }
         } finally { server.shutdown() }
     }
 
@@ -204,6 +223,11 @@ class AnalysisGetResponseTest {
                 MockResponse().setBody(summary("FAILED")) to ImageSummaryResult.Failed,
                 MockResponse().setBody(summary(null)) to ImageSummaryResult.Unavailable,
                 MockResponse().setBody(summary("DISABLED")) to ImageSummaryResult.Unavailable,
+                MockResponse().setBody(summary("COMPLETED")) to
+                    ImageSummaryResult.Completed(ImageAnalysisSummary(summaryStatus = "COMPLETED")),
+                MockResponse().setBody(summary("COMPLETED").replace("\"IMAGE\"", "\"TEXT\"")) to
+                    ImageSummaryResult.Unavailable,
+                MockResponse().setBody(detail("FAILED")) to ImageSummaryResult.LookupError,
                 MockResponse().setBody(summary("COMPLETED").replace(id, "other-id")) to ImageSummaryResult.LookupError,
                 MockResponse().setBody(summary("COMPLETED").replace("ANALYSIS200", "OTHER")) to ImageSummaryResult.LookupError,
                 MockResponse().setBody("invalid json") to ImageSummaryResult.LookupError,
@@ -211,16 +235,20 @@ class AnalysisGetResponseTest {
             for ((response, expected) in responses) {
                 server.enqueue(response)
                 assertEquals(expected, repository.findImageSummary(id))
-                assertEquals("/api/analysis/$id/summary", server.takeRequest().path)
+                val request = server.takeRequest()
+                assertEquals("GET", request.method)
+                assertEquals("/api/analysis/$id", request.path)
             }
             assertEquals(responses.size, server.requestCount)
         } finally { server.shutdown() }
     }
 
-    private fun summary(status: String?) = """{
+    private fun summary(status: String?, fields: String = "") = """{
         "isSuccess":true,"code":"ANALYSIS200","result":{
-            "analysisId":"$id","summaryStatus":${status?.let { "\"$it\"" } ?: "null"},
-            "summary":"Gemini 요약","summaryModel":"gemini","summarizedAt":null}
+            "analysisId":"$id","type":"IMAGE","status":"COMPLETED",
+            "reasons":[{"description":"서버 모델 근거"}],
+            "summaryStatus":${status?.let { "\"$it\"" } ?: "null"}$fields
+        }
     }"""
 
     private fun repository(server: MockWebServer): AnalysisRepository {

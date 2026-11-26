@@ -32,6 +32,7 @@ import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.feature.home.returnToHome
 import com.dundueni.app.feature.floatingbutton.FloatingButtonManager
+import com.google.gson.Gson
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.filterIsInstance
@@ -66,6 +67,11 @@ class AnalysisResultActivity : ComponentActivity() {
         ): Intent = createDeliveryIntent(
             context, AnalysisResultDelivery(resultJson = resultJson), isDemo, suspendFloatingButton,
         )
+
+        internal suspend fun createPhoneResultIntent(context: Context, result: AnalysisResult): Intent =
+            withContext(Dispatchers.IO) {
+                createIntent(context.applicationContext, Gson().toJson(result), suspendFloatingButton = true)
+            }
 
         internal fun createScreenIntent(context: Context, screen: AnalysisUiState.ScreenSuccess): Intent =
             createDeliveryIntent(context, AnalysisResultDelivery(screen = screen), false, true)

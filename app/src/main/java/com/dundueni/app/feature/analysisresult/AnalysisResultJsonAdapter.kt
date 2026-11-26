@@ -1,5 +1,9 @@
 package com.dundueni.app.feature.analysisresult
 
+import com.dundueni.app.data.model.ExtractedPhoneNumber
+import com.dundueni.app.data.model.ImageActionGuide
+import com.dundueni.app.data.model.ImageAnalysisSummary
+import com.dundueni.app.data.model.ImageDetailedReason
 import com.dundueni.app.data.model.ImageModelDetails
 import org.json.JSONObject
 import com.dundueni.app.feature.history.HistoryType
@@ -52,8 +56,46 @@ object AnalysisResultJsonAdapter {
             imageGenerationDetails = value.modelDetails("imageGenerationDetails"),
             imageManipulationDetails = value.modelDetails("imageManipulationDetails"),
             screenTextEvidence = value.evidence("screenTextEvidence"),
+            imageOverallDecision = value.optionalText("imageOverallDecision"),
+            imageSummary = value.optJSONObject("imageSummary")?.toImageSummary(),
+            analyzedAt = value.optionalText("analyzedAt"),
+            textSummary = value.optionalText("textSummary"),
+            extractedPhoneNumbers = value.optJSONArray("extractedPhoneNumbers")?.let { phones ->
+                List(phones.length()) { index ->
+                    val phone = phones.getJSONObject(index)
+                    ExtractedPhoneNumber(
+                        phone.getString("phoneNumber"),
+                        phone.getString("displayNumber"),
+                        phone.getString("source"),
+                    )
+                }
+            }.orEmpty(),
         )
     }
+
+    private fun JSONObject.toImageSummary() = ImageAnalysisSummary(
+        summaryStatus = optionalString("summaryStatus"),
+        summary = optionalString("summary"),
+        detailedReasons = optJSONArray("detailedReasons")?.let { items ->
+            List(items.length()) { index ->
+                val item = items.getJSONObject(index)
+                ImageDetailedReason(
+                    item.getString("type"),
+                    item.getString("title"),
+                    item.getString("description"),
+                )
+            }
+        }.orEmpty(),
+        actionGuides = optJSONArray("actionGuides")?.let { items ->
+            List(items.length()) { index ->
+                val item = items.getJSONObject(index)
+                ImageActionGuide(item.getString("title"), item.getString("description"))
+            }
+        }.orEmpty(),
+        reassurance = optionalString("reassurance"),
+        summaryModel = optionalString("summaryModel"),
+        summarizedAt = optionalString("summarizedAt"),
+    )
 
     private fun JSONObject.evidence(key: String): List<RiskEvidence> =
         optJSONArray(key)?.let { items ->
@@ -83,11 +125,14 @@ object AnalysisResultJsonAdapter {
         return value
     }
 
-    private fun JSONObject.optionalText(key: String): String? {
+    private fun JSONObject.optionalText(key: String): String? =
+        optionalString(key)?.takeIf { it.isNotBlank() }
+
+    private fun JSONObject.optionalString(key: String): String? {
         if (!has(key) || isNull(key)) return null
         val value = get(key)
         require(value is String) { "$key 값은 문자열이어야 합니다." }
-        return value.takeIf { it.isNotBlank() }
+        return value
     }
 
     private fun JSONObject.optionalScore(key: String): Double? {

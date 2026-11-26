@@ -60,6 +60,8 @@ internal fun ResultImageLayout(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     actions: @Composable ColumnScope.(onSave: () -> Unit, canSave: Boolean) -> Unit,
+    saveEnabled: Boolean = true,
+    imageContentAtClick: (() -> (@Composable () -> Unit))? = null,
     content: @Composable ColumnScope.(forImage: Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -130,8 +132,9 @@ internal fun ResultImageLayout(
             content(false)
             actions(
                 {
-                    if (!preview && !saving && widthPx > 0) {
+                    if (!preview && saveEnabled && !saving && widthPx > 0) {
                         val widthAtClick = widthPx
+                        val imageContent = imageContentAtClick?.invoke()
                         val capture = {
                             renderResultBitmap(view, parentComposition, widthAtClick) {
                                 CompositionLocalProvider(LocalDensity provides density, LocalEasyMode provides easy) {
@@ -140,7 +143,7 @@ internal fun ResultImageLayout(
                                         verticalArrangement = spacing,
                                     ) {
                                         Text(title, color = BrandInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                                        content(true)
+                                        if (imageContent == null) content(true) else imageContent()
                                     }
                                 }
                             }
@@ -152,7 +155,7 @@ internal fun ResultImageLayout(
                             pendingCapture = capture
                             try {
                                 permissionLauncher.launch(permission)
-                            } catch (_: IllegalStateException) {
+                            } catch (_: RuntimeException) {
                                 pendingCapture = null
                                 finishSaving(false)
                             }
@@ -161,7 +164,7 @@ internal fun ResultImageLayout(
                         }
                     }
                 },
-                !saving && (preview || widthPx > 0),
+                saveEnabled && !saving && (preview || widthPx > 0),
             )
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))

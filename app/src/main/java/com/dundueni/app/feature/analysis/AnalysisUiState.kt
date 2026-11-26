@@ -1,6 +1,7 @@
 package com.dundueni.app.feature.analysis
 
 import com.dundueni.app.data.model.AnalysisResult
+import com.dundueni.app.data.model.TextAnalysisPhoneNumbers
 import com.dundueni.app.data.repository.AnalysisExecutionStatus
 import com.dundueni.app.data.remote.api.PhotoUpload
 import android.graphics.Bitmap
@@ -23,6 +24,7 @@ sealed interface AnalysisUiState {
         val imageError: Error?,
         val textError: Error?,
         val resultType: ScreenResultType? = null,
+        val pendingTextPhoneNumbers: TextAnalysisPhoneNumbers? = null,
     ) : AnalysisUiState
     // Preserve a safe category, never the exception or raw server message.
     data class Error(

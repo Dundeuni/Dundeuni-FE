@@ -7,11 +7,13 @@ import com.dundueni.app.feature.analysisresult.AnalysisResult as PresentedResult
 import com.dundueni.app.feature.analysisresult.AnalysisResultScreen
 import com.dundueni.app.feature.analysisresult.ImageSummaryUiState
 import com.dundueni.app.feature.analysisresult.RiskLevel
+import com.dundueni.app.data.model.ExtractedPhoneNumber
 import com.dundueni.app.data.repository.ImageSummaryResult
 import com.dundueni.app.data.remote.api.HistoryEntryDto
 import com.dundueni.app.data.remote.api.HistoryPhoneResultDto
 import com.dundueni.app.feature.history.HistoryType
 import com.dundueni.app.feature.phone.toPhoneResult
+import com.dundueni.app.ui.component.InspectionLoadingDialog
 import com.dundueni.app.ui.theme.DundueniFETheme
 import com.dundueni.app.ui.theme.LocalEasyMode
 
@@ -21,36 +23,37 @@ internal fun ResultPreview(
     easyMode: Boolean = false,
     imageSummary: ImageSummaryUiState? = null,
     screenResultType: ScreenResultType? = null,
+    phoneInspectionInProgress: Boolean = false,
 ) {
     DundueniFETheme {
         CompositionLocalProvider(LocalEasyMode provides easyMode) {
             AnalysisResultScreen(
                 result = result, onAction = {}, isDemo = false,
                 imageSummary = imageSummary, screenResultType = screenResultType,
+                onInspectPhone = {}, phoneInspectionInProgress = phoneInspectionInProgress,
             )
+            if (phoneInspectionInProgress) {
+                InspectionLoadingDialog(onDismissPopup = {}, message = "선택한 전화번호를 검사하고 있어요.")
+            }
         }
     }
 }
 
-@Preview(name = "P1 결과 · 이미지 생성·변조 의심", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 위험 · 통합 요약 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImageResultPreview() = ImageSummaryCompletedPreview(easyMode = false)
 
-@Preview(name = "P1 결과 · 이미지 생성·변조 의심 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 위험 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun EasyImageResultPreview() = ImageSummaryCompletedPreview(easyMode = true)
 
 @Composable
-private fun ImageSummaryCompletedPreview(easyMode: Boolean) {
-    val detail = previewImageDetail()
-    ResultPreview(
-        checkNotNull(detail.copy(summary = null).toPb05Result(isDemo = false)),
-        easyMode = easyMode,
-        imageSummary = ImageSummaryUiState(ImageSummaryResult.Completed(checkNotNull(detail.summary)), checking = false),
-    )
-}
+private fun ImageSummaryCompletedPreview(easyMode: Boolean) = ResultPreview(
+    checkNotNull(previewImageDetail().toPb05Result(isDemo = false)),
+    easyMode = easyMode,
+)
 
-@Preview(name = "P1 결과 · 이미지 뚜렷한 신호 없음", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 이미지 안전", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ImageNoClearSignalPreview() = ResultPreview(
     checkNotNull(previewImageDetail(noClearSignal = true).toPb05Result(isDemo = false)),
@@ -67,18 +70,22 @@ private fun EasyScreenImageResultPreview() = ScreenImageResultPreview(easyMode =
 @Composable
 private fun ScreenImageResultPreview(easyMode: Boolean) {
     val image = previewImageDetail(noClearSignal = true)
-    val state = screenState(image = image.copy(summary = null), text = null, resultType = ScreenResultType.IMAGE)
+    val state = screenState(
+        image = previewImageDetail(summaryStatus = "PENDING", noClearSignal = true),
+        text = null,
+        resultType = ScreenResultType.IMAGE,
+    )
     ResultPreview(
         checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
         easyMode = easyMode,
         imageSummary = ImageSummaryUiState(
-            ImageSummaryResult.Completed(checkNotNull(image.summary)), checking = false,
+            ImageSummaryResult.Completed(checkNotNull(image.imageSummary)), checking = false,
         ),
         screenResultType = state.resultType,
     )
 }
 
-@Preview(name = "P1 결과 · 텍스트 피싱 의심", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 텍스트 피싱 의심 · 전화번호 1개 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun TextResultPreview() = TextPhishingResultPreview(easyMode = false)
 
@@ -88,11 +95,13 @@ private fun EasyTextResultPreview() = TextPhishingResultPreview(easyMode = true)
 
 @Composable
 private fun TextPhishingResultPreview(easyMode: Boolean) = ResultPreview(
-    previewTextDetail(sourceType = "TEXT", decision = "phishing").toTextResult("급하게 송금해 주세요."),
+    previewTextDetail(sourceType = "TEXT", decision = "phishing")
+        .toTextResult("급하게 송금해 주세요. 문의는 010-1234-5678로 주세요.")
+        .copy(extractedPhoneNumbers = listOf(ExtractedPhoneNumber("01012345678", "010-1234-5678", "TEXT"))),
     easyMode = easyMode,
 )
 
-@Preview(name = "P1 결과 · 일반 텍스트 판정", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 일반 텍스트 · 전화번호 미검출", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun TextNormalResultPreview() = ResultPreview(
     previewTextDetail(sourceType = "TEXT", decision = "normal").toTextResult("토요일에 도서관 앞에서 봐요."),
@@ -103,7 +112,7 @@ private fun TextNormalResultPreview() = ResultPreview(
 private fun PhoneSafeResultPreview() =
     ResultPreview(previewPhoneResult(RiskLevel.SAFE))
 
-@Preview(name = "P1 결과 · 전화번호 기본 모드 · 주의", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 전화번호 기본 모드 · 주의 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun PhoneResultPreview() =
     ResultPreview(previewPhoneResult(RiskLevel.CAUTION))
@@ -139,7 +148,7 @@ private fun TextDeferredResultPreview() = ResultPreview(
     previewTextDetail(sourceType = "TEXT", decision = "defer").toTextResult("확인 부탁드립니다."),
 )
 
-@Preview(name = "P1 결과 · OCR · 피싱 의심", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · OCR · 전화번호 여러 개", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun ScreenTextResultPreview() = ScreenOcrResultPreview("phishing")
 
@@ -151,25 +160,40 @@ private fun ScreenTextNormalResultPreview() = ScreenOcrResultPreview("normal")
 @Composable
 private fun ScreenTextDeferredResultPreview() = ScreenOcrResultPreview("defer")
 
-@Preview(name = "P1 결과 · OCR · 피싱 의심 · 쉬운 모드", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · OCR · 전화번호 여러 개 · 쉬운 모드 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun EasyScreenTextResultPreview() = ScreenOcrResultPreview("phishing", easyMode = true)
 
+@Preview(name = "P1 결과 · OCR · 전화번호 검사 요청 중", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun ScreenOcrResultPreview(decision: String, easyMode: Boolean = false) {
+private fun ScreenPhoneInspectionLoadingPreview() = ScreenOcrResultPreview("phishing", phoneInspectionInProgress = true)
+
+@Composable
+private fun ScreenOcrResultPreview(
+    decision: String,
+    easyMode: Boolean = false,
+    includeImage: Boolean = false,
+    phoneInspectionInProgress: Boolean = false,
+) {
     val state = screenState(
-        image = null,
+        image = if (includeImage) previewImageDetail(noClearSignal = true) else null,
         text = previewTextDetail(decision = decision).toScreenCropAnalysis(),
-        resultType = ScreenResultType.TEXT,
+        resultType = if (includeImage) null else ScreenResultType.TEXT,
     )
+    val result = checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN))
+    val phones = if (decision == "phishing") listOf(
+        ExtractedPhoneNumber("021234567", "02-123-4567", "OCR"),
+        ExtractedPhoneNumber("01012345678", "010-1234-5678", "OCR"),
+    ) else emptyList()
     ResultPreview(
-        checkNotNull(state.toPresentedResult(false, HistoryType.SCREEN)),
+        result.copy(extractedPhoneNumbers = phones),
         easyMode = easyMode,
         screenResultType = state.resultType,
+        phoneInspectionInProgress = phoneInspectionInProgress,
     )
 }
 
-@Preview(name = "P1 결과 · 구형 이미지 응답", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · 기존 이미지 기록 · 요약만 제공", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
 private fun LegacyImageScoreResultPreview() = ResultPreview(
     checkNotNull(previewLegacyImageDetail().toPb05Result(isDemo = false)),

@@ -471,6 +471,7 @@ internal fun HistoryResultDetail(
     onRetry: () -> Unit,
     error: String? = null,
     onDelete: (() -> Unit)? = null,
+    refreshingImageSummary: Boolean = false,
 ) {
     val easy = LocalEasyMode.current
     val detailModifier = Modifier.testTag("history-detail")
@@ -508,9 +509,19 @@ internal fun HistoryResultDetail(
             }
         },
     ) { forImage ->
-        val date = Instant.ofEpochMilli(record.savedAt).atZone(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm"))
+        val zone = ZoneId.systemDefault()
+        val dateFormat = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")
+        val date = (detail.completedAt ?: Instant.ofEpochMilli(record.savedAt)).atZone(zone).format(dateFormat)
         Text("검사 일시 · $date", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+        if (!forImage && (record.type == HistoryType.IMAGE || record.type == HistoryType.SCREEN)) {
+            detail.expiresAt?.let { expiration ->
+                Text(
+                    "보관 기한 · ${expiration.atZone(zone).format(dateFormat)}",
+                    color = Muted, fontSize = if (easy) 16.sp else 13.sp,
+                )
+            }
+            Text("신규 이미지 검사 기록은 최대 7일 보관돼요.", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
+        }
         if (record.textSourceType == "SCREEN_CROP") {
             Text("분석 출처 · 화면 캡처", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
         }
@@ -520,26 +531,23 @@ internal fun HistoryResultDetail(
         when {
             result?.historyType == HistoryType.TEXT -> TextInspectionContent(result, fromHistory = true)
             result?.historyType == HistoryType.IMAGE || result?.historyType == HistoryType.SCREEN -> {
-                result.aiRiskLabel?.let { level ->
-                    val label = RiskLevel.entries.firstOrNull { it.name == level }?.label ?: level
-                    Text("AI 분석 단계 · $label", color = Muted, fontSize = if (easy) 16.sp else 13.sp)
-                }
                 ImageInspectionContent(
                     result,
                     summaryState = detail.imageSummaryStatus?.let {
                         ImageSummaryUiState(
                             result = it,
-                            checking = false,
+                            checking = refreshingImageSummary,
                             showRetry = it == ImageSummaryResult.Pending,
                         )
                     },
                     onCheckSummary = retry,
+                    fromHistory = true,
                 )
             }
             result?.historyType == HistoryType.PHONE -> PhoneInspectionContent(result)
             record.status == "QUEUED" || record.status == "ANALYZING" ->
                 EmptyPanel("분석 중이에요", "분석이 완료되면 결과를 확인할 수 있어요.", "다시 확인", retry, easy)
-            record.status == "FAILED" -> Notice("분석에 실패했어요.", easy)
+            record.status == "FAILED" || detail.imageResultStatus == "FAILED" -> Notice("분석에 실패했어요.", easy)
             else -> {
                 if (record.evidence.isNotEmpty()) {
                     Panel {
