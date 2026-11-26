@@ -160,9 +160,9 @@ private fun ScreenTextNormalResultPreview() = ScreenOcrResultPreview("normal")
 @Composable
 private fun ScreenTextDeferredResultPreview() = ScreenOcrResultPreview("defer")
 
-@Preview(name = "P1 결과 · 이미지와 OCR · 전화번호 여러 개 · 쉬운 모드 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
+@Preview(name = "P1 결과 · OCR · 전화번호 여러 개 · 쉬운 모드 · PNG 저장", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
-private fun EasyScreenTextResultPreview() = ScreenOcrResultPreview("phishing", easyMode = true, includeImage = true)
+private fun EasyScreenTextResultPreview() = ScreenOcrResultPreview("phishing", easyMode = true)
 
 @Preview(name = "P1 결과 · OCR · 전화번호 검사 요청 중", widthDp = 390, heightDp = 1200, showBackground = true)
 @Composable
